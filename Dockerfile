@@ -46,3 +46,12 @@ RUN chown -R app:app $HOME
 USER app
 EXPOSE 50051
 CMD [ "npm", "start" ]
+
+# To build the image:
+# docker build -t restorecommerce/scheduling-srv .
+#
+# To create a container:
+# docker create --name identity-srv --net restorecms_default restorecommerce/identity-srv
+#
+# To run the container:
+# docker start identity-srv
