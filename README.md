@@ -6,16 +6,16 @@
 [depend]: https://img.shields.io/david/restorecommerce/scheduling-srv.svg?style=flat-square
 [cover]: http://img.shields.io/coveralls/restorecommerce/scheduling-srv/master.svg?style=flat-square
 
-A generic microservice for scheduling the jobs and emit them over [Aapache Kafka](https://kafka.apache.org/). The job scheduling has been implemented using [kue-scheduler](https://github.com/lykmapipo/kue-scheduler) which is a job scheduler utility for [kue](https://github.com/Automattic/kue), backed by [redis](https://redis.io/) and built for node.js. This service provides a [gRPC](https://grpc.io/docs/) interface for scheduling new jobs and modifying the existing jobs using CRUD operations. The scheduled and recurring jobs are persisted within an ArangoDB instance so that in case redis goes down the jobs will be scheduled on service start up again.
-The jobs emitted to Kafka could be consumed by other microservices and emit back a response when job is done/failed.
+A generic microservice for scheduling jobs and emit them over [Apache Kafka](https://kafka.apache.org/). Job scheduling is implemented using [kue-scheduler](https://github.com/lykmapipo/kue-scheduler) which is a job scheduler utility for [kue](https://github.com/Automattic/kue), backed by [Redis](https://redis.io/). This service provides a [gRPC](https://grpc.io/docs/) interface for scheduling new jobs and modifying the existing jobs using CRUD operations. The scheduled and recurring jobs are persisted within an ArangoDB instance so that in case Redis goes down the jobs will be scheduled once the service starts up again.
+The jobs emitted to Kafka can be consumed by other microservices. After processing the jobs an event is then emitted by the respetive microservices indicating job failure or completion.
 
 ## gRPC Interface
 
-This microservice exposes the following gRPC endpoints for Job resource.
+This microservice exposes the following gRPC endpoints for the Job resource.
 
 ### Job
 
-A Job resource `io.restorecommerce.job.Job`.
+`io.restorecommerce.job.Job`.
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
@@ -23,14 +23,14 @@ A Job resource `io.restorecommerce.job.Job`.
 | created | double | required | Date of the Job creation |
 | modified | double | required | Date when Job was modified |
 | creator | string | optional | User ID of the creator |
-| name | string | required | Job name, indicates the job type |
-| unique | string | optional | A single instance of job is created when set |
-| data | Data | optional | Payload data sent to the worker |
+| name | string | required | Job name |
+| unique | string | optional | A fixed job instance identifier; recurring jobs use this value as their instance ID in Redis if it is set |
+| data | Data | optional | Payload data sent to the worker (structure is variable) |
 | priority | `io.restorecommerce.job.Job.Priority` | optional | Job priority |
-| attempts | number | optional | Amount of possible failing runs until Job fails |
+| attempts | number | optional | Amount of possible failing runs until a job fails |
 | backoff | `io.restorecommerce.job.Backoff` | optional | Delay settings between failed job runs |
-| parallel | number | optional | Number of parallel Jobs |
-| interval | string | optional | Interval to run a job periodically which could be a cron entry. Ex: "0 0 5 * * *" to run a job everyday at 5AM |
+| parallel | number | optional | Maximum number of parallel jobs |
+| interval | string | optional | Interval to run a job periodically which could be a cron entry. Ex: "0 0 5 * * *" to run a job everyday at 5AM (view [kue-scheduler](https://github.com/lykmapipo/kue-scheduler) for more |
 | when | string | optional | A date string, Job is run once at specific time. Ex: "Jan 15, 2018 10:30:00" |
 | now | boolean | optional | If set to true job is run once immediately |
 
@@ -38,10 +38,8 @@ A Job resource `io.restorecommerce.job.Job`.
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| timezone | string | optional | The timezone when the job has to be scheduled. Ex: 'Europe/Amsterdam' |
-| payload | []google.protobuf.Any | required | Any data type with type_url and value in bytes |
-
-For detailed message structure refer [`google.protobuf.Any`](https://github.com/restorecommerce/protos/blob/master/google/protobuf/any.proto).
+| timezone | string | optional | Timezone specification for job scheduling (ex: 'Europe/Amsterdam') |
+| payload | []google.protobuf.Any | required | Generic data type for different job data structures (see [google.protobuf.Any](https://github.com/restorecommerce/protos/blob/master/google/protobuf/any.proto)) |
 
 `io.restorecommerce.job.Job.Priority`
 
@@ -105,7 +103,7 @@ This microservice subscribes to the following Kafka events by topic:
   - healthCheckCommand
   - resetCommand
 
-For creating/modifying the Jobs via kafka this service listenes to events `createJobs`, `modifyJobs` and `deleteJobs` on topic `io.restorecommerce.jobs`. For tracking the status of the job it listens for `jobDone` and `jobFailed` events which would be emitted by other microservices which consumes the Job.
+For creating/modifying jobs through Kafka this service listens to events on topic `io.restorecommerce.jobs`. CRUD operations take the same arguments as the gRPC endpoints. Tracking a job's status is performed by listening to `jobDone` and `jobFailed` events, which are emitted by any microservice which processes a given job.
 
 `io.restorecommerce.job.JobDone`
 
@@ -126,12 +124,12 @@ For creating/modifying the Jobs via kafka this service listenes to events `creat
 | job_unique_name | string | optinal | unique job name |
 
 List of events emitted to Kafka by this microservice for below topics:
-- io.restorecommerce.jobs.resource
+- `io.restorecommerce.jobs.resource`
   - jobsCreated
   - jobsModified
   - jobsDeleted
 
-This microservice emits the Job message to topic `io.restorecommerce.jobs.resource` with event names `jobsCreated`, `jobsModified` and `jobsDeleted` which would be used to reschedule the jobs in case if redis goes down.
+Events from the `io.restorecommerce.jobs.resource` topic are issued whenever a CRUD opertion is performed. They are useful for job rescheduling in case of Redis failure.
 
 
 ## Chassis Service
@@ -141,6 +139,7 @@ This service uses [chassis-srv](http://github.com/restorecommerce/chassis-srv), 
 - implementation of a [command-interface](https://github.com/restorecommerce/chassis-srv/blob/master/command-interface.md) which
 provides endpoints for retrieving the system status and resetting/restoring the system in case of failure. These endpoints can be called via gRPC or Kafka events (through the `io.restorecommerce.command` topic).
 - database access, which is abstracted by the [resource-base-interface](https://github.com/restorecommerce/resource-base-interface)
+- Redis cache management
 
 ## Usage
 
