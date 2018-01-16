@@ -39,7 +39,7 @@ This microservice exposes the following gRPC endpoints for the Job resource.
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
 | timezone | string | optional | Timezone specification for job scheduling (ex: 'Europe/Amsterdam') |
-| payload | []google.protobuf.Any | required | Generic data type for different job data structures (see [google.protobuf.Any](https://github.com/restorecommerce/protos/blob/master/google/protobuf/any.proto)) |
+| payload | []google.protobuf.Any | optional | Generic data type for different job data structures (see [google.protobuf.Any](https://github.com/restorecommerce/protos/blob/master/google/protobuf/any.proto)) |
 
 `io.restorecommerce.job.Job.Priority`
 
