@@ -239,8 +239,8 @@ class JobsCommandInterface extends chassis.CommandInterface {
    * @param call
    * @param context
    */
-  async reset(call: any, context?: any): Promise<any> {
-    await super.reset(call, context);
+  async reset(): Promise<any> {
+    await super.reset();
     // Get a redis connection
     const redis = await co(chassis.cache.get(this.config.cache['kue-scheduler'],
       this.logger));
@@ -255,7 +255,7 @@ class JobsCommandInterface extends chassis.CommandInterface {
       });
     }
     // Delete all the jobs in the jobs resource database
-    super.reset(call, context);
+    super.reset();
   }
 
   makeResourcesRestoreSetup(db: any, collectionName: string): any {
@@ -276,7 +276,7 @@ class JobsCommandInterface extends chassis.CommandInterface {
         return {};
       },
       jobsDeleted: async function restoreDeleted(message: any, context: any,
-        config: any, eventName: string): Promise< any> {
+        config: any, eventName: string): Promise<any> {
         that.service.deleteJob(message.id, message.job_unique_name);
         await co(db.delete(collectionName, { id: message.id }));
         return {};
