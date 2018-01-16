@@ -1,0 +1,217 @@
+{
+  "logger": {
+    "console": {
+      "handleExceptions": false,
+      "level": "error",
+      "colorize": true,
+      "prettyPrint": true
+    }
+  },
+  "database": {
+    "main": {
+      "provider": "arango",
+      "host": "localhost",
+      "port": 8529,
+      "database": "scheduling-srv",
+      "autoCreate": true,
+      "collections": [
+        "jobs"
+      ]
+    }
+  },
+  "cache": {
+    "kue-scheduler": [
+      {
+        "provider": "redis",
+        "port": 6379,
+        "host": "localhost"
+      }
+    ]
+  },
+  "events": {
+    "kafka": {
+      "provider": "kafka",
+      "groupId": "scheduling-srv",
+      "clientId": "scheduling-srv",
+      "connectionString": "zookeeper:2181",
+      "jobsTopic": "io.restorecommerce.jobs",
+      "queuedJob": {
+        "protos": [
+          "io/restorecommerce/job.proto"
+        ],
+        "protoRoot": "protos/",
+        "messageObject": "io.restorecommerce.job.ScheduledJob"
+      },
+      "createJobs": {
+        "protos": [
+          "io/restorecommerce/job.proto"
+        ],
+        "protoRoot": "protos/",
+        "messageObject": "io.restorecommerce.job.JobList"
+      },
+      "modifyJobs": {
+        "protos": [
+          "io/restorecommerce/job.proto"
+        ],
+        "protoRoot": "protos/",
+        "messageObject": "io.restorecommerce.job.JobList"
+      },
+      "deleteJobs": {
+        "protos": [
+          "io/restorecommerce/job.proto"
+        ],
+        "protoRoot": "protos/",
+        "messageObject": "io.restorecommerce.resourcebase.DeleteRequest"
+      },
+      "jobsCreated": {
+        "protos": [
+          "io/restorecommerce/job.proto"
+        ],
+        "protoRoot": "protos/",
+        "messageObject": "io.restorecommerce.job.JobList"
+      },
+      "jobsModified": {
+        "protos": [
+          "io/restorecommerce/job.proto"
+        ],
+        "protoRoot": "protos/",
+        "messageObject": "io.restorecommerce.job.JobList"
+      },
+      "jobsDeleted": {
+        "protos": [
+          "io/restorecommerce/job.proto"
+        ],
+        "protoRoot": "protos/",
+        "messageObject": "io.restorecommerce.resourcebase.DeleteRequest"
+      },
+      "mailNotification-event": {
+        "protos": [
+          "io/restorecommerce/job.proto"
+        ],
+        "protoRoot": "protos/",
+        "messageObject": "io.restorecommerce.job.ScheduledJob"
+      },
+      "jobDone": {
+        "protos": [
+          "io/restorecommerce/job.proto"
+        ],
+        "protoRoot": "protos/",
+        "messageObject": "io.restorecommerce.job.JobDone"
+      },
+      "jobFailed": {
+        "protos": [
+          "io/restorecommerce/job.proto"
+        ],
+        "protoRoot": "protos/",
+        "messageObject": "io.restorecommerce.job.JobFailed"
+      },
+      "topics": {
+        "command": {
+          "topic": "io.restorecommerce.command",
+          "events": [
+            "healthCheckCommand",
+            "restoreCommand",
+            "resetCommand"
+          ]
+        },
+        "jobs": {
+          "topic": "io.restorecommerce.jobs",
+          "events": [
+            "createJobs",
+            "modifyJobs",
+            "deleteJobs"
+          ]
+        }
+      }
+    }
+  },
+  "server": {
+    "services": {
+      "io-restorecommerce-scheduling-srv": {
+        "read": {
+          "transport": [
+            "schedulingGRPC"
+          ]
+        },
+        "create": {
+          "transport": [
+            "schedulingGRPC"
+          ]
+        },
+        "delete": {
+          "transport": [
+            "schedulingGRPC"
+          ]
+        },
+        "update": {
+          "transport": [
+            "schedulingGRPC"
+          ]
+        },
+        "upsert": {
+          "transport": [
+            "schedulingGRPC"
+          ]
+        }
+      },
+      "io-restorecommerce-scheduling-cis": {
+        "check": {
+          "transport": [
+            "schedulingGRPC"
+          ]
+        },
+        "reset": {
+          "transport": [
+            "schedulingGRPC"
+          ]
+        },
+        "restore": {
+          "transport": [
+            "schedulingGRPC"
+          ]
+        },
+        "sendMailNotification": {
+          "transport": [
+            "schedulingGRPC"
+          ]
+        },
+        "version": {
+          "transport": [
+            "schedulingGRPC"
+          ]
+        }
+      },
+      "io-restorecommerce-scheduling-reflection": {
+        "serverReflectionInfo": {
+          "transport": [
+            "schedulingGRPC"
+          ]
+        }
+      }
+    },
+    "transports": [
+      {
+        "name": "schedulingGRPC",
+        "provider": "grpc",
+        "services": {
+          "io-restorecommerce-scheduling-srv": "io.restorecommerce.job.Scheduling",
+          "io-restorecommerce-scheduling-cis": "io.restorecommerce.commandinterface.Service",
+          "io-restorecommerce-scheduling-reflection": "grpc.reflection.v1alpha.ServerReflection"
+        },
+        "protos": [
+          "io/restorecommerce/job.proto",
+          "io/restorecommerce/commandinterface.proto",
+          "grpc/reflection/v1alpha/reflection.proto",
+          "google/protobuf/descriptor.proto"
+        ],
+        "protoRoot": "protos/",
+        "addr": "localhost:50054"
+      }
+    ]
+  },
+  "serviceNames": {
+    "scheduling": "io-restorecommerce-scheduling-srv",
+    "cis": "io-restorecommerce-scheduling-cis",
+    "reflection": "io-restorecommerce-scheduling-reflection"
+  }
+}

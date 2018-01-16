@@ -1,0 +1,49 @@
+{
+  "database": {
+    "main": {
+      "host": "restorecommerce-arangodb"
+    }
+  },
+  "events": {
+    "main":{
+      "connectionString":"restorecommerce-kafka:2181"
+    }
+  },
+  "client":{
+    "schedulingClient":{
+      "publisher": [
+        "grpc://scheduling-srv:50051"
+      ]
+    }
+  },
+  "server":{
+    "transports": [
+      {
+        "name": "schedulingGRPC",
+        "provider": "grpc",
+        "services": {
+          "scheduling": "io.restorecommerce.job.Scheduling",
+          "commandinterface": "io.restorecommerce.commandinterface.Service",
+          "reflection": "grpc.reflection.v1alpha.ServerReflection"
+        },
+        "protos": [
+          "io/restorecommerce/job.proto",
+          "io/restorecommerce/commandinterface.proto",
+          "grpc/reflection/v1alpha/reflection.proto",
+          "google/protobuf/descriptor.proto"
+        ],
+        "protoRoot": "protos/",
+        "addr": "scheduling-srv:50051"
+      }
+    ]
+  },
+  "logger": {
+    "elasticsearch": {
+      "level": "error",
+      "clientOpts": {
+        "host": "restorecommerce-elasticsearch:9200"
+      },
+      "source": "scheduling-srv"
+    }
+  }
+}
