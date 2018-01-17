@@ -194,7 +194,7 @@
         "name": "schedulingGRPC",
         "provider": "grpc",
         "services": {
-          "io-restorecommerce-scheduling-srv": "io.restorecommerce.job.Scheduling",
+          "io-restorecommerce-scheduling-srv": "io.restorecommerce.job.Service",
           "io-restorecommerce-scheduling-cis": "io.restorecommerce.commandinterface.Service",
           "io-restorecommerce-scheduling-reflection": "grpc.reflection.v1alpha.ServerReflection"
         },
