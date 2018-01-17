@@ -30,7 +30,6 @@ RUN npm install
 
 FROM node:alpine
 RUN mkdir -p /home/app
-# Create an app user so our application doesn't run as root.
 RUN addgroup -S app &&\
     adduser -S -g app app
 ENV HOME=/home/app
@@ -38,11 +37,8 @@ ENV APP_HOME=/home/app/scheduling-srv
 RUN mkdir $APP_HOME
 WORKDIR $APP_HOME
 RUN pwd
-# Copy files from base container
-COPY --from=base /home/app/scheduling-srv/ .
-# Chown all the files to the app user.
-RUN chown -R app:app $HOME
-# Change to the app user.
+# Copy files from base container by changing the ownership
+COPY --chown=app:app --from=base /home/app/scheduling-srv/ .
 USER app
 EXPOSE 50051
 CMD [ "npm", "start" ]
@@ -51,7 +47,7 @@ CMD [ "npm", "start" ]
 # docker build -t restorecommerce/scheduling-srv .
 #
 # To create a container:
-# docker create --name identity-srv --net restorecms_default restorecommerce/identity-srv
+# docker create --name identity-srv --net restorecms_default restorecommerce/scheduling-srv
 #
 # To run the container:
-# docker start identity-srv
+# docker start scheduling-srv
