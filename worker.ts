@@ -19,11 +19,6 @@ const grpc = chassis.grpc;
 const COLLECTION_NAME = 'jobs';
 // Topic the jobs are stored as resources
 const JOBS_RESOURCE_TOPIC_NAME = 'io.restorecommerce.jobs.resource';
-const HEALTH_CMD_EVENT = 'healthCheckCommand';
-const HEALTH_RES_EVENT = 'healthCheckResponse';
-const RESET_START_EVENT = 'resetCommand';
-const RESET_DONE_EVENT = 'resetResponse';
-const RESTORE_CMD_EVENT = 'restoreCommand';
 const JOBS_CREATE_EVENT = 'createJobs';
 const JOBS_MODIFY_EVENT = 'modifyJobs';
 const JOBS_DELETE_EVENT = 'deleteJobs';
@@ -150,30 +145,13 @@ export class Worker {
     await co(server.bind(serviceNamesCfg.scheduling, jobResourceService));
 
     // Add CommandInterfaceService
-    const cis: any = new JobsCommandInterface(server, cfg.get(),
+    const cis: chassis.ICommandInterface = new JobsCommandInterface(server, cfg.get(),
       logger, events, service);
     await co(server.bind(serviceNamesCfg.cis, cis));
     let schedulingServiceEventsListener = async function eventListener(msg: any,
       context: any, config: any, eventName: string): Promise<any> {
       let requestObject = msg;
-      if (eventName === HEALTH_CMD_EVENT && requestObject &&
-        requestObject.service === serviceNamesCfg.scheduling) {
-        const serviceStatus = await cis.check(requestObject);
-        const healthCheckTopic = events.topic(commandTopic);
-        await healthCheckTopic.emit(HEALTH_RES_EVENT, serviceStatus);
-      }
-      else if (eventName === RESTORE_CMD_EVENT) {
-        // the response would be sent from CIS chassis service
-        await cis.restore(msg, context);
-      }
-      else if (eventName === RESET_START_EVENT) {
-        const resetStatus = await cis.reset(requestObject, context);
-        if (resetStatus) {
-          const healthCheckTopic = events.topic(commandTopic);
-          await healthCheckTopic.emit(RESET_DONE_EVENT, resetStatus);
-        }
-      }
-      else if (eventName === JOBS_CREATE_EVENT) {
+      if (eventName === JOBS_CREATE_EVENT) {
         const call = { request: { items: requestObject.items } };
         jobResourceService.create(call, {});
       }
@@ -187,6 +165,8 @@ export class Worker {
         const job_unique_name = requestObject.job_unique_name;
         const call = { request: { ids, id, job_unique_name } };
         jobResourceService.delete(call, {});
+      } else {  // commands
+        await cis.command(msg, context);
       }
     };
 
