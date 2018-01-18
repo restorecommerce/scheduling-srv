@@ -146,7 +146,7 @@ export class Worker {
 
     // Add CommandInterfaceService
     const cis: chassis.ICommandInterface = new JobsCommandInterface(server, cfg.get(),
-      logger, events, service);
+      logger, events);
     await co(server.bind(serviceNamesCfg.cis, cis));
     let schedulingServiceEventsListener = async function eventListener(msg: any,
       context: any, config: any, eventName: string): Promise<any> {
@@ -207,11 +207,8 @@ export class Worker {
 }
 
 class JobsCommandInterface extends chassis.CommandInterface {
-  service: any;
-  constructor(server: chassis.Server, cfg: any, logger: any, events: Events,
-    service: SchedulingService) {
+  constructor(server: chassis.Server, cfg: any, logger: any, events: Events) {
     super(server, cfg, logger, events);
-    this.service = service;
   }
 
   /**
