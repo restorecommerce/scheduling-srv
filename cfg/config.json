@@ -168,7 +168,7 @@
           "protos": [
             "io/restorecommerce/job.proto"
           ],
-          "protoRoot": "protos/",
+          "protoRoot": "node_modules/@restorecommerce/protos/",
           "timeout": 3000
         }
       },
