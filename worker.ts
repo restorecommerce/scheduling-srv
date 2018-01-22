@@ -15,10 +15,10 @@ import * as redisStore from 'cache-manager-redis';
 const Server = chassis.Server;
 const database = chassis.database;
 const grpc = chassis.grpc;
-// Topics
+
+// // Topics
 const COLLECTION_NAME = 'jobs';
-// Topic the jobs are stored as resources
-const JOBS_RESOURCE_TOPIC_NAME = 'io.restorecommerce.jobs.resource';
+// // Topic the jobs are stored as resources
 const JOBS_CREATE_EVENT = 'createJobs';
 const JOBS_MODIFY_EVENT = 'modifyJobs';
 const JOBS_DELETE_EVENT = 'deleteJobs';
@@ -95,7 +95,8 @@ export class Worker {
     const events: Events = new Events(kafkaCfg, logger);
     await events.start();
 
-    const JOBS_TOPIC_NAME = kafkaCfg.jobsTopic;
+    const JOBS_RESOURCE_TOPIC_NAME = kafkaCfg.topics['jobs.resource'].topic;
+    const JOBS_TOPIC_NAME = kafkaCfg.topics.jobs.topic;
     // Subscribe to events which the business logic requires
     const jobResourceEvents: Topic = events.topic(JOBS_RESOURCE_TOPIC_NAME);
     const jobEvents: Topic = events.topic(JOBS_TOPIC_NAME);
