@@ -1,4 +1,4 @@
-FROM node:9.2.0-wheezy AS base
+FROM node:9.2.0-wheezy
 ## CREATE APP USER ##
 # Create the home directory for the new app user.
 RUN mkdir -p /home/app
