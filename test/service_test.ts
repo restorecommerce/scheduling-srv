@@ -1,8 +1,6 @@
 'use strict';
 
 import * as mocha from 'mocha';
-import * as coMocha from 'co-mocha';
-coMocha(mocha);
 import * as should from 'should';
 import * as _ from 'lodash';
 import { SchedulingService } from '../schedulingService';
