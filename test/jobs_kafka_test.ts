@@ -7,6 +7,9 @@ import { Topic } from '@restorecommerce/kafka-client';
 import * as sconfig from '@restorecommerce/service-config';
 
 /* global describe it beforeEach afterEach */
+/**
+ * NOTE: A running redis, kafka and ArangoDB instance is required to run below test.
+ */
 
 const Priority = {
   NORMAL: 0,
@@ -15,6 +18,7 @@ const Priority = {
   HIGH: -10,
   CRITICAL: -15,
 };
+let jobInstID;
 
 describe('Worker', () => {
   let worker: Worker;
@@ -36,11 +40,13 @@ describe('Worker', () => {
     it('should create a new job', async () => {
       const jobID = 'kafka-test';
       let err;
-      await jobTopic.on('queuedJob', (job, context, configRet, eventNameRet) => {
+      await jobTopic.on('queuedJob', async (job, context, configRet, eventNameRet) => {
+        jobInstID = job.id;
         if (job.name === jobID) {
           try {
             should.exist(job.payload);
             job.name.should.equal(jobID);
+            await jobTopic.emit('jobDone', { id: job.id });
             return;
           } catch (error) {
             err = error;
@@ -53,7 +59,7 @@ describe('Worker', () => {
         });
       };
       const data = {
-        timezone: "Europe/Amsterdam",
+        timezone: "Europe/Berlin",
         payload: [{ type_url: "A test", value: string2Dec('A test Value') }]
       };
       const job = {
@@ -63,17 +69,16 @@ describe('Worker', () => {
         priority: Priority.HIGH,
         attempts: 1,
         interval: '',
-        when: new Date()
+        // when: "Mar 15, 2018 10:30:00"
+        when: new Date().toString()
       };
 
-      const offset = await jobTopic.$offset(-1) + 1;
+      const offset = await jobTopic.$offset(-1);
       await jobTopic.emit('createJobs', { items: [job] });
       if (err) {
         throw err;
       }
-      await jobTopic.$wait(offset);
-
-      // await jobEvents.$wait(offset);
+      await jobTopic.$wait(offset + 1);
       const result = await worker.jobResourceService.read({
         request: {},
       }, {});
@@ -91,7 +96,7 @@ describe('Worker', () => {
       };
 
       const offset = await jobResourceTopic.$offset(-1);
-      await jobTopic.emit('deleteJobs', { ids: [job.id] });
+      await jobTopic.emit('deleteJobs', { ids: [job.id], id: [jobInstID] });
 
       // Create a listener for Jobs resource topic to check if the job
       // was actually deleted

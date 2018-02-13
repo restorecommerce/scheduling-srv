@@ -57,9 +57,9 @@
     "test": "npm run lint && npm run mocha",
     "test-debug": "npm run mochadebug",
     "lint": "tslint './*.ts'",
-    "mocha": "export NODE_ENV=test; mocha -R spec ./test/service_test.js ./test/jobs_grpc_test.js ./test/jobs_kafka_test.js --full-trace --exit",
+    "mocha": "export NODE_ENV=test; mocha -R spec ./test/*.js --full-trace --exit",
     "mochadebug": "export NODE_ENV=test; mocha -R spec ./test/*.js --inspect-brk --full-trace --exit",
-    "coveralls": "export NODE_ENV=test; istanbul cover ./node_modules/mocha/bin/_mocha --report lcovonly -- -R spec ./test/service_test.js ./test/jobs_grpc_test.js ./test/jobs_kafka_test.js --exit"
+    "coveralls": "export NODE_ENV=test; istanbul cover ./node_modules/mocha/bin/_mocha --report lcovonly -- -R spec ./test/*.js --exit"
   },
   "engines": {
     "node": ">= 9.2.0"

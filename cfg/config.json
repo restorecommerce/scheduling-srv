@@ -60,14 +60,14 @@
           "io/restorecommerce/job.proto"
         ],
         "protoRoot": "node_modules/@restorecommerce/protos/",
-        "messageObject": "io.restorecommerce.job.Job"
+        "messageObject": "io.restorecommerce.job.JobList"
       },
       "jobsModified": {
         "protos": [
           "io/restorecommerce/job.proto"
         ],
         "protoRoot": "node_modules/@restorecommerce/protos/",
-        "messageObject": "io.restorecommerce.job.Job"
+        "messageObject": "io.restorecommerce.job.JobList"
       },
       "jobsDeleted": {
         "protos": [

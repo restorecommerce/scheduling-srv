@@ -12,7 +12,7 @@
       "provider": "arango",
       "host": "localhost",
       "port": 8529,
-      "database": "scheduling-srv",
+      "database": "scheduling-srv-test",
       "autoCreate": true,
       "collections": [
         "jobs"
@@ -216,5 +216,35 @@
     "scheduling": "io-restorecommerce-scheduling-srv",
     "cis": "io-restorecommerce-scheduling-cis",
     "reflection": "io-restorecommerce-scheduling-reflection"
+  },
+  "client": {
+    "schedulingClient": {
+      "transports": {
+        "grpc": {
+          "service": "io.restorecommerce.job.Service",
+          "protos": [
+            "io/restorecommerce/job.proto"
+          ],
+          "protoRoot": "node_modules/@restorecommerce/protos/",
+          "timeout": 3000
+        }
+      },
+      "loadbalancer": {
+        "name": "roundRobin"
+      },
+      "publisher": {
+        "name": "static",
+        "instances": [
+          "grpc://localhost:50054"
+        ]
+      },
+      "endpoints": {
+        "read": {},
+        "create": {},
+        "delete": {},
+        "update": {},
+        "upsert": {}
+      }
+    }
   }
 }

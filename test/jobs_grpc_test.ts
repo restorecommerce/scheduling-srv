@@ -7,6 +7,9 @@ import { Topic } from '@restorecommerce/kafka-client';
 import * as sconfig from '@restorecommerce/service-config';
 
 /* global describe it beforeEach afterEach */
+/**
+ * NOTE: A running redis, kafka and ArangoDB instance is required to run below test.
+ */
 
 const QUEUED_TOPIC_NAME = 'io.restorecommerce.jobs';
 
@@ -22,7 +25,7 @@ const Backoffs = {
   FIXED: 'FIXED',
   EXPONENTIAL: 'EXPONENTIAL',
 };
-
+let jobInstID;
 describe('Worker', () => {
   let worker: Worker;
   let jobEvents: Topic;
@@ -40,12 +43,14 @@ describe('Worker', () => {
     it('should create a new job', async () => {
       const jobID = 'grpc-test';
       let err;
-      await jobEvents.on('queuedJob', (job, context, configRet, eventNameRet) => {
+      await jobEvents.on('queuedJob', async (job, context, configRet, eventNameRet) => {
+        jobInstID = job.id;
         if (job.name === jobID) {
           try {
             should.exist(job.data);
             job.data.payload[0].value.toString().should.equal('test Value');
             job.name.should.equal(jobID);
+            await jobEvents.emit('jobDone', { id: job.id });
             return;
           } catch (error) {
             err = error;
@@ -58,10 +63,10 @@ describe('Worker', () => {
         });
         return converted;
       };
-      // Example Value for Data is: data: {timezone: "Europe/Amsterdam",
+      // Example Value for Data is: data: {timezone: "Europe/Berlin",
       // payload: [{ type_url: "A test", value: "B test"}]},
       const data = {
-        timezone: "Europe/Amsterdam",
+        timezone: "Europe/Berlin",
         payload: [{ type_url: "test key", value: string2Dec('test Value') }]
       };
       const job = {
@@ -87,9 +92,8 @@ describe('Worker', () => {
       if (err) {
         throw err;
       }
-      await jobEvents.$wait(offset);
+      await jobEvents.$wait(offset + 1);
 
-      // await jobEvents.$wait(offset);
       const result = await worker.jobResourceService.read({
         request: {},
       }, {});
@@ -108,6 +112,7 @@ describe('Worker', () => {
       await worker.jobResourceService.delete({
         request: {
           ids: [job.id],
+          id: jobInstID
         },
       }, {});
       setTimeout(async function (): Promise<any> {
@@ -116,10 +121,6 @@ describe('Worker', () => {
         }, {});
         result.items.should.be.length(0);
       }, 1000);
-      // const result = await worker.jobResourceService.read({
-      //   request: {},
-      // }, {});
-      // result.items.should.be.length(0);
       if (err) {
         throw err;
       }

@@ -31,6 +31,12 @@ export class JobResourceService extends ServiceBase {
       if (jobItem.now) {
         jobsImmediate.push(jobItem);
       }
+      // to fix the kafka message as after encoding it contained additional
+      // attributes which causes issues when adding to ArangoDB instance
+      if (jobItem.data) {
+        jobItem.data = _.pick(jobItem.data, ['payload', 'timezone']);
+        console.log('Job data is :', jobItem.data);
+      }
     }
     call.request.items = call.request.items.filter(item => !jobsImmediate.includes(item));
     const result: any = await super.create(call, context);
@@ -70,6 +76,7 @@ export class JobResourceService extends ServiceBase {
   }
 
   async delete(call: any, context?: any): Promise<any> {
+    // call.request.ids - is the job resouurce id stored in the DB and deleted below.
     const result: any = await super.delete(call, context);
     const deleteJob = [{
       id: call.request.id,
