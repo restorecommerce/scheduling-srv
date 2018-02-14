@@ -47,7 +47,6 @@ export class JobResourceService extends ServiceBase {
       // attributes which causes issues when adding to ArangoDB instance
       if (jobItem.data) {
         jobItem.data = _.pick(jobItem.data, ['payload', 'timezone']);
-        console.log('Job data is :', jobItem.data);
       }
     }
     await this.emitter.emit('createJobs', call.request.items);
