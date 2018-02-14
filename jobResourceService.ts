@@ -5,6 +5,7 @@ import * as Emitter from 'co-emitter';
 
 // API_Resource CRUD operations
 import { ResourcesAPIBase, ServiceBase } from '@restorecommerce/resource-base-interface';
+import { errors } from '@restorecommerce/chassis-srv';
 import * as _ from 'lodash';
 
 const COLLECTION_NAME = 'jobs';
@@ -23,9 +24,20 @@ export class JobResourceService extends ServiceBase {
   }
 
   async create(call: any, context: any): Promise<any> {
-    await this.emitter.emit('createJobs', call.request.items);
     let jobsImmediate: any = [];
     for (let jobItem of call.request.items) {
+      // Check if the jobs execution time i.e. job.when is > current time.
+      // if so process the job else return.
+      if (jobItem.when) {
+        // If the jobSchedule time has already lapsed then do not schedule
+        // the job - fix for kue-scheduler bug.
+        const jobScheduleTime = new Date(jobItem.when).getTime();
+        const currentTime = new Date().getTime();
+        if (jobScheduleTime < currentTime) {
+          throw new errors.InvalidArgument(
+            'the time schedule for the job is invalid or has already elapsed');
+        }
+      }
       // if job is to be executed 'now' i.e. immediately then do not store the
       // job in the database
       if (jobItem.now) {
@@ -38,6 +50,7 @@ export class JobResourceService extends ServiceBase {
         console.log('Job data is :', jobItem.data);
       }
     }
+    await this.emitter.emit('createJobs', call.request.items);
     call.request.items = call.request.items.filter(item => !jobsImmediate.includes(item));
     const result: any = await super.create(call, context);
     for (let jobInst of result.items) {
