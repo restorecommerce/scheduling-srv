@@ -30,7 +30,7 @@ This microservice exposes the following gRPC endpoints for the Job resource.
 | attempts | number | optional | Amount of possible failing runs until a job fails |
 | backoff | `io.restorecommerce.job.Backoff` | optional | Delay settings between failed job runs |
 | parallel | number | optional | Maximum number of parallel jobs |
-| interval | string | optional | Interval to run a job periodically which could be a cron entry. Ex: "0 0 5 * * *" to run a job everyday at 5AM (view [kue-scheduler](https://github.com/lykmapipo/kue-scheduler) for more |
+| interval | string | optional | Interval to run a job periodically which could be a cron entry. Ex: "0 0 5 * * *" to run a job everyday at 5AM (refer [kue-scheduler](https://github.com/lykmapipo/kue-scheduler) for more information)|
 | when | string | optional | A date string, Job is run once at specific time. Ex: "Jan 15, 2018 10:30:00" |
 | now | boolean | optional | If set to true job is run once immediately |
 
@@ -110,7 +110,7 @@ For creating/modifying jobs through Kafka this service listens to events on topi
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
 | id | number | required | Job instance ID in redis |
-| schedule_type | string | required | Job type ex: ONCE, RECURR etc. |
+| schedule_type | string | required | Job type ex: `ONCE`, `RECURR` etc. |
 | job_resource_id | string | required | Job reference ID in the database |
 | job_unique_name | string | optinal | unique job name |
 
@@ -119,7 +119,7 @@ For creating/modifying jobs through Kafka this service listens to events on topi
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
 | id | number | required | Job instance ID in redis |
-| schedule_type | string | required | Job type ex: ONCE, RECURR etc. |
+| schedule_type | string | required | Job type ex: `ONCE`, `RECURR` etc. |
 | job_resource_id | string | required | Job reference ID in the database |
 | job_unique_name | string | optinal | unique job name |
 
