@@ -39,7 +39,7 @@ This microservice exposes the following gRPC endpoints for the Job resource.
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
 | timezone | string | optional | Timezone specification for job scheduling (ex: 'Europe/Amsterdam') |
-| payload | []google.protobuf.Any | optional | Generic data type for different job data structures (see [google.protobuf.Any](https://github.com/restorecommerce/protos/blob/master/google/protobuf/any.proto)) |
+| payload | [ ] `google.protobuf.Any` | optional | Generic data type for different job data structures (see [google.protobuf.Any](https://github.com/restorecommerce/protos/blob/master/google/protobuf/any.proto)) |
 
 `io.restorecommerce.job.Job.Priority`
 
@@ -92,16 +92,17 @@ For the detailed protobuf message structure of `io.restorecommerce.resourcebase.
 ## Kafka Events
 
 This microservice subscribes to the following Kafka events by topic:
-- io.restorecommerce.jobs
+- `io.restorecommerce.jobs`
   - createJobs
   - modifyJobs
   - deleteJobs
   - jobDone
   - jobFailed
-- io.restorecommerce.command
+- `io.restorecommerce.command`
   - restoreCommand
-  - healthCheckCommand
   - resetCommand
+  - healthCheckCommand
+  - versionCommand
 
 For creating/modifying jobs through Kafka this service listens to events on topic `io.restorecommerce.jobs`. CRUD operations take the same arguments as the gRPC endpoints. Tracking a job's status is performed by listening to `jobDone` and `jobFailed` events, which are emitted by any microservice which processes a given job.
 
@@ -128,6 +129,11 @@ List of events emitted to Kafka by this microservice for below topics:
   - jobsCreated
   - jobsModified
   - jobsDeleted
+- io.restorecommerce.command
+  - restoreResponse
+  - resetResponse
+  - healthCheckResponse
+  - versionResponse
 
 Events from the `io.restorecommerce.jobs.resource` topic are issued whenever a CRUD opertion is performed. They are useful for job rescheduling in case of Redis failure.
 
