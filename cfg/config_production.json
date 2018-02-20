@@ -4,19 +4,35 @@
       "host": "restorecommerce-arangodb"
     }
   },
+  "redis": {
+    "host": "redis",
+    "port": 6379,
+    "interval": 1000,
+    "db": 0
+  },
+  "cache": {
+    "kue-scheduler": [
+      {
+        "provider": "redis",
+        "port": 6379,
+        "host": "redis",
+        "db": 1
+      }
+    ]
+  },
   "events": {
-    "main":{
-      "connectionString":"restorecommerce-kafka:2181"
+    "main": {
+      "connectionString": "restorecommerce-kafka:2181"
     }
   },
-  "client":{
-    "schedulingClient":{
+  "client": {
+    "schedulingClient": {
       "publisher": [
         "grpc://scheduling-srv:50051"
       ]
     }
   },
-  "server":{
+  "server": {
     "transports": [
       {
         "name": "schedulingGRPC",

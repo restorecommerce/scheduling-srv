@@ -11,12 +11,18 @@
       ]
     }
   },
+  "redis": {
+    "host": "localhost",
+    "port": 6379,
+    "interval": 1000,
+    "db": 0
+  },
   "cache": {
     "kue-scheduler": [
       {
         "provider": "redis",
         "port": 6379,
-        "host": "redis",
+        "host": "localhost",
         "db": 1
       }
     ]

@@ -40,6 +40,7 @@ export class Worker {
   jobResourceService: JobResourceService;
   events: Events;
   server: any;
+  offsetStore: chassis.OffsetStore;
 
   async start(cfg: any): Promise<any> {
     // Load config
@@ -94,6 +95,7 @@ export class Worker {
     const commandTopic = kafkaCfg.topics.command.topic;
     const events: Events = new Events(kafkaCfg, logger);
     await events.start();
+    this.offsetStore = new chassis.OffsetStore(events, cfg, logger);
 
     const JOBS_RESOURCE_TOPIC_NAME = kafkaCfg.topics['jobs.resource'].topic;
     const JOBS_TOPIC_NAME = kafkaCfg.topics.jobs.topic;
@@ -176,10 +178,13 @@ export class Worker {
     for (let topicType of topicTypes) {
       const topicName = kafkaCfg.topics[topicType].topic;
       topics[topicType] = events.topic(topicName);
+      const offsetValue = await this.offsetStore.getOffset(topicName);
+      logger.info('subscribing to topic with offset value', topicName, offsetValue);
       if (kafkaCfg.topics[topicType].events) {
         const eventNames = kafkaCfg.topics[topicType].events;
         for (let eventName of eventNames) {
-          await topics[topicType].on(eventName, schedulingServiceEventsListener);
+          await topics[topicType].on(eventName, schedulingServiceEventsListener,
+            offsetValue);
         }
       }
     }
@@ -193,6 +198,9 @@ export class Worker {
 
     // Start server
     await co(server.start());
+    // delay to avoid updating of the latestOffset to redis instantly
+    // as the current offSetValue needs to be used for subscribing to topic
+    setTimeout(this.offsetStore.updateTopicOffsets.bind(this.offsetStore), 5000);
 
     this.schedulingService = service;
     this.jobResourceService = jobResourceService;
@@ -204,6 +212,7 @@ export class Worker {
     this.server.logger.info('Shutting down');
     await co(this.server.end());
     await this.events.stop();
+    await this.offsetStore.stop();
   }
 }
 

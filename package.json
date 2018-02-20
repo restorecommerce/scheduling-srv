@@ -20,7 +20,7 @@
     "@restorecommerce/chassis-srv": "github:restorecommerce/chassis-srv",
     "@restorecommerce/cluster-service": "^0.1.0",
     "@restorecommerce/grpc-client": "github:restorecommerce/grpc-client",
-    "@restorecommerce/kafka-client": "^0.1.0",
+    "@restorecommerce/kafka-client": "github:restorecommerce/kafka-client",
     "@restorecommerce/logger": "^0.1.0",
     "@restorecommerce/protos": "github:restorecommerce/protos",
     "@restorecommerce/resource-base-interface": "github:restorecommerce/resource-base-interface",
@@ -55,8 +55,6 @@
     "test-debug": "npm run mochadebug",
     "lint": "tslint './*.ts'",
     "mocha": "export NODE_ENV=test; mocha -R spec ./test/*_test.js --full-trace --exit",
-    "mochagrpc": "export NODE_ENV=test; mocha -R spec ./test/*grpc_test.js --full-trace --exit",
-    "mochakafka": "export NODE_ENV=test; mocha -R spec ./test/*kafka_test.js --full-trace --exit",
     "mochadebug": "export NODE_ENV=test; mocha -R spec ./test/*_test.js --inspect-brk --full-trace --exit",
     "coveralls": "export NODE_ENV=test; istanbul cover ./node_modules/mocha/bin/_mocha --report lcovonly -- -R spec ./test/*_test.js --exit"
   },
