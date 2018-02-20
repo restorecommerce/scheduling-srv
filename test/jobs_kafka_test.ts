@@ -62,6 +62,8 @@ describe('Worker', () => {
         timezone: "Europe/Berlin",
         payload: [{ type_url: "A test", value: string2Dec('A test Value') }]
       };
+      let scheduledTime = new Date();
+      scheduledTime.setSeconds(scheduledTime.getSeconds() + 4);
       const job = {
         id: `/jobs/${jobID}`,
         name: jobID,
@@ -69,8 +71,9 @@ describe('Worker', () => {
         priority: Priority.HIGH,
         attempts: 1,
         interval: '',
-        // when: "Mar 15, 2018 10:30:00"
-        when: new Date().toString()
+        // when: 'Mar 15, 2019 10:30:00'
+        // when: new Date().toString()
+        when: scheduledTime.toString()
       };
 
       const offset = await jobTopic.$offset(-1);

@@ -1,7 +1,5 @@
 'use strict';
-
-import * as Emitter from 'co-emitter';
-
+import { EventEmitter } from 'events';
 
 // API_Resource CRUD operations
 import { ResourcesAPIBase, ServiceBase } from '@restorecommerce/resource-base-interface';
@@ -20,7 +18,7 @@ export class JobResourceService extends ServiceBase {
     super(COLLECTION_NAME, jobResourceEvents, logger, apiBase, true);
     this.db = db;
     this.logger = logger;
-    this.emitter = new Emitter();
+    this.emitter = new EventEmitter();
   }
 
   async create(call: any, context: any): Promise<any> {

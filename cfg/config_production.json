@@ -23,7 +23,7 @@
         "provider": "grpc",
         "services": {
           "io-restorecommerce-scheduling-srv": "io.restorecommerce.job.Service",
-          "io-restorecommerce-scheduling-ci": "io.restorecommerce.commandinterface.Service",
+          "io-restorecommerce-scheduling-cis": "io.restorecommerce.commandinterface.Service",
           "io-restorecommerce-scheduling-reflection": "grpc.reflection.v1alpha.ServerReflection"
         },
         "protos": [

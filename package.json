@@ -28,8 +28,6 @@
     "cache-manager": "^2.1.2",
     "cache-manager-redis": "^0.5.0",
     "co": "^4.6.0",
-    "co-emitter": "^0.2.3",
-    "kue": "^0.11.1",
     "kue-scheduler": "^0.7.4",
     "lodash": "^4.14.1"
   },
@@ -41,7 +39,6 @@
     "istanbul": "^0.4.4",
     "mocha": "^4.0.1",
     "mocha-typescript": "^1.1.4",
-    "nsp": "^2.6.1",
     "should": "^11.2.1",
     "tslint": "^5.3.2",
     "typescript": "^2.3.4",
@@ -57,9 +54,11 @@
     "test": "npm run lint && npm run mocha",
     "test-debug": "npm run mochadebug",
     "lint": "tslint './*.ts'",
-    "mocha": "export NODE_ENV=test; mocha -R spec ./test/*.js --full-trace --exit",
-    "mochadebug": "export NODE_ENV=test; mocha -R spec ./test/*.js --inspect-brk --full-trace --exit",
-    "coveralls": "export NODE_ENV=test; istanbul cover ./node_modules/mocha/bin/_mocha --report lcovonly -- -R spec ./test/*.js --exit"
+    "mocha": "export NODE_ENV=test; mocha -R spec ./test/*_test.js --full-trace --exit",
+    "mochagrpc": "export NODE_ENV=test; mocha -R spec ./test/*grpc_test.js --full-trace --exit",
+    "mochakafka": "export NODE_ENV=test; mocha -R spec ./test/*kafka_test.js --full-trace --exit",
+    "mochadebug": "export NODE_ENV=test; mocha -R spec ./test/*_test.js --inspect-brk --full-trace --exit",
+    "coveralls": "export NODE_ENV=test; istanbul cover ./node_modules/mocha/bin/_mocha --report lcovonly -- -R spec ./test/*_test.js --exit"
   },
   "engines": {
     "node": ">= 9.2.0"

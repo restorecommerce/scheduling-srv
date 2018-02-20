@@ -40,7 +40,7 @@ describe('Worker', () => {
   });
   describe('post new job via gRPC', function postNewJob() {
     this.timeout(5000);
-    it('should create a new job', async () => {
+    it('should create a new job and execute it immediately', async () => {
       const jobID = 'grpc-test';
       let err;
       await jobEvents.on('queuedJob', async (job, context, configRet, eventNameRet) => {
@@ -51,7 +51,6 @@ describe('Worker', () => {
             job.data.payload[0].value.toString().should.equal('test Value');
             job.name.should.equal(jobID);
             await jobEvents.emit('jobDone', { id: job.id });
-            return;
           } catch (error) {
             err = error;
           }
@@ -63,8 +62,6 @@ describe('Worker', () => {
         });
         return converted;
       };
-      // Example Value for Data is: data: {timezone: "Europe/Berlin",
-      // payload: [{ type_url: "A test", value: "B test"}]},
       const data = {
         timezone: "Europe/Berlin",
         payload: [{ type_url: "test key", value: string2Dec('test Value') }]
@@ -79,8 +76,69 @@ describe('Worker', () => {
           delay: 1000,
           type: Backoffs.FIXED,
         },
-        interval: '',
-        when: new Date()
+        now: true
+      };
+
+      const offset = await jobEvents.$offset(-1);
+      await worker.jobResourceService.create({
+        request: {
+          items: [job],
+        },
+      }, {});
+      if (err) {
+        throw err;
+      }
+      await jobEvents.$wait(offset + 1);
+
+      const result = await worker.jobResourceService.read({
+        request: {},
+      }, {});
+      // there should not be any data since we do not store the jobs in DB
+      // which are to be executed immediately
+      result.items.should.be.length(0);
+    });
+    it('should create a new job and execute it at scheduled time', async () => {
+      const jobID = 'grpc-test-scheduled';
+      let err;
+      await jobEvents.on('queuedJob', async (job, context, configRet, eventNameRet) => {
+        jobInstID = job.id;
+        if (job.name === jobID) {
+          try {
+            should.exist(job.data);
+            job.data.payload[0].value.toString().should.equal('test another Value');
+            job.name.should.equal(jobID);
+            await jobEvents.emit('jobDone', { id: job.id });
+          } catch (error) {
+            err = error;
+          }
+        }
+      });
+      const string2Dec = (str) => {
+        const converted = str.split('').map((val) => {
+          return val.charCodeAt(0);
+        });
+        return converted;
+      };
+      const data = {
+        timezone: "Europe/Berlin",
+        payload: [{ type_url: "test key", value: string2Dec('test another Value') }]
+      };
+
+      // schedule the job to be executed 4 seconds from now.
+      // we can specify any Date instance for scheduling the job
+      let scheduledTime = new Date();
+      scheduledTime.setSeconds(scheduledTime.getSeconds() + 4);
+      const job = {
+        id: `/jobs/${jobID}`,
+        name: jobID,
+        data,
+        priority: Priority.HIGH,
+        attempts: 1,
+        backoff: {
+          delay: 1000,
+          type: Backoffs.FIXED,
+        },
+        when: scheduledTime.toString()
       };
 
       const offset = await jobEvents.$offset(-1);
@@ -104,7 +162,7 @@ describe('Worker', () => {
     this.timeout(5000);
     it('should delete the created job', async () => {
       // Delete the above posted job itself
-      const jobID = 'grpc-test';
+      const jobID = 'grpc-test-scheduled';
       let err;
       const job = {
         id: `/jobs/${jobID}`

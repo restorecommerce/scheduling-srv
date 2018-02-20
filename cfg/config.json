@@ -16,7 +16,8 @@
       {
         "provider": "redis",
         "port": 6379,
-        "host": "redis"
+        "host": "redis",
+        "db": 1
       }
     ]
   },
