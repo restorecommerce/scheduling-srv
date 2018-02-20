@@ -198,9 +198,6 @@ export class Worker {
 
     // Start server
     await co(server.start());
-    // delay to avoid updating of the latestOffset to redis instantly
-    // as the current offSetValue needs to be used for subscribing to topic
-    setTimeout(this.offsetStore.updateTopicOffsets.bind(this.offsetStore), 5000);
 
     this.schedulingService = service;
     this.jobResourceService = jobResourceService;
