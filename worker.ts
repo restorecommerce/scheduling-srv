@@ -66,7 +66,9 @@ export class Worker {
     logger.verbose(`found ${jobNames.length} job resource(s)`, jobNames);
 
     // Get a redis connection
-    const redis = await co(chassis.cache.get(cfg.get('cache:kue-scheduler'), logger));
+    const redisConfig = cfg.get('redis');
+    redisConfig.db = cfg.get('redis:db-indexes:db-jobStore');
+    const redis = await co(chassis.cache.get([redisConfig], logger));
 
     // Filter jobResources based on already queued jobs in redis
     const missingJobNames = [];
@@ -104,7 +106,6 @@ export class Worker {
     const jobEvents: Topic = events.topic(JOBS_TOPIC_NAME);
 
     // Create the business logic
-    const redisConfig: any = cfg.get('cache:kue-scheduler:0');
     const service: SchedulingService = new
       SchedulingService(jobEvents, redisConfig, cfg, logger);
     await co(service.start(missingJobs));
