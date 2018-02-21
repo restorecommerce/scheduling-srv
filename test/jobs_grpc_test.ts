@@ -138,7 +138,7 @@ describe('Worker', () => {
           delay: 1000,
           type: Backoffs.FIXED,
         },
-        when: scheduledTime.toString()
+        when: scheduledTime.toISOString()
       };
 
       const offset = await jobEvents.$offset(-1);

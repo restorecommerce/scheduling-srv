@@ -72,8 +72,7 @@ describe('Worker', () => {
         attempts: 1,
         interval: '',
         // when: 'Mar 15, 2019 10:30:00'
-        // when: new Date().toString()
-        when: scheduledTime.toString()
+        when: scheduledTime.toISOString()
       };
 
       const offset = await jobTopic.$offset(-1);
