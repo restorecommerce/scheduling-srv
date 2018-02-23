@@ -27,6 +27,7 @@
       "groupId": "scheduling-srv",
       "clientId": "scheduling-srv",
       "connectionString": "localhost:2181",
+      "latestOffset": false,
       "jobsTopic": "io.restorecommerce.jobs",
       "queuedJob": {
         "protos": [

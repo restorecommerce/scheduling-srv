@@ -35,6 +35,7 @@
       "groupId": "scheduling-srv",
       "clientId": "scheduling-srv",
       "connectionString": "zookeeper:2181",
+      "latestOffset": true,
       "jobsTopic": "io.restorecommerce.jobs",
       "queuedJob": {
         "protos": [
