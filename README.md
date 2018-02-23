@@ -145,6 +145,7 @@ This service uses [chassis-srv](http://github.com/restorecommerce/chassis-srv), 
 - implementation of a [command-interface](https://github.com/restorecommerce/chassis-srv/blob/master/command-interface.md) which
 provides endpoints for retrieving the system status and resetting/restoring the system in case of failure. These endpoints can be called via gRPC or Kafka events (through the `io.restorecommerce.command` topic).
 - database access, which is abstracted by the [resource-base-interface](https://github.com/restorecommerce/resource-base-interface)
+- stores the offset values for Kafka topics at regular intervals to [Redis](https://redis.io/)
 - Redis cache management
 
 ## Usage
