@@ -1,7 +1,16 @@
 {
+  "logger": {
+    "elasticsearch": {
+      "level": "error",
+      "clientOpts": {
+        "host": "elasticsearch:9200"
+      },
+      "source": "scheduling-srv"
+    }
+  }
   "database": {
     "main": {
-      "host": "restorecommerce-arangodb"
+      "host": "arangodb"
     }
   },
   "redis": {
@@ -9,7 +18,7 @@
   },
   "events": {
     "main": {
-      "connectionString": "restorecommerce-kafka:2181"
+      "connectionString": "zookeeper:2181"
     }
   },
   "client": {
@@ -39,14 +48,5 @@
         "addr": "scheduling-srv:50051"
       }
     ]
-  },
-  "logger": {
-    "elasticsearch": {
-      "level": "error",
-      "clientOpts": {
-        "host": "restorecommerce-elasticsearch:9200"
-      },
-      "source": "scheduling-srv"
-    }
   }
 }
