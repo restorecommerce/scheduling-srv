@@ -6,8 +6,8 @@
 [depend]: https://img.shields.io/david/restorecommerce/scheduling-srv.svg?style=flat-square
 [cover]: http://img.shields.io/coveralls/restorecommerce/scheduling-srv/master.svg?style=flat-square
 
-A generic microservice for scheduling jobs and emit them over [Apache Kafka](https://kafka.apache.org/). Job scheduling is implemented using [kue-scheduler](https://github.com/lykmapipo/kue-scheduler) which is a job scheduler utility for [kue](https://github.com/Automattic/kue), backed by [Redis](https://redis.io/). This service provides a [gRPC](https://grpc.io/docs/) interface for scheduling new jobs and modifying the existing jobs using CRUD operations. The scheduled and recurring jobs are persisted within an ArangoDB instance so that in case Redis goes down the jobs will be scheduled once the service starts up again.
-The jobs emitted to Kafka can be consumed by other microservices. After processing the jobs an event is then emitted by the respetive microservices indicating job failure or completion.
+A generic microservice for scheduling jobs and emit them over [Apache Kafka](https://kafka.apache.org/). Job scheduling is implemented using [kue-scheduler](https://github.com/lykmapipo/kue-scheduler) which is a job scheduler utility for [kue](https://github.com/Automattic/kue), backed by [Redis](https://redis.io/). This service provides a [gRPC](https://grpc.io/docs/) interface for scheduling new jobs and modifying the existing jobs using CRUD operations. Jobs can also be created asynchronously using Kafka. The scheduled and recurring jobs are persisted within an ArangoDB instance so that in case Redis goes down the jobs will be scheduled once the service starts up again.
+The jobs emitted to Kafka can be consumed by other microservices. After processing the job an event is then emitted by the respetive microservices indicating job failure or completion.
 
 ## gRPC Interface
 
