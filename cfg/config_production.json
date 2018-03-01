@@ -7,7 +7,7 @@
       },
       "source": "scheduling-srv"
     }
-  }
+  },
   "database": {
     "main": {
       "host": "arangodb"
