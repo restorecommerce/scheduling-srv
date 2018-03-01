@@ -172,36 +172,6 @@
       }
     }
   },
-  "client": {
-    "schedulingClient": {
-      "transports": {
-        "grpc": {
-          "service": "io.restorecommerce.job.Service",
-          "protos": [
-            "io/restorecommerce/job.proto"
-          ],
-          "protoRoot": "node_modules/@restorecommerce/protos/",
-          "timeout": 3000
-        }
-      },
-      "loadbalancer": {
-        "name": "roundRobin"
-      },
-      "publisher": {
-        "name": "static",
-        "instances": [
-          "grpc://localhost:50054"
-        ]
-      },
-      "endpoints": {
-        "read": {},
-        "create": {},
-        "delete": {},
-        "update": {},
-        "upsert": {}
-      }
-    }
-  },
   "server": {
     "services": {
       "io-restorecommerce-scheduling-srv": {

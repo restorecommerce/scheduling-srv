@@ -54,43 +54,10 @@ export class Worker {
     // Get database connection
     const db = await co(database.get(cfg.get('database:main'), logger));
 
-    let jobResources;
-    try {
-      jobResources = await co(db.find(COLLECTION_NAME, {}));
-    } catch (err) {
-      logger.info('No Jobs found:', err);
-    }
-    const jobNames = _.map(jobResources, jr => {
-      return jr.name;
-    });
-    logger.verbose(`found ${jobNames.length} job resource(s)`, jobNames);
-
     // Get a redis connection
     const redisConfig = cfg.get('redis');
     redisConfig.db = cfg.get('redis:db-indexes:db-jobStore');
     const redis = await co(chassis.cache.get([redisConfig], logger));
-
-    // Filter jobResources based on already queued jobs in redis
-    const missingJobNames = [];
-    for (let i = 0; i < jobNames; i += 1) {
-      const jobName = jobNames[i];
-      const keys = await (() => {
-        return (cb) => {
-          redis.keys(`scheduling-srv:jobs:${jobName}*`, cb);
-        };
-      });
-      if (keys.length === 0) {
-        missingJobNames.push(jobName);
-      }
-    }
-    const missingJobs = _.filter(jobResources, (jr) => {
-      return _.includes(missingJobNames, jr.name);
-    });
-
-    logger.verbose(`missing ${missingJobs.length} job(s) in redis`,
-      _.map(missingJobs, jr => {
-        return jr.name;
-      }));
 
     // Create events
     let kafkaCfg = cfg.get('events:kafka');
@@ -105,25 +72,51 @@ export class Worker {
     const jobResourceEvents: Topic = events.topic(JOBS_RESOURCE_TOPIC_NAME);
     const jobEvents: Topic = events.topic(JOBS_TOPIC_NAME);
 
+    const jobResourceService: JobResourceService = new JobResourceService(jobResourceEvents, db, logger);
     // Create the business logic
-    const service: SchedulingService = new
-      SchedulingService(jobEvents, redisConfig, cfg, logger);
-    await co(service.start(missingJobs));
-    // schedule existing jobs in the database
-    for (let i = 0; i < jobResources.length; i++) {
-      jobResources[i].data = _.toPlainObject(jobResources[i].data);
-      await service.createJob(jobResources[i]);
+    const schedulingService: SchedulingService = new SchedulingService(jobEvents, redisConfig, cfg, logger, jobResourceService);
+
+    // read existing jobs from DB
+    const jobsResult = await jobResourceService.read({
+      request: {}
+    }, {});
+    const existingJobs = jobsResult.items || [];
+    const jobNames = _.map(existingJobs, (job) => {
+      return job.name;
+    });
+
+    logger.verbose(`found ${jobNames.length} job resource(s)`, jobNames);
+
+    // Filter jobResources based on already queued jobs in redis
+    const missingJobs = [];
+    for (let i = 0; i < existingJobs.length; i += 1) {
+      const jobName = existingJobs[i].name;
+      const keys = await (() => {
+        return (cb) => {
+          redis.keys(`scheduling-srv:jobs:${jobName}*`, cb);
+        };
+      });
+      if (keys.length === 0) {
+        missingJobs.push(existingJobs[i]);
+      }
     }
 
-    // Create CRUD REST interface
-    const jobResourceService: JobResourceService = new
-      JobResourceService(jobResourceEvents, db, logger);
+    logger.verbose(`missing ${missingJobs.length} job(s) in redis`,
+      _.map(missingJobs, job => {
+        return job.name;
+      }));
+    await co(schedulingService.start(missingJobs));
+
+    // schedule existing jobs in the database
+    for (let i = 0; i < existingJobs.length; i++) {
+      await schedulingService.createJob(existingJobs[i]);
+    }
+
     jobResourceService.emitter.on('createJobs',
       async function onCreated(jobs: any): Promise<any> {
         const createJobs = [];
         for (let i = 0; i < jobs.length; i++) {
-          jobs[i].data = _.toPlainObject(jobs[i].data);
-          createJobs.push(service.createJob(jobs[i]));
+          createJobs.push(schedulingService.createJob(jobs[i]));
         }
         await createJobs;
       });
@@ -131,7 +124,7 @@ export class Worker {
       async function onDeleted(jobs: any): Promise<any> {
         const deleteJobs = [];
         for (let i = 0; i < jobs.length; i++) {
-          deleteJobs.push(service.deleteJob(jobs[i].id, jobs[i].job_unique_name));
+          deleteJobs.push(schedulingService.deleteJob(jobs[i].id, jobs[i].job_unique_name));
         }
         await deleteJobs;
       });
@@ -139,8 +132,8 @@ export class Worker {
       async function onUpdated(jobs: any): Promise<any> {
         const calls = [];
         for (let i = 0; i < jobs.length; i++) {
-          calls.push(service.deleteJob(jobs[i].id, jobs[i].job_unique_name));
-          calls.push(service.createJob(jobs[i]));
+          calls.push(schedulingService.deleteJob(jobs[i].id, jobs[i].job_unique_name));
+          calls.push(schedulingService.createJob(jobs[i]));
         }
         await calls;
       });
@@ -200,7 +193,7 @@ export class Worker {
     // Start server
     await co(server.start());
 
-    this.schedulingService = service;
+    this.schedulingService = schedulingService;
     this.jobResourceService = jobResourceService;
     this.events = events;
     this.server = server;

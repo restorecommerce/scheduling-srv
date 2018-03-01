@@ -4,11 +4,9 @@ import * as _ from 'lodash';
 import * as co from 'co';
 import * as kue from 'kue-scheduler';
 import * as chassis from '@restorecommerce/chassis-srv';
-import * as grpcClient from '@restorecommerce/grpc-client';
 import * as kafkaClient from '@restorecommerce/kafka-client';
 import { Worker } from './worker';
-declare const Buffer;
-
+import { JobResourceService } from './jobResourceService';
 function filterJob(job: any): Object {
   return _.pick(job, [
     'type', 'data', '_max_attempts', '_priority',
@@ -36,16 +34,17 @@ class SchedulingService {
   queue: any;
   jobCbs: any;
   cfg: any;
-
-  constructor(jobEvents: kafkaClient.Topic, redisConfig: any, cfg: any, logger: any) {
+  jobResourceService: JobResourceService;
+  constructor(jobEvents: kafkaClient.Topic, redisConfig: any, cfg: any, logger: any, jobResourceService: JobResourceService) {
     this.events = jobEvents;
     this.logger = logger;
-    const options: Object = {
+    const options = {
       prefix: 'scheduling-srv',
       redis: redisConfig,
     };
     this.queue = kue.createQueue(options);
     this.cfg = cfg;
+    this.jobResourceService = jobResourceService;
   }
 
   /**
@@ -69,15 +68,15 @@ class SchedulingService {
         delete jobCbs[job.id];
         cb();
         if (!(job.schedule_type === 'RECCUR')) {
-          let client = new grpcClient.Client(that.cfg.get('client:schedulingClient'), logger);
-          let jobResourceService = await client.connect();
           let jobIDs = [job.job_resource_id];
           let uniqueName = [job.job_unique_name];
           let jobProcID = [job.id];
-          await jobResourceService.delete({
-            ids: jobIDs,
-            id: jobProcID,
-            job_unique_name: uniqueName
+          await that.jobResourceService.delete({
+            request: {
+              ids: jobIDs,
+              id: jobProcID,
+              job_unique_name: uniqueName
+            }
           });
         }
       }
@@ -94,15 +93,15 @@ class SchedulingService {
         delete jobCbs[job.id];
         cb();
         if (!(job.schedule_type === 'RECCUR')) {
-          let client = new grpcClient.Client(that.cfg.get('client:schedulingClient'), logger);
-          let jobResourceService = await client.connect();
           let jobIDs = [job.job_resource_id];
           let uniqueName = [job.job_unique_name];
           let jobProcID = [job.id];
-          await jobResourceService.delete({
-            ids: jobIDs,
-            id: jobProcID,
-            job_unique_name: uniqueName
+          await that.jobResourceService.delete({
+            request: {
+              ids: jobIDs,
+              id: jobProcID,
+              job_unique_name: uniqueName
+            }
           });
         }
       }
@@ -130,24 +129,9 @@ class SchedulingService {
     const jobEvents: kafkaClient.Topic = this.events;
     const jobCbs: any = this.jobCbs;
     const logger: any = this.logger;
+    const that = this;
     this.queue.process(jobName, parallel, (jobInst, done) => {
       jobCbs[jobInst.id] = done;
-      if (jobInst.data && jobInst.data.payload) {
-        jobInst.data.payload = _.toArray(jobInst.data.payload);
-        for (let i = 0; i < jobInst.data.payload.length; i += 1) {
-          // As the job process could add additional attributes to data
-          // make a check if job data contains value element
-          let byteArray = [];
-          if (jobInst.data.payload[i].value && jobInst.data.payload[i].value
-            && jobInst.data.payload[i].value.data) {
-            const bufDataLength = jobInst.data.payload[i].value.data.length;
-            for (let j = 0; j < bufDataLength; j += 1) {
-              byteArray[j] = jobInst.data.payload[i].value.data[j];
-            }
-            jobInst.data.payload[i].value = byteArray;
-          }
-        }
-      }
       logger.verbose(`job@${jobInst.type}#${jobInst.id} queued`, filterJob(jobInst));
       kue.Job.get(jobInst.id, function (err: any, job: any): any {
         const scheduleType = job.data.schedule;

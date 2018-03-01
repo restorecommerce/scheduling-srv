@@ -6,6 +6,7 @@ import { Worker } from '../worker';
 import { Topic } from '@restorecommerce/kafka-client';
 import * as sconfig from '@restorecommerce/service-config';
 
+import { marshallPayload, unmarshallPayload } from './utils';
 /* global describe it beforeEach afterEach */
 /**
  * NOTE: A running redis, kafka and ArangoDB instance is required to run below test.
@@ -53,14 +54,11 @@ describe('Worker', () => {
           }
         }
       });
-      const string2Dec = (str) => {
-        return str.split('').map((val) => {
-          return val.charCodeAt(0);
-        });
-      };
       const data = {
         timezone: "Europe/Berlin",
-        payload: [{ type_url: "A test", value: string2Dec('A test Value') }]
+        payload:  marshallPayload({
+          testValue: 'test-value'
+        })
       };
       let scheduledTime = new Date();
       scheduledTime.setSeconds(scheduledTime.getSeconds() + 4);
@@ -71,7 +69,6 @@ describe('Worker', () => {
         priority: Priority.HIGH,
         attempts: 1,
         interval: '',
-        // when: 'Mar 15, 2019 10:30:00'
         when: scheduledTime.toISOString()
       };
 

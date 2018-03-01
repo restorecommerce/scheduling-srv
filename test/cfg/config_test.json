@@ -70,14 +70,14 @@
           "io/restorecommerce/job.proto"
         ],
         "protoRoot": "node_modules/@restorecommerce/protos/",
-        "messageObject": "io.restorecommerce.job.JobList"
+        "messageObject": "io.restorecommerce.job.Job"
       },
       "jobsModified": {
         "protos": [
           "io/restorecommerce/job.proto"
         ],
         "protoRoot": "node_modules/@restorecommerce/protos/",
-        "messageObject": "io.restorecommerce.job.JobList"
+        "messageObject": "io.restorecommerce.job.Job"
       },
       "jobsDeleted": {
         "protos": [
@@ -85,13 +85,6 @@
         ],
         "protoRoot": "node_modules/@restorecommerce/protos/",
         "messageObject": "io.restorecommerce.resourcebase.DeleteRequest"
-      },
-      "mailNotification-event": {
-        "protos": [
-          "io/restorecommerce/job.proto"
-        ],
-        "protoRoot": "node_modules/@restorecommerce/protos/",
-        "messageObject": "io.restorecommerce.job.ScheduledJob"
       },
       "jobDone": {
         "protos": [
@@ -228,11 +221,6 @@
           ]
         },
         "restore": {
-          "transport": [
-            "schedulingGRPC"
-          ]
-        },
-        "sendMailNotification": {
           "transport": [
             "schedulingGRPC"
           ]
