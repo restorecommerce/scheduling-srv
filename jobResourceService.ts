@@ -72,13 +72,6 @@ export class JobResourceService extends ServiceBase {
 
   async read(call: any, context: any): Promise<any> {
     const result: any = await super.read(call, context);
-    result.items = result.items.map((jobInst) => {
-      if (jobInst.data && jobInst.data.payload)
-        jobInst.data.payload = marshallProtobufAny(jobInst.data.payload);
-      return jobInst;
-    });
-
-    // delete result.items.total_count;
     return result;
   }
 
