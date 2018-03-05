@@ -37,7 +37,7 @@ export class JobResourceService extends ServiceBase {
 
     if (job.data) {
       job.data = _.pick(job.data, ['payload', 'timezone']);
-      if (job.data.payload) {
+      if (job.data.payload && job.data.payload.value) {
         job.data.payload = marshallProtobufAny(JSON.parse(job.data.payload.value.toString()));
       }
     }
