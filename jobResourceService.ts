@@ -73,7 +73,8 @@ export class JobResourceService extends ServiceBase {
   async read(call: any, context: any): Promise<any> {
     const result: any = await super.read(call, context);
     result.items = result.items.map((jobInst) => {
-      jobInst.data.payload = marshallProtobufAny(jobInst.data.payload);
+      if (jobInst.data && jobInst.data.payload)
+        jobInst.data.payload = marshallProtobufAny(jobInst.data.payload);
       return jobInst;
     });
 
@@ -120,7 +121,7 @@ export class JobResourceService extends ServiceBase {
   }
 }
 
-function marshallProtobufAny(data: any): any {
+export function marshallProtobufAny(data: any): any {
   const stringified = JSON.stringify(data);
   return {
     type_url: '',
@@ -128,7 +129,7 @@ function marshallProtobufAny(data: any): any {
   };
 }
 
-function unmarshallProtobufAny(data: any): any {
+export function unmarshallProtobufAny(data: any): any {
   let unmarshalled = {};
   if (!_.isEmpty(data)) {
     const payloadValue = data.value;
