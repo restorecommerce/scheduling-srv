@@ -71,6 +71,7 @@ class SchedulingService {
           let jobIDs = [job.job_resource_id];
           let uniqueName = [job.job_unique_name];
           let jobProcID = [job.id];
+          logger.info('Delete job resrource service request :', job);
           await that.jobResourceService.delete({
             request: {
               ids: jobIDs,
