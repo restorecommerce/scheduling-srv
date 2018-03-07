@@ -71,7 +71,6 @@ class SchedulingService {
           let jobIDs = [job.job_resource_id];
           let uniqueName = [job.job_unique_name];
           let jobProcID = [job.id];
-          logger.info('Delete completed job resrource service request :', job);
           await that.jobResourceService.delete({
             request: {
               ids: jobIDs,
@@ -79,6 +78,7 @@ class SchedulingService {
               job_unique_name: uniqueName
             }
           });
+          logger.info('Recurring job was successfully deleted from the database', job);
         }
       }
     });
@@ -97,7 +97,6 @@ class SchedulingService {
           let jobIDs = [job.job_resource_id];
           let uniqueName = [job.job_unique_name];
           let jobProcID = [job.id];
-          logger.info('Delete failed job resrource service request :', job);
           await that.jobResourceService.delete({
             request: {
               ids: jobIDs,
@@ -105,6 +104,7 @@ class SchedulingService {
               job_unique_name: uniqueName
             }
           });
+          logger.verbose('Failed job was successfully deleted from the database', job);
         }
       }
     });
