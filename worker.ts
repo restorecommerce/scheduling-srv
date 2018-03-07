@@ -91,10 +91,10 @@ export class Worker {
     const missingJobs = [];
     for (let i = 0; i < existingJobs.length; i += 1) {
       const jobName = existingJobs[i].name;
-      const keys = await (() => {
-        return (cb) => {
-          redis.keys(`scheduling-srv:jobs:${jobName}*`, cb);
-        };
+      const keys: any = await new Promise(function (resolve: any, reject: any): any {
+        redis.keys(`scheduling-srv:jobs:${jobName}*`, (err, keyData) => {
+          resolve(keyData);
+        });
       });
       if (keys.length === 0) {
         missingJobs.push(existingJobs[i]);
