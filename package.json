@@ -22,27 +22,26 @@
     "@restorecommerce/kafka-client": "github:restorecommerce/kafka-client",
     "@restorecommerce/logger": "^0.1.0",
     "@restorecommerce/protos": "github:restorecommerce/protos",
-    "@restorecommerce/resource-base-interface": "github:restorecommerce/resource-base-interface",
     "@restorecommerce/service-config": "^0.1.0",
     "cache-manager": "^2.1.2",
     "cache-manager-redis": "^0.5.0",
     "co": "^4.6.0",
     "kue-scheduler": "^0.7.4",
-    "lodash": "^4.14.1"
+    "lodash": "^4.14.1",
+    "sleep": "^5.1.1"
   },
   "devDependencies": {
     "@restorecommerce/grpc-client": "github:restorecommerce/grpc-client",
     "@types/mocha": "^2.2.39",
     "@types/node": "^4.0.35",
+    "@types/redis": "^2.8.6",
     "@types/should": "^11.2.0",
     "coveralls": "^3.0.0",
     "istanbul": "^0.4.4",
     "mocha": "^4.0.1",
-    "mocha-typescript": "^1.1.4",
     "should": "^11.2.1",
     "tslint": "^5.3.2",
-    "typescript": "^2.3.4",
-    "typescript-require": "^0.2.9"
+    "typescript": "^2.3.4"
   },
   "scripts": {
     "start": "npm run createtopics && node start.js",
@@ -54,7 +53,9 @@
     "test": "npm run lint && npm run mocha",
     "test-debug": "npm run mochadebug",
     "lint": "tslint './*.ts'",
-    "mocha": "export NODE_ENV=test; mocha -R spec ./test/*.js --full-trace --exit",
+    "grpc-mocha": "export NODE_ENV=test; mocha -R spec ./test/grpc*.js --full-trace --exit --trace-warnings",
+    "kafka-mocha": "export NODE_ENV=test; mocha -R spec ./test/kafka*.js --full-trace --exit --trace-warnings",
+    "mocha": "export NODE_ENV=test; mocha -R spec ./test/grpc*.js --full-trace --exit --trace-warnings",
     "mochadebug": "export NODE_ENV=test; mocha -R spec ./test/*_test.js --inspect-brk --full-trace --exit",
     "coveralls": "export NODE_ENV=test; istanbul cover ./node_modules/mocha/bin/_mocha --report lcovonly -- -R spec ./test/*_test.js --exit"
   },

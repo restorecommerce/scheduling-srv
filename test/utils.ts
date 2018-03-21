@@ -1,25 +1,43 @@
+import { Priority, marshallProtobufAny, unmarshallProtobufAny } from '../schedulingService';
+import * as should from 'should';
 
-/**
- * Marshall any job payload to google.protobuf.Any
- * Bytes are encoded in base 64
- * @param payload
- */
-export function marshallPayload(payload: any): any {
-  const stringified = JSON.stringify(payload);
-  return {
-    type_url: '',
-    value: Buffer.from(stringified).toString('base64')
-  };
+export function validateScheduledJob(job: any, expectedSchedule: string): void {
+  should.exist(job.data);
+  should.exist(job.data.payload);
+  const payload = unmarshallProtobufAny(job.data.payload);
+  should.exist(payload.testValue);
+  payload.testValue.should.equal('test-value');
+  should.exist(job.id);
+  should.exist(job.type);
+  job.type.should.equal('test-job');
+  should.exist(job.schedule_type);
+  job.schedule_type.should.equal(expectedSchedule);
 }
 
-/**
- * Unmarshall a job payload.
- * @param payload
- */
-export function unmarshallPayload(payload: any): any {
-  if (payload.value)  {
-    const decoded = Buffer.from(payload.value, 'base64').toString();
-    return JSON.parse(decoded);
+export function validateJobResource(job: any): void {
+  should.exist(job.data);
+  should.exist(job.data.payload);
+  const payload = unmarshallProtobufAny(job.data.payload);
+  should.exist(payload.testValue);
+  payload.testValue.should.equal('test-value');
+  should.exist(job.id);
+  should.exist(job.type);
+  job.type.should.equal('test-job');
+  should.exist(job.priority);
+  Priority.should.hasOwnProperty(job.priority);
+  should.exist(job.attempts);
+  job.attempts.should.equal(1);
+}
+
+export function shouldBeEmpty(result: any): void {
+  should.exist(result);
+  if (result.data) {
+    should.exist(result.data);
+    should.exist(result.data.items);
+    result.data.items.should.be.length(0);
+  } else {
+    should.exist(result.items);
+    result.items.should.be.length(0);
   }
-  return {};
 }
+

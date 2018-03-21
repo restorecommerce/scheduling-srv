@@ -7,18 +7,6 @@
       "prettyPrint": true
     }
   },
-  "database": {
-    "main": {
-      "provider": "arango",
-      "host": "localhost",
-      "port": 8529,
-      "database": "scheduling-srv-test",
-      "autoCreate": true,
-      "collections": [
-        "jobs"
-      ]
-    }
-  },
   "redis": {
     "host": "localhost",
     "port": 6379,
@@ -36,7 +24,6 @@
       "clientId": "scheduling-srv",
       "connectionString": "localhost:2181",
       "latestOffset": true,
-      "jobsTopic": "io.restorecommerce.jobs",
       "queuedJob": {
         "protos": [
           "io/restorecommerce/job.proto"
@@ -84,7 +71,7 @@
           "io/restorecommerce/job.proto"
         ],
         "protoRoot": "node_modules/@restorecommerce/protos/",
-        "messageObject": "io.restorecommerce.resourcebase.DeleteRequest"
+        "messageObject": "io.restorecommerce.job.Deleted"
       },
       "jobDone": {
         "protos": [
@@ -202,11 +189,6 @@
           "transport": [
             "schedulingGRPC"
           ]
-        },
-        "upsert": {
-          "transport": [
-            "schedulingGRPC"
-          ]
         }
       },
       "io-restorecommerce-scheduling-cis": {
@@ -289,8 +271,7 @@
         "read": {},
         "create": {},
         "delete": {},
-        "update": {},
-        "upsert": {}
+        "update": {}
       }
     }
   }

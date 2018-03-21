@@ -8,24 +8,12 @@
       "source": "scheduling-srv"
     }
   },
-  "database": {
-    "main": {
-      "host": "arangodb"
-    }
-  },
   "redis": {
     "host": "redis"
   },
   "events": {
     "main": {
       "connectionString": "zookeeper:2181"
-    }
-  },
-  "client": {
-    "schedulingClient": {
-      "publisher": [
-        "grpc://scheduling-srv:50051"
-      ]
     }
   },
   "server": {
