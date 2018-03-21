@@ -27,8 +27,7 @@
     "cache-manager-redis": "^0.5.0",
     "co": "^4.6.0",
     "kue-scheduler": "^0.7.4",
-    "lodash": "^4.14.1",
-    "sleep": "^5.1.1"
+    "lodash": "^4.14.1"
   },
   "devDependencies": {
     "@restorecommerce/grpc-client": "github:restorecommerce/grpc-client",
@@ -53,9 +52,7 @@
     "test": "npm run lint && npm run mocha",
     "test-debug": "npm run mochadebug",
     "lint": "tslint './*.ts'",
-    "grpc-mocha": "export NODE_ENV=test; mocha -R spec ./test/grpc*.js --full-trace --exit --trace-warnings",
-    "kafka-mocha": "export NODE_ENV=test; mocha -R spec ./test/kafka*.js --full-trace --exit --trace-warnings",
-    "mocha": "export NODE_ENV=test; mocha -R spec ./test/grpc*.js --full-trace --exit --trace-warnings",
+    "mocha": "export NODE_ENV=test; mocha -R spec ./test/*.js --full-trace --exit --trace-warnings",
     "mochadebug": "export NODE_ENV=test; mocha -R spec ./test/*_test.js --inspect-brk --full-trace --exit",
     "coveralls": "export NODE_ENV=test; istanbul cover ./node_modules/mocha/bin/_mocha --report lcovonly -- -R spec ./test/*_test.js --exit"
   },
