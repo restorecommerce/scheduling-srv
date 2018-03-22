@@ -198,38 +198,43 @@ export class SchedulingService implements JobService {
       }).then(() => done());
 
       that.logger.verbose(`job@${job.type}#${job.id} queued`, that._filterQueuedJob(job));
-      // kue.Job.get(jobInst.id, function (err: any, job: any): any {
-
-      // });
     });
   }
 
   _validateJob(job: any): any {
     if (_.isNil(job.type)) {
-      throw new errors.InvalidArgument('Job type not specified.');
+      this._handleError(new errors.InvalidArgument('Job type not specified.'));
     }
     if (job.when) {
       // If the jobSchedule time has already lapsed then do not schedule the job
       const jobScheduleTime = new Date(job.when).getTime();
       const currentTime = new Date().getTime();
       if (jobScheduleTime < currentTime) {
-        throw new errors.InvalidArgument(
-          'Cannot schedule a job for an elapsed time');
+        this._handleError(new errors.InvalidArgument('Cannot schedule a job for an elapsed time'));
       }
     }
 
     if (_.isEmpty(job.data)) {
-      throw new errors.InvalidArgument('No job data specified.');
+      this._handleError(new errors.InvalidArgument('No job data specified.'));
     }
 
     if (_.isEmpty(job.data.creator)) {
-      throw new errors.InvalidArgument('No job creator specified.');
+      this._handleError(new errors.InvalidArgument('No job creator specified.'));
     }
 
     job.data = this._filterJobData(job.data);
     return job;
   }
 
+
+  _handleError(err: any): void {
+    this.logger.error(err);
+    if (_.isString(err)) {
+      throw new Error(err);
+    } else {
+      throw err;
+    }
+  }
   /**
    * Create and queue jobs.
    * @param {any} call RPC call argument
@@ -237,7 +242,7 @@ export class SchedulingService implements JobService {
    */
   async create(call: any, context?: any): Promise<any> {
     if (_.isNil(call) || _.isNil(call.request) || _.isNil(call.request.items)) {
-      throw new errors.InvalidArgument('Missing items in create request.');
+      this._handleError(new errors.InvalidArgument('Missing items in create request.'));
     }
 
     const that = this;
@@ -286,7 +291,7 @@ export class SchedulingService implements JobService {
 
       this.redisClient.sadd(job.data.creator, jobDataKey, (error, reply) => {
         if (error) {
-          throw new Error(`Error occurred when mapping job to creator: ${error}`);
+          that._handleError(`Error occurred when mapping job to creator: ${error}`);
         }
       });
 
@@ -320,8 +325,7 @@ export class SchedulingService implements JobService {
       } else if (creator) {
         this.redisClient.smembers(creator, (error, reply) => {
           if (error) {
-            that.logger.error(`Error retrieving creator jobs: ${error}`);
-            throw error;
+            that._handleError(`Error retrieving creator jobs: ${error}`);
           }
 
           jobIDs = reply;
@@ -331,8 +335,7 @@ export class SchedulingService implements JobService {
       for (let jobID of jobIDs) {
         this.queue._readJobData(jobID, (error, job) => {
           if (error) {
-            that.logger.error(`Error reading job ${jobID}: ${error}`);
-            throw error;
+            that._handleError(`Error reading job ${jobID}: ${error}`);
           }
 
           jobs.push(that._filterQueuedJob(job));
@@ -367,6 +370,7 @@ export class SchedulingService implements JobService {
     return new Promise((resolve, reject) => {
       that.queue._getAllJobData((error, jobs) => {
         if (error) {
+          that._handleError(error);
           reject(error);
         }
         resolve(_.map(jobs, that._filterKueJob.bind(this)));
@@ -380,8 +384,7 @@ export class SchedulingService implements JobService {
 
     kue.Job.get(jobInstID, (err, job) => {
       if (err) {
-        that.logger.error(err);
-        throw err;
+        that._handleError(err);
       }
 
       let uniqueKey = _.snakeCase(job.data.unique);
@@ -393,8 +396,7 @@ export class SchedulingService implements JobService {
         }
       }).catch((err) => {
         if (err) {
-          that.logger.error(err);
-          throw err;
+          that._handleError(err);
         }
       }).then();
     });
@@ -406,7 +408,7 @@ export class SchedulingService implements JobService {
    */
   async delete(call: any, context?: any): Promise<any> {
     if (_.isEmpty(call) || ((!call.request.collection && _.isEmpty(call.request.ids)))) {
-      throw new errors.InvalidArgument('No arguments provided for delete operation');
+      this._handleError(new errors.InvalidArgument('No arguments provided for delete operation'));
     }
 
     const collection = call.request.collection || false;
@@ -433,15 +435,13 @@ export class SchedulingService implements JobService {
           jobDataKey
         }, (err, reply) => {
           if (err) {
-            that.logger.error(err);
-            throw err;
+            that._handleError(err);
           }
           removed = reply.removedJobData == 1;
           if (removed) {
             that.redisClient.publish(`jobDeleted-${jobDataKey}`, '', (err, reply) => {
               if (err) {
-                that.logger.error(err);
-                throw err;
+                that._handleError(err);
               }
             });
           }
@@ -462,7 +462,7 @@ export class SchedulingService implements JobService {
    */
   async update(call: any, context?: any): Promise<any> {
     if (_.isNil(call) || _.isNil(call.request) || _.isNil(call.request.items)) {
-      throw new errors.InvalidArgument('Missing items in update request.');
+      this._handleError(new errors.InvalidArgument('Missing items in update request.'));
     }
 
     const jobIDs = _.map(call.request.items, (job) => { return job.id; });
@@ -484,9 +484,11 @@ export class SchedulingService implements JobService {
    * Clear all job data.
    */
   async clear(): Promise<any> {
+    const that = this;
     return new Promise((resolve, reject) => {
       this.queue.clear((error, response) => {
         if (error) {
+          that._handleError(error);
           reject(error);
         }
         resolve(response);
@@ -580,7 +582,6 @@ export function unmarshallProtobufAny(data: any): any {
   if (!_.isEmpty(data)) {
     const payloadValue = data.value;
     const decoded = payloadValue.toString();
-    // const decoded = Buffer.from(payloadValue).toString();
     unmarshalled = JSON.parse(decoded);
   }
 
