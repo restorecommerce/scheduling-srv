@@ -6,8 +6,7 @@
 [depend]: https://img.shields.io/david/restorecommerce/scheduling-srv.svg?style=flat-square
 [cover]: http://img.shields.io/coveralls/restorecommerce/scheduling-srv/master.svg?style=flat-square
 
-A generic microservice for scheduling jobs and emit them over [Apache Kafka](https://kafka.apache.org/). Job scheduling is implemented using [kue-scheduler](https://github.com/lykmapipo/kue-scheduler) which is a job scheduler utility for [kue](https://github.com/Automattic/kue), backed by [Redis](https://redis.io/). This service provides a [gRPC](https://grpc.io/docs/) interface for scheduling new jobs and modifying the existing jobs using CRUD operations. Jobs can also be created asynchronously using Kafka. The scheduled and recurring jobs are persisted within an ArangoDB instance so that in case Redis goes down the jobs will be scheduled once the service starts up again.
-The jobs emitted to Kafka can be consumed by other microservices. After processing the job an event is then emitted by the respetive microservices indicating job failure or completion.
+A generic microservice for scheduling jobs and emitting them over [Apache Kafka](https://kafka.apache.org/). Job scheduling is implemented using [kue-scheduler](https://github.com/lykmapipo/kue-scheduler) which is a job scheduling extension of [kue](https://github.com/Automattic/kue) backed by [Redis](https://redis.io/). This service provides a [gRPC](https://grpc.io/docs/) interface for scheduling new jobs as well as manage the existing ones. Jobs can also be managed asynchronously using Kafka. The jobs emitted to Kafka can be consumed by other microservices which listen to the `queuedJob`. After processing the job an event should be emitted by the respective microservice indicating job failure or completion. A job is always deleted upon being receiving failure or completion data, unless it is a reccurring job.
 
 ## gRPC Interface
 
@@ -20,11 +19,8 @@ This microservice exposes the following gRPC endpoints for the Job resource.
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
 | id | string | required | Job resource ID |
-| created | double | required | Date of the Job creation |
-| modified | double | required | Date when Job was modified |
 | creator | string | optional | User ID of the creator |
 | name | string | required | Job name |
-| unique | string | optional | A fixed job instance identifier; recurring jobs use this value as their instance ID in Redis if it is set |
 | data | Data | optional | Payload data sent to the worker (structure is variable) |
 | priority | `io.restorecommerce.job.Job.Priority` | optional | Job priority |
 | attempts | number | optional | Amount of possible failing runs until a job fails |
@@ -75,10 +71,11 @@ modifying Job resource.
 | Method Name | Request Type | Response Type | Description |
 | ----------- | ------------ | ------------- | ------------|
 | Create | `io.restorecommerce.job.JobList` | `io.restorecommerce.job.JobList` | Create a list of Job resources |
-| Read | `io.restorecommerce.resourcebase.ReadRequest` | `io.restorecommerce.job.JobList` | Read a list of Job resources |
+| Read | `io.restorecommerce.job.JobRequest` | `io.restorecommerce.job.JobList` | Read a list of Job resources |
 | Update | `io.restorecommerce.job.JobList` | `io.restorecommerce.job.JobList` | Update a list of Job resources |
 | Delete | `io.restorecommerce.resourcebase.DeleteRequest` | Empty | Delete a list of Job resources |
-| Upsert | `io.restorecommerce.job.JobList` | `io.restorecommerce.job.JobList` | Create or Update a list of Job resources |
+
+Please note that the `update` operation literally just deletes an existing job and reschedules it with new properties.
 
 `io.restorecommerce.job.JobList`
 
@@ -104,7 +101,7 @@ This microservice subscribes to the following Kafka events by topic:
   - healthCheckCommand
   - versionCommand
 
-For creating/modifying jobs through Kafka this service listens to events on topic `io.restorecommerce.jobs`. CRUD operations take the same arguments as the gRPC endpoints. Tracking a job's status is performed by listening to `jobDone` and `jobFailed` events, which are emitted by any microservice which processes a given job.
+Jobs can be created, updated or deleted by issuing Kafka messages to topic `io.restorecommerce.jobs`. These operations are exposed with the same input as the gRPC endpoints (note that it is only possible to *read* a job through gRPC). 
 
 `io.restorecommerce.job.JobDone`
 
@@ -127,7 +124,6 @@ For creating/modifying jobs through Kafka this service listens to events on topi
 List of events emitted to Kafka by this microservice for below topics:
 - `io.restorecommerce.jobs.resource`
   - jobsCreated
-  - jobsModified
   - jobsDeleted
 - io.restorecommerce.command
   - restoreResponse
@@ -137,16 +133,13 @@ List of events emitted to Kafka by this microservice for below topics:
 
 Events from the `io.restorecommerce.jobs.resource` topic are issued whenever a CRUD opertion is performed. They are useful for job rescheduling in case of Redis failure.
 
-
 ## Chassis Service
 
 This service uses [chassis-srv](http://github.com/restorecommerce/chassis-srv), a base module for [restorecommerce](https://github.com/restorecommerce) microservices, in order to provide the following functionalities:
 - exposure of all previously mentioned gRPC endpoints
-- implementation of a [command-interface](https://github.com/restorecommerce/chassis-srv/blob/master/command-interface.md) which
-provides endpoints for retrieving the system status and resetting/restoring the system in case of failure. These endpoints can be called via gRPC or Kafka events (through the `io.restorecommerce.command` topic).
-- database access, which is abstracted by the [resource-base-interface](https://github.com/restorecommerce/resource-base-interface)
-- stores the offset values for Kafka topics at regular intervals to [Redis](https://redis.io/)
-- Redis cache management
+- implementation of a [command-interface](https://github.com/restorecommerce/chassis-srv/blob/master/command-interface.md) which provides endpoints for retrieving the system status and resetting/restoring the system in case of failure. These endpoints can be called via gRPC or Kafka events (through the `io.restorecommerce.command` topic).
+- stores the offset values for Kafka topics at regular intervals to Redis
+- Job store through a Redis cache 
 
 ## Usage
 
