@@ -152,6 +152,71 @@ export class SchedulingService implements JobService {
     this.queue.on('scheduler unknown job expiry key', (message) => {
       logger.warn('scheduler unknown job expiry key', message);
     });
+
+    await this._rescheduleJobs();
+  }
+
+  async _rescheduleJobs(): Promise<any> {
+    const that = this;
+
+    const deleteDispatch = [];
+    const createDispatch = [];
+
+    kue.Job.range(0, -1, 'desc', (err, jobs) => {
+      if (err) {
+        that._handleError(err);
+      }
+
+      _.forEach(jobs, (job) => {
+        job.remove((err) => {
+          if (err) {
+            this._handleError(err);
+          }
+        });
+      });
+    });
+
+    // restoring jobs upon start-up
+    this.queue._getAllJobData((err, jobs) => {
+      if (err) {
+        that._handleError(err);
+      }
+
+      _.forEach(jobs, (job) => {
+        const scheduleType = job.data.schedule;
+        const unique = job.data.unique;
+        const jobDataKey = that.queue._getJobDataKey(unique);
+
+        // delete the job and reschedule it
+        deleteDispatch.push(that.delete({
+          request: {
+            ids: [jobDataKey]
+          }
+        }));
+
+        if (scheduleType == 'ONCE') {
+          const when = new Date(job.promote_at);
+          const now = new Date();
+          const elapsed = (now.getMilliseconds() - when.getMilliseconds()) > 0;
+          if (elapsed) {
+            that.logger.warn(`Unable to schedule job ${jobDataKey}; scheduled time has elapsed`);
+            return;
+          }
+        }
+
+        const filteredJob = that._filterKueJob(job);
+        delete job.id;
+
+        createDispatch.push(that.create({
+          request: {
+            items: [filteredJob]
+          }
+        }));
+      });
+    });
+
+    await deleteDispatch;
+    await createDispatch;
   }
 
   /**
@@ -164,7 +229,7 @@ export class SchedulingService implements JobService {
   /**
    * Enabling of CRUD events.
    */
-  enableEvents(): void {
+  enableEvents(): any {
     this.resourceEventsEnabled = true;
   }
 
@@ -253,6 +318,7 @@ export class SchedulingService implements JobService {
    * @param {any} context RPC context
    */
   async create(call: any, context?: any): Promise<any> {
+    console.log('Received create!', JSON.stringify(call));
     if (_.isNil(call) || _.isNil(call.request) || _.isNil(call.request.items)) {
       this._handleError(new errors.InvalidArgument('Missing items in create request.'));
     }
@@ -265,7 +331,7 @@ export class SchedulingService implements JobService {
       let job = jobs[i];
       job.data.timezone = job.data.timezone || 'Europe/London'; // fallback to GMT
 
-      const data = _.cloneDeep(job.data);
+      const data: any = _.cloneDeep(job.data);
 
       let qjob = this.queue.createJob(job.type, data);
       let uniqueName = new Date().toISOString().replace(/:/g, "_"); // unique name is a timestamp
@@ -299,7 +365,7 @@ export class SchedulingService implements JobService {
       }
 
       const parallel: number = job.parallel || 1;
-      const jobDataKey = this.queue._getJobDataKey(uniqueName);
+      const jobDataKey: string = this.queue._getJobDataKey(uniqueName);
       this.process(job.type, jobDataKey, parallel);
       this.logger.verbose(`job@${job.type} created with ${parallel} concurrent runs`, job);
 
@@ -476,6 +542,7 @@ export class SchedulingService implements JobService {
           }
           removed = reply.removedJobData == 1;
           if (removed) {
+            console.log('Removed job!', that.resourceEventsEnabled);
             if (that.resourceEventsEnabled) {
               dispatch.push(that.jobResourceEvents.emit('jobsDeleted', { id: jobDataKey }));
             }
@@ -575,7 +642,7 @@ export class SchedulingService implements JobService {
     }
 
     if (job.state && job.state == 'delayed') {
-      job.when = new Date(job.created_at + job.delay).toISOString();
+      job.when = new Date(job.promote_at).toISOString();
     } else if (job.reccurInterval) {
       job.interval = job.reccurInterval;
     }
