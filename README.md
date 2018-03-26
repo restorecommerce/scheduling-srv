@@ -26,9 +26,9 @@ This microservice exposes the following gRPC endpoints for the Job resource.
 | attempts | number | optional | Amount of possible failing runs until a job fails |
 | backoff | `io.restorecommerce.job.Backoff` | optional | Delay settings between failed job runs |
 | parallel | number | optional | Maximum number of parallel jobs |
-| interval | string | optional | Interval to run a job periodically which could be a cron entry. Ex: "0 0 5 * * *" to run a job everyday at 5AM (refer [kue-scheduler](https://github.com/lykmapipo/kue-scheduler) for more information)|
-| when | string | optional | A date string, Job is run once at specific time. Ex: "Jan 15, 2018 10:30:00" |
-| now | boolean | optional | If set to true job is run once immediately |
+| interval | string | optional | Interval to run a job periodically. It is possible to specify the interval in a cron format (e.g: "0 0 5 * * *") or a human-readable format (e.g: "2 minutes"), as specified on [kue-scheduler](https://github.com/lykmapipo/kue-scheduler). This should only be used in recurring jobs.
+| when | string | optional | Used to define the exact time at which a single job instance is processed. Ex: "Jan 15, 2018 10:30:00". This should only be used in one-time jobs. |
+| now | boolean | optional | If set to true job is run once immediately (job is not stored in Redis in this case). |
 
 `io.restorecommerce.job.Data`
 
