@@ -58,8 +58,9 @@ export class Worker {
     const jobResourceEvents: Topic = events.topic(JOBS_RESOURCE_TOPIC_NAME);
     const jobEvents: Topic = events.topic(JOBS_TOPIC_NAME);
 
+    const kueOptions = cfg.get('kue');
     // Create the business logic
-    const schedulingService: SchedulingService = new SchedulingService(jobEvents, jobResourceEvents, redisConfig, logger, redis);
+    const schedulingService: SchedulingService = new SchedulingService(jobEvents, jobResourceEvents, redisConfig, logger, redis, kueOptions);
     await schedulingService.start();
 
     // Bind business logic to server
@@ -72,6 +73,7 @@ export class Worker {
 
     const schedulingServiceEventsListener = async function eventListener(msg: any,
       context: any, config: any, eventName: string): Promise<any> {
+
       if (eventName === JOBS_CREATE_EVENT) {
         // protobuf.js appends unnecessary properties to object
         msg.items = _.map(msg.items, schedulingService._filterKafkaJob.bind(schedulingService));
@@ -135,25 +137,25 @@ export class Worker {
 
 class JobsCommandInterface extends chassis.CommandInterface {
   schedulingService: SchedulingService;
-  cfg: any;
-  logger: any;
   constructor(server: chassis.Server, cfg: any, logger: any, events: Events,
     schedulingService: SchedulingService) {
     super(server, cfg, logger, events);
     this.schedulingService = schedulingService;
-    this.cfg = cfg;
-    this.logger = logger;
   }
 
   /**
-   * Reset system data for job service by deleting all scheduled jobs.
+   * Reset system data for job service by deleting all scheduled jobs in Redis.
    * @param call
    * @param context
    */
   async reset(): Promise<any> {
-    // await super.reset();
-    // const that = this;
-    // // Get a redis connection
+    const that = this;
+    // Get a redis connection
+    this.schedulingService.disableEvents();
+    const redisConn = this.schedulingService.redisClient;
+
+    this.schedulingService.enableEvents();
+
     // const redisConfig = this.cfg.redis;
     // const dbIndexes = this.cfg.redis['db-indexes'];
     // redisConfig.db = dbIndexes['db-jobStore'];
@@ -171,47 +173,120 @@ class JobsCommandInterface extends chassis.CommandInterface {
     return {};
   }
 
-  makeResourcesRestoreSetup(db: any, collectionName: string): any {
+  async restore(payload: any): Promise<any> {
+    if (_.isNil(payload) || _.keys(payload).length == 0) {
+      throw new chassis.errors.InvalidArgument('Invalid payload for restore command');
+    }
+
+    this.schedulingService.disableEvents();
+    const kafkaCfg = this.config.events.kafka;
+    const topicName = kafkaCfg.topics['jobs.resource'].topic;
+    const restoreSetup = {};
+    if (!_.isEmpty(payload.jobs)) {
+      restoreSetup[topicName] = {
+        resource: 'jobs',
+        topic: this.kafkaEvents.topic(topicName),
+        events: this.makeJobsRestoreSetup()
+      };
+    }
+
+    const that = this;
+    for (let topicName in restoreSetup) {
+      const topicSetup = restoreSetup[topicName];
+
+      const topic = topicSetup.topic;
+      const resource = topicSetup.resource;
+      const eventsSetup = topicSetup.events;
+
+      // const eventNames = _.keys(restoreTopic.events);
+      const baseOffset: number = payload['jobs'].offset || 0;
+      const targetOffset: number = (await topic.$offset(-1)) - 1;
+      const ignoreOffsets: number[] = payload[resource].ignore_offset || [];
+
+      const eventNames = _.keys(eventsSetup);
+      for (let eventName of eventNames) {
+        const listener = eventsSetup[eventName];
+        const listenUntil = async function listenUntil(message: any, ctx: any,
+          config: any, eventNameRet: string): Promise<any> {
+          that.logger.debug(`received message ${ctx.offset}/${targetOffset}`, ctx);
+          if (_.includes(ignoreOffsets, ctx.offset)) {
+            return;
+          }
+          try {
+            await listener(message, ctx, config, eventNameRet);
+          } catch (e) {
+            that.logger.debug('Exception caught :', e.message);
+          }
+          if (ctx.offset >= targetOffset) {
+            const message = {};
+            message['topic'] = topic;
+            message['offset'] = ctx.offset;
+            await that.commandTopic.emit('restoreResponse', {
+              services: _.keys(that.service),
+              payload: that.encodeMsg(message)
+            });
+
+            for (let name of eventNames) {
+              that.logger.debug('Number of listeners before removing :',
+                topic.listenerCount(name));
+              await topic.removeAllListeners(name);
+              that.logger.debug('Number of listeners after removing :',
+                topic.listenerCount(name));
+            }
+            that.logger.info('restore process done');
+
+            that.schedulingService.enableEvents();
+          }
+        };
+
+        this.logger.debug(`listening to topic ${topic} event ${eventName}
+        until offset ${targetOffset} while ignoring offset`, ignoreOffsets);
+        await topic.on(eventName, listenUntil);
+        this.logger.debug(`resetting commit offset of topic ${topic} to ${baseOffset}`);
+        await topic.$reset(eventName, baseOffset);
+        this.logger.debug(`reset done for topic ${topic} to commit offset ${baseOffset}`);
+      }
+    }
+
+    return {};
+  }
+
+  makeJobsRestoreSetup(): any {
     const that = this;
     return {
-      // jobsCreated: async function onJobsCreated(message: any, context: any): Promise<any> {
-      //   if (message.when) {
-      //     // If the jobSchedule time has already lapsed then do not schedule
-      //     // the job - fix for kue-scheduler bug.
-      //     const jobScheduleTime = new Date(message.when).getTime();
-      //     const currentTime = new Date().getTime();
-      //     if (jobScheduleTime < currentTime) {
-      //       that.logger.info('Skipping the elapsed time job');
-      //       return {};
-      //     }
-      //   }
+      jobsCreated: async function onJobsCreated(message: any, context: any): Promise<any> {
+        if (message.when) {
+          // If the jobSchedule time has already lapsed then do not schedule
+          const jobScheduleTime = new Date(message.when).getTime();
+          const currentTime = new Date().getTime();
+          if (jobScheduleTime < currentTime) {
+            that.logger.info('Skipping the elapsed time job');
+            return {};
+          }
+        }
 
-      //   // the message received from Kafka would be array of integers i.e. utf-8
-      //   // convert it to base64 again
-      //   if (message.data && message.data.payload && message.data.payload.value) {
-      //     message.data.payload = marshallProtobufAny(JSON.parse(
-      //       message.data.payload.value.toString()));
-      //   }
-      //   message.data = _.pick(message.data, ['timezone', 'payload']);
-      //   // Schedule the job to redis using scheduling service
-      //   that.schedulingService.create([message]);
-      //   // Insert the job in DB and as well
-      //   await co(db.insert('jobs', message));
-      //   return {};
-      // },
-      // jobsModified: async function onJobsModified(message: any, context: any,
-      //   config: any, eventName: string): Promise<any> {
-      //   that.schedulingService.deleteJob(message.id, message.job_unique_name);
-      //   that.schedulingService.createJob(message);
-      //   await co(db.update(collectionName, { id: message.id }, _.omitBy(message, _.isNil)));
-      //   return {};
-      // },
-      // jobsDeleted: async function restoreDeleted(message: any, context: any,
-      //   config: any, eventName: string): Promise<any> {
-      //   that.schedulingService.deleteJob(message.id, message.job_unique_name);
-      //   await co(db.delete(collectionName, { id: message.id }));
-      //   return {};
-      // }
+        if (message.now) {
+          that.logger.info('Skipping immediate job');
+          return {};
+        }
+
+        await that.schedulingService.create({
+          request: {
+            items: [message]
+          }
+        });
+
+        return {};
+      },
+      jobsDeleted: async function restoreDeleted(message: any, context: any,
+        config: any, eventName: string): Promise<any> {
+        await that.schedulingService.delete({
+          request: {
+            ids: [message.id]
+          }
+        });
+        return {};
+      }
     };
   }
 }

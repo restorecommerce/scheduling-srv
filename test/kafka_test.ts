@@ -89,15 +89,13 @@ describe('testing scheduling-srv: Kafka', () => {
       };
 
       const offset = await jobTopic.$offset(-1);
-      const jobResourceOffset = await jobResourceTopic.$offset(-1);
       await jobTopic.emit('createJobs', { items: [job] });
-      await jobTopic.$wait(offset + 2); // createJobs, queued, jobDone
-      await jobResourceTopic.$wait(jobResourceOffset + 1);
-
       const result = await schedulingService.read({
         request: {}
       });
       shouldBeEmpty(result);
+
+      await jobTopic.$wait(offset + 2); // createJobs, queued, jobDone
     });
     it('should create a new job and execute it at a scheduled time', async () => {
       await jobTopic.on('queuedJob', async (job, context, configRet, eventNameRet) => {

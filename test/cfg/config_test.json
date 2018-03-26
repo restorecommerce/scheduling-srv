@@ -274,5 +274,6 @@
         "update": {}
       }
     }
-  }
+  },
+  "kue-prefix": "scheduling-srv-test"
 }

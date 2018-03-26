@@ -71,8 +71,6 @@ enum SortOrder {
   UNSORTED = 'UNSORTED'
 }
 
-const KUE_PREFIX = 'scheduling-srv';
-
 /**
  * A job scheduling service.
  */
@@ -84,26 +82,26 @@ export class SchedulingService implements JobService {
   jobCbs: any;
   redisClient: RedisClient;
   resourceEventsEnabled: boolean;
-  redisSubscriber: RedisClient;
-  constructor(jobEvents: kafkaClient.Topic, jobResourceEvents: kafkaClient.Topic, redisConfig: any, logger: any, redisCache: any) {
+  canceledJobs: Set<string>;
+  constructor(jobEvents: kafkaClient.Topic, jobResourceEvents: kafkaClient.Topic, redisConfig: any, logger: any, redisCache: any, kueOptions: any) {
     this.jobEvents = jobEvents;
     this.jobResourceEvents = jobResourceEvents;
     this.resourceEventsEnabled = true;
 
     this.logger = logger;
 
-    const options = {
-      prefix: KUE_PREFIX,
-      redis: redisConfig,
-      restore: true
-    };
+    const options = _.defaults(kueOptions, {
+      prefix: 'scheduling-srv',
+      redis: redisConfig
+    });
     this.queue = kue.createQueue(options);
 
     const that = this;
     redisCache.store.getClient((err, redisConn) => {
       this.redisClient = redisConn.client;
-      this.redisSubscriber = createClient(redisConfig); // second client connection
     });
+
+    this.canceledJobs = new Set<string>();
   }
 
   /**
@@ -135,8 +133,8 @@ export class SchedulingService implements JobService {
           delete jobCbs[job.id];
           cb();
           if (job.schedule_type != 'RECCUR') {
-            await that._deleteJobInstance(job.id);
-            logger.verbose(`job#${job.id} succesfully deleted`, that._filterQueuedJob(job));
+            await that._deleteJobInstance(job.id, job.schedule_type);
+            logger.verbose(`job#${job.id} successfully deleted`, that._filterQueuedJob(job));
           }
         }
       });
@@ -156,48 +154,61 @@ export class SchedulingService implements JobService {
     });
   }
 
+  /**
+   * Disabling of CRUD events.
+   */
+  disableEvents(): void {
+    this.resourceEventsEnabled = false;
+  }
+
+  /**
+   * Enabling of CRUD events.
+   */
+  enableEvents(): void {
+    this.resourceEventsEnabled = true;
+  }
+
   process(jobType: string, jobUUID: string, parallel: number): any {
     const jobCbs: any = this.jobCbs;
     const that = this;
     this.queue.process(jobType, parallel, (job, done) => {
       const jobInstID = job.id;
-      jobCbs[jobInstID] = done;
-
       job.schedule = job.data.schedule;
-      job = that._filterQueuedJob(job);
 
-      // subscribing deletion events on Redis
-      // when deleting job by unique ID, job gets deleted
-      that.redisSubscriber.subscribe(`jobDeleted-${jobUUID}`);
-      that.redisSubscriber.on('message', (channel, message) => {
+      const uniqueName = job.data.unique;
+      const jobDataKey = that.queue._getJobDataKey(uniqueName);
+
+      if (!_.isNil(uniqueName) && that.canceledJobs.has(jobDataKey) && job.schedule != 'NOW') {
+        // removing a canceled job from Redis
         kue.Job.get(jobInstID, (err, kueJob) => {
           if (err) {
-            that.logger.error(err);
-            throw err;
+            that._handleError(err);
           }
 
           kueJob.remove((err) => {
             if (err) {
-              that.logger.error(err);
-              throw err;
+              that._handleError(err);
             }
-            that.redisSubscriber.unsubscribe(`jobDeleted-${jobUUID}`);
+            that.canceledJobs.delete(jobDataKey);
           });
         });
-      });
+      } else {
+        jobCbs[jobInstID] = done;
+        job = that._filterQueuedJob(job);
 
-      that.jobEvents.emit('queuedJob', {
-        id: jobInstID,
-        type: job.type,
-        data: job.data,
-        schedule_type: job.schedule,
-      }).catch((error) => {
-        delete jobCbs[job.id];
-        that.logger.error(`Error while processing job ${job.id} in queue: ${error}`);
-        done(error);
-      }).then(() => done());
+        that.jobEvents.emit('queuedJob', {
+          id: jobInstID,
+          type: job.type,
+          data: job.data,
+          schedule_type: job.schedule,
+        }).catch((error) => {
+          delete jobCbs[job.id];
+          that.logger.error(`Error while processing job ${job.id} in queue: ${error}`);
+          done(error);
+        }).then(() => done());
 
-      that.logger.verbose(`job@${job.type}#${job.id} queued`, that._filterQueuedJob(job));
+        that.logger.verbose(`job@${job.type}#${job.id} queued`, that._filterQueuedJob(job));
+      }
     });
   }
 
@@ -218,7 +229,8 @@ export class SchedulingService implements JobService {
       this._handleError(new errors.InvalidArgument('No job data specified.'));
     }
 
-    if (_.isEmpty(job.data.creator)) {
+    if (_.isEmpty(job.data.creator) && !job.now) {
+      // one-time job does not require a creator
       this._handleError(new errors.InvalidArgument('No job creator specified.'));
     }
 
@@ -280,8 +292,10 @@ export class SchedulingService implements JobService {
         this.queue.every(job.interval, qjob);
       } else if (_.size(job.when) > 0) {
         this.queue.schedule(job.when, qjob);
-      } else {
+      } else if (job.now) {
         this.queue.now(qjob);
+      } else {
+        this._handleError('No schedule specified for job.');
       }
 
       const parallel: number = job.parallel || 1;
@@ -296,7 +310,9 @@ export class SchedulingService implements JobService {
       });
 
       job.id = jobDataKey;
-      await this.jobResourceEvents.emit('jobsCreated', job);
+      if (this.resourceEventsEnabled && !job.now) {
+        await this.jobResourceEvents.emit('jobsCreated', job);
+      }
     }
 
     return {
@@ -312,7 +328,8 @@ export class SchedulingService implements JobService {
    */
   async read(call: any, context?: any): Promise<any> {
     let jobs = [];
-    if (_.isEmpty(call) || _.isEmpty(call.request) || _.isEmpty(call.request.filter)) {
+    if (_.isEmpty(call) || _.isEmpty(call.request)
+      || _.isEmpty(call.request.filter) || _.isEmpty(call.request.filter.creator)) {
       jobs = await this._getJobList();
     } else if (call.request.filter) {
       const that = this;
@@ -343,7 +360,7 @@ export class SchedulingService implements JobService {
       }
     }
 
-    if (!_.isEmpty(call.request.sort)
+    if (!_.isEmpty(call.request) && !_.isEmpty(call.request.sort)
       && _.includes(['ASCENDING', 'DESCENDING'], call.request.sort)) {
       let sort;
       switch (call.request.sort) {
@@ -379,27 +396,31 @@ export class SchedulingService implements JobService {
   }
 
   // delete a job by its job instance after processing 'jobDone' / 'jobFailed'
-  async _deleteJobInstance(jobInstID: number): Promise<void> {
+  async _deleteJobInstance(jobInstID: number, schedule_type: string): Promise<void> {
     const that = this;
 
-    kue.Job.get(jobInstID, (err, job) => {
-      if (err) {
-        that._handleError(err);
-      }
-
-      let uniqueKey = _.snakeCase(job.data.unique);
-      const dataKey = that.queue._getJobDataKey(uniqueKey);
-
-      that.delete({
-        request: {
-          ids: [dataKey]
-        }
-      }).catch((err) => {
+    if (schedule_type == 'NOW') {
+      this._removeKueJob(jobInstID);
+    } else {
+      kue.Job.get(jobInstID, (err, job) => {
         if (err) {
           that._handleError(err);
         }
-      }).then();
-    });
+
+        let uniqueKey = _.snakeCase(job.data.unique);
+        const dataKey = that.queue._getJobDataKey(uniqueKey);
+
+        that.delete({
+          request: {
+            ids: [dataKey]
+          }
+        }).catch((err) => {
+          if (err) {
+            that._handleError(err);
+          }
+        }).then();
+      });
+    }
   }
 
   /**
@@ -422,7 +443,9 @@ export class SchedulingService implements JobService {
       kue.Job.range(0, -1, 'desc', (err, jobs) => {
         _.forEach(jobs, (job) => {
           const id = job.data.dataKey;
-          dispatch.push(that.jobResourceEvents.emit('jobsDeleted', { id }));
+          if (that.resourceEventsEnabled) {
+            dispatch.push(that.jobResourceEvents.emit('jobsDeleted', { id }));
+          }
         });
       });
       await this.clear();
@@ -431,6 +454,20 @@ export class SchedulingService implements JobService {
       _.forEach(ids, (jobDataKey) => {
         let removed = false;
 
+        that.queue._readJobData(jobDataKey, (error, jobData) => {
+          if (error) {
+            that._handleError(error);
+          }
+
+          if (!_.isNil(jobData.id)) {
+            // remove `kue` instance by its id
+            that._removeKueJob(jobData.id);
+          } else {
+            // if job instance ID is not on job data,
+            // delete it upon its processing
+            that.canceledJobs.add(jobDataKey);
+          }
+        });
         that.queue.remove({
           jobDataKey
         }, (err, reply) => {
@@ -439,14 +476,12 @@ export class SchedulingService implements JobService {
           }
           removed = reply.removedJobData == 1;
           if (removed) {
-            that.redisClient.publish(`jobDeleted-${jobDataKey}`, '', (err, reply) => {
-              if (err) {
-                that._handleError(err);
-              }
-            });
+            if (that.resourceEventsEnabled) {
+              dispatch.push(that.jobResourceEvents.emit('jobsDeleted', { id: jobDataKey }));
+            }
+          } else {
+            that.logger.info(`Unable to delete job with data key ${jobDataKey}; pushing it to canceled jobs.`);
           }
-
-          dispatch.push(that.jobResourceEvents.emit('jobsDeleted', { id: jobDataKey }));
         });
       });
     }
@@ -555,6 +590,15 @@ export class SchedulingService implements JobService {
     return _.pick(data, [
       'creator', 'payload', 'timezone'
     ]);
+  }
+
+  _removeKueJob(jobInstID: number): void {
+    kue.Job.remove(jobInstID, (err) => {
+      if (err) {
+        this._handleError(err);
+      }
+      this.logger.info(`Immediate job#${jobInstID} removed`);
+    });
   }
 }
 

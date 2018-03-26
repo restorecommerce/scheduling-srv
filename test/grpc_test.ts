@@ -85,15 +85,13 @@ describe('testing scheduling-srv: gRPC', () => {
       };
 
       const offset = await jobEvents.$offset(-1);
-      const jobResourceOffset = await jobResourceEvents.$offset(-1);
 
       await grpcSchedulingSrv.create({ items: [job], }, {});
 
-      await jobEvents.$wait(offset + 1);
-      await jobResourceEvents.$wait(jobResourceOffset + 1);
-
       const result = await grpcSchedulingSrv.read({}, {});
       shouldBeEmpty(result);
+
+      await jobEvents.$wait(offset + 1);
     });
 
     it('should create a new job and execute it at a scheduled time', async () => {
@@ -132,12 +130,11 @@ describe('testing scheduling-srv: gRPC', () => {
       await grpcSchedulingSrv.create({
         items: [job],
       }, {});
-      await jobEvents.$wait(offset + 1);
       await jobResourceEvents.$wait(jobResourceOffset + 1);
+      await jobEvents.$wait(offset + 1);
 
       const result = await grpcSchedulingSrv.read({}, {});
       shouldBeEmpty(result);
-
     });
   });
   describe('creating a recurring job', function (): void {

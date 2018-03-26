@@ -222,5 +222,9 @@
     "scheduling": "io-restorecommerce-scheduling-srv",
     "cis": "io-restorecommerce-scheduling-cis",
     "reflection": "io-restorecommerce-scheduling-reflection"
+  },
+  "kue": {
+    "prefix": "scheduling-srv",
+    "restore": true
   }
 }
