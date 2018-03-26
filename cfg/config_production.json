@@ -12,7 +12,7 @@
     "host": "redis"
   },
   "events": {
-    "main": {
+    "kafka": {
       "connectionString": "zookeeper:2181"
     }
   },
