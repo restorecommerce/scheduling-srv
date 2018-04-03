@@ -149,27 +149,8 @@ class JobsCommandInterface extends chassis.CommandInterface {
    * @param context
    */
   async reset(): Promise<any> {
-    const that = this;
     // Get a redis connection
-    this.schedulingService.disableEvents();
-    const redisConn = this.schedulingService.redisClient;
-
-    this.schedulingService.enableEvents();
-
-    // const redisConfig = this.cfg.redis;
-    // const dbIndexes = this.cfg.redis['db-indexes'];
-    // redisConfig.db = dbIndexes['db-jobStore'];
-    // const redis = await co(chassis.cache.get([redisConfig], this.logger));
-    // const keys: any = await new Promise(function (resolve: any, reject: any): any {
-    //   redis.keys('scheduling-srv:*', (err, keyData) => {
-    //     resolve(keyData);
-    //     that.logger.info('Redis job keys are :', keyData);
-    //   });
-    // });
-    // for (let i = 0; i < keys.length; i++) {
-    //   redis.del(keys[i], (err, done) => {
-    //   });
-    // }
+    await this.schedulingService.clear();
     return {};
   }
 
