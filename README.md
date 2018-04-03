@@ -71,7 +71,7 @@ modifying Job resource.
 | Method Name | Request Type | Response Type | Description |
 | ----------- | ------------ | ------------- | ------------|
 | Create | `io.restorecommerce.job.JobList` | `io.restorecommerce.job.JobList` | Create a list of Job resources |
-| Read | `io.restorecommerce.job.JobRequest` | `io.restorecommerce.job.JobList` | Read a list of Job resources |
+| Read | `io.restorecommerce.job.JobReadRequest` | `io.restorecommerce.job.JobList` | Read a list of Job resources |
 | Update | `io.restorecommerce.job.JobList` | `io.restorecommerce.job.JobList` | Update a list of Job resources |
 | Delete | `io.restorecommerce.resourcebase.DeleteRequest` | Empty | Delete a list of Job resources |
 
