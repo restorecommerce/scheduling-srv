@@ -43,7 +43,7 @@ export class Worker {
     // Get a redis connection
     const redisConfig = cfg.get('redis');
     redisConfig.db = cfg.get('redis:db-indexes:db-jobStore');
-    const redis = await co(chassis.cache.get([redisConfig], logger));
+    const redis = await chassis.cache.get([redisConfig], logger);
 
     // Create events
     const kafkaCfg = cfg.get('events:kafka');
@@ -65,11 +65,11 @@ export class Worker {
 
     // Bind business logic to server
     const serviceNamesCfg = cfg.get('serviceNames');
-    await co(server.bind(serviceNamesCfg.scheduling, schedulingService));
+    await server.bind(serviceNamesCfg.scheduling, schedulingService);
 
     const cis: chassis.ICommandInterface = new JobsCommandInterface(server, cfg.get(),
       logger, events, schedulingService);
-    await co(server.bind(serviceNamesCfg.cis, cis));
+    await server.bind(serviceNamesCfg.cis, cis);
 
     const schedulingServiceEventsListener = async function eventListener(msg: any,
       context: any, config: any, eventName: string): Promise<any> {
@@ -117,10 +117,10 @@ export class Worker {
     const transportName = cfg.get(`server:services:${reflectionServiceName}:serverReflectionInfo:transport:0`);
     const transport = server.transport[transportName];
     const reflectionService = new chassis.grpc.ServerReflection(transport.$builder, server.config);
-    await co(server.bind(reflectionServiceName, reflectionService));
+    await server.bind(reflectionServiceName, reflectionService);
 
     // Start server
-    await co(server.start());
+    await server.start();
 
     this.schedulingService = schedulingService;
     this.events = events;
@@ -129,7 +129,7 @@ export class Worker {
 
   async stop(): Promise<any> {
     this.server.logger.info('Shutting down');
-    await co(this.server.end());
+    await this.server.stop();
     await this.events.stop();
     await this.offsetStore.stop();
   }
