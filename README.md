@@ -19,9 +19,8 @@ This microservice exposes the following gRPC endpoints for the Job resource.
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
 | id | string | required | Job resource ID |
-| creator | string | optional | User ID of the creator |
-| name | string | required | Job name |
-| data | Data | optional | Payload data sent to the worker (structure is variable) |
+| type | string | required | Arbitrary job type (e.g: 'daily_email_dispatcher'). |
+| data | Data | optional | Job data to persist in Redis |
 | priority | `io.restorecommerce.job.Job.Priority` | optional | Job priority |
 | attempts | number | optional | Amount of possible failing runs until a job fails |
 | backoff | `io.restorecommerce.job.Backoff` | optional | Delay settings between failed job runs |
@@ -35,6 +34,7 @@ This microservice exposes the following gRPC endpoints for the Job resource.
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
 | timezone | string | optional | Timezone specification for job scheduling (ex: 'Europe/Amsterdam') |
+| creator | string | optional | User ID of the job's creator |
 | payload | [ ] `google.protobuf.Any` | optional | Generic data type for different job data structures (see [google.protobuf.Any](https://github.com/restorecommerce/protos/blob/master/google/protobuf/any.proto)) |
 
 `io.restorecommerce.job.Job.Priority`
@@ -103,14 +103,21 @@ This microservice subscribes to the following Kafka events by topic:
 
 Jobs can be created, updated or deleted by issuing Kafka messages to topic `io.restorecommerce.jobs`. These operations are exposed with the same input as the gRPC endpoints (note that it is only possible to *read* a job through gRPC). 
 
+`io.restorecommerce.job.ScheduledJob`
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| id | number | required | Job instance ID in Redis |
+| type | string | required | Arbitrary job type (e.g: 'daily_email_dispatcher'). |
+| data | `io.restorecommerce.job.Data` | required | Arbitrary job type (e.g: 'daily_email_dispatcher'). |
+| schedule_type | string | required | Job type ex: `ONCE`, `RECURR` etc. |
+
 `io.restorecommerce.job.JobDone`
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| id | number | required | Job instance ID in redis |
+| id | number | required | Job instance ID in Redis |
 | schedule_type | string | required | Job type ex: `ONCE`, `RECURR` etc. |
-| job_resource_id | string | required | Job reference ID in the database |
-| job_unique_name | string | optinal | unique job name |
 
 `io.restorecommerce.job.JobFailed`
 
@@ -118,8 +125,7 @@ Jobs can be created, updated or deleted by issuing Kafka messages to topic `io.r
 | ----- | ---- | ----- | ----------- |
 | id | number | required | Job instance ID in redis |
 | schedule_type | string | required | Job type ex: `ONCE`, `RECURR` etc. |
-| job_resource_id | string | required | Job reference ID in the database |
-| job_unique_name | string | optinal | unique job name |
+| error | string | required | Failure details. |
 
 List of events emitted to Kafka by this microservice for below topics:
 - `io.restorecommerce.jobs.resource`
