@@ -318,7 +318,6 @@ export class SchedulingService implements JobService {
    * @param {any} context RPC context
    */
   async create(call: any, context?: any): Promise<any> {
-    console.log('Received create!', JSON.stringify(call));
     if (_.isNil(call) || _.isNil(call.request) || _.isNil(call.request.items)) {
       this._handleError(new errors.InvalidArgument('Missing items in create request.'));
     }
@@ -542,7 +541,6 @@ export class SchedulingService implements JobService {
           }
           removed = reply.removedJobData == 1;
           if (removed) {
-            console.log('Removed job!', that.resourceEventsEnabled);
             if (that.resourceEventsEnabled) {
               dispatch.push(that.jobResourceEvents.emit('jobsDeleted', { id: jobDataKey }));
             }
