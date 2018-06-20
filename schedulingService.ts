@@ -400,6 +400,7 @@ export class SchedulingService implements JobService {
       const that = this;
       const uuid = call.request.filter.id;
       const creator = call.request.filter.creator;
+      const typeFilterName = call.request.filter.type;
 
       let jobIDs = [];
       if (uuid) {
@@ -414,6 +415,15 @@ export class SchedulingService implements JobService {
         });
       }
 
+      if (typeFilterName) {
+        kue.Job.rangeByType(typeFilterName, '*', 0, -1, 'asc', (err, jobs) => {
+          if (err) {
+            that._handleError(`Error reading jobs based on ${typeFilterName}`);
+          }
+          jobs.push(jobs);
+        });
+      }
+      
       for (let jobID of jobIDs) {
         this.queue._readJobData(jobID, (error, job) => {
           if (error) {
