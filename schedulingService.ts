@@ -423,7 +423,7 @@ export class SchedulingService implements JobService {
           jobs.push(jobs);
         });
       }
-      
+
       for (let jobID of jobIDs) {
         this.queue._readJobData(jobID, (error, job) => {
           if (error) {
@@ -588,6 +588,42 @@ export class SchedulingService implements JobService {
     });
 
     return updated;
+  }
+
+  /**
+   * Upserts a job - creates a new job if it does not exist or update the
+   * existing one if it already exists.
+   * @param call
+   * @param context
+   */
+  async upsert(call: any, context?: any): Promise<any> {
+    if (_.isNil(call) || _.isNil(call.request) || _.isNil(call.request.items)) {
+      this._handleError(new errors.InvalidArgument('Missing items in upsert request.'));
+    }
+
+    let upserted = [];
+    let createJobsList = [];
+    let updateJobsList = [];
+    const jobIDs = _.map(call.request.items, (job) => { return job.id; });
+    for (let eachJob of call.request.items) {
+      if (eachJob.id) {
+        // existing job update it
+        updateJobsList.push(eachJob);
+      } else {
+        // new job create it.
+        createJobsList.push(eachJob);
+      }
+    }
+
+    if (updateJobsList.length > 0) {
+      upserted.push(await this.update({ request: { items: updateJobsList } }));
+    }
+
+    if (createJobsList.length > 0) {
+      upserted.push(await this.create({ request: { items: createJobsList } }));
+    }
+
+    return upserted;
   }
 
   /**
