@@ -186,7 +186,7 @@
           "transport": [
             "schedulingGRPC"
           ]
-        },
+        }
       },
       "io-restorecommerce-scheduling-cis": {
         "command": {
