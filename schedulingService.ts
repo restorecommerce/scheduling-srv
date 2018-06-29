@@ -4,6 +4,7 @@ import { schedule } from './kue_extensions';
 import { errors } from '@restorecommerce/chassis-srv';
 import * as kafkaClient from '@restorecommerce/kafka-client';
 import { RedisClient, createClient } from 'redis';
+import { identifier } from 'babel-types';
 
 const JOB_DONE_EVENT = 'jobDone';
 const JOB_FAILED_EVENT = 'jobFailed';
@@ -294,11 +295,6 @@ export class SchedulingService implements JobService {
       this._handleError(new errors.InvalidArgument('No job data specified.'));
     }
 
-    if (_.isEmpty(job.data.creator) && !job.now) {
-      // one-time job does not require a creator
-      this._handleError(new errors.InvalidArgument('No job creator specified.'));
-    }
-
     job.data = this._filterJobData(job.data);
     return job;
   }
@@ -353,6 +349,14 @@ export class SchedulingService implements JobService {
       if (!_.isNil(job.backoff) && !_.isNil(Backoffs[job.backoff])) {
         qjob = qjob.backoff(job.backoff);
       }
+
+      const now = Date.now();
+      job.data.meta = {
+        created: now,
+        modified: now,
+        modified_by: '',
+        owner: []
+      };
       if (_.size(job.interval) > 0) {
         this.queue.every(job.interval, qjob);
       } else if (_.size(job.when) > 0) {
@@ -367,12 +371,6 @@ export class SchedulingService implements JobService {
       const jobDataKey: string = this.queue._getJobDataKey(uniqueName);
       this.process(job.type, jobDataKey, parallel);
       this.logger.verbose(`job@${job.type} created with ${parallel} concurrent runs`, job);
-
-      this.redisClient.sadd(job.data.creator, jobDataKey, (error, reply) => {
-        if (error) {
-          that._handleError(`Error occurred when mapping job to creator: ${error}`);
-        }
-      });
 
       job.id = jobDataKey;
       if (this.resourceEventsEnabled && !job.now) {
@@ -394,25 +392,16 @@ export class SchedulingService implements JobService {
   async read(call: any, context?: any): Promise<any> {
     let jobs = [];
     if (_.isEmpty(call) || _.isEmpty(call.request)
-      || _.isEmpty(call.request.filter) || _.isEmpty(call.request.filter.creator)) {
+      || _.isEmpty(call.request.filter)) {
       jobs = await this._getJobList();
     } else if (call.request.filter) {
       const that = this;
       const uuid = call.request.filter.id;
-      const creator = call.request.filter.creator;
       const typeFilterName = call.request.filter.type;
 
       let jobIDs = [];
       if (uuid) {
         jobIDs.push(uuid);
-      } else if (creator) {
-        this.redisClient.smembers(creator, (error, reply) => {
-          if (error) {
-            that._handleError(`Error retrieving creator jobs: ${error}`);
-          }
-
-          jobIDs = reply;
-        });
       }
 
       if (typeFilterName) {
@@ -699,7 +688,7 @@ export class SchedulingService implements JobService {
 
   _filterJobData(data: any): Object {
     return _.pick(data, [
-      'creator', 'payload', 'timezone'
+      'meta', 'payload', 'timezone'
     ]);
   }
 
