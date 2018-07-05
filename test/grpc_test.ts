@@ -83,15 +83,11 @@ describe('testing scheduling-srv: gRPC', () => {
         },
         now: true
       };
-
-      const offset = await jobEvents.$offset(-1);
-
+      // For immediate job there is no event being emitted
       await grpcSchedulingSrv.create({ items: [job], }, {});
-
       const result = await grpcSchedulingSrv.read({}, {});
-      shouldBeEmpty(result);
-
-      await jobEvents.$wait(offset + 1);
+      should.exist(result);
+      result.data.items.length.should.equal(0);
     });
 
     it('should create a new job and execute it at a scheduled time', async () => {
@@ -104,7 +100,6 @@ describe('testing scheduling-srv: gRPC', () => {
 
       const data = {
         timezone: "Europe/Berlin",
-        creator: 'test-creator',
         payload: marshallProtobufAny({
           testValue: 'test-value'
         })
@@ -132,7 +127,6 @@ describe('testing scheduling-srv: gRPC', () => {
       }, {});
       await jobResourceEvents.$wait(jobResourceOffset + 1);
       await jobEvents.$wait(offset + 1);
-
       const result = await grpcSchedulingSrv.read({}, {});
       shouldBeEmpty(result);
     });
@@ -168,7 +162,6 @@ describe('testing scheduling-srv: gRPC', () => {
 
       const data = {
         timezone: "Europe/Berlin",
-        creator: 'test-creator',
         payload: marshallProtobufAny({
           testValue: 'test-value'
         })
@@ -204,13 +197,12 @@ describe('testing scheduling-srv: gRPC', () => {
       // wait for 'jobsCreated' and 'jobsDeleted' events
       await jobResourceEvents.$wait(jobResourceOffset + 1);
     });
-  });
+   });
   describe('managing jobs', function (): void {
     this.timeout(5000);
     it('should schedule some jobs for tomorrow', async () => {
       const data = {
         timezone: "Europe/Berlin",
-        creator: 'test-creator',
         payload: marshallProtobufAny({
           testValue: 'test-value'
         })

@@ -243,7 +243,6 @@ export class SchedulingService implements JobService {
 
       const uniqueName = job.data.unique;
       const jobDataKey = that.queue._getJobDataKey(uniqueName);
-
       if (!_.isNil(uniqueName) && that.canceledJobs.has(jobDataKey) && job.schedule != 'NOW') {
         // removing a canceled job from Redis
         kue.Job.get(jobInstID, (err, kueJob) => {
@@ -317,7 +316,6 @@ export class SchedulingService implements JobService {
     if (_.isNil(call) || _.isNil(call.request) || _.isNil(call.request.items)) {
       this._handleError(new errors.InvalidArgument('Missing items in create request.'));
     }
-
     const that = this;
     const jobs = _.map(call.request.items, that._validateJob.bind(this));
 
@@ -392,11 +390,13 @@ export class SchedulingService implements JobService {
   async read(call: any, context?: any): Promise<any> {
     let jobs = [];
     if (_.isEmpty(call) || _.isEmpty(call.request)
-      || _.isEmpty(call.request.filter)) {
+      || _.isEmpty(call.request.filter)
+      || _.isEmpty(call.request.filter.job_ids)
+      || _.isEmpty(call.request.filter.type)) {
       jobs = await this._getJobList();
-    } else if (call.request.filter) {
+    } else {
       const that = this;
-      const uuid = call.request.filter.id;
+      const uuid = call.request.filter.job_ids;
       const typeFilterName = call.request.filter.type;
 
       let jobIDs = [];
@@ -409,18 +409,33 @@ export class SchedulingService implements JobService {
           if (err) {
             that._handleError(`Error reading jobs based on ${typeFilterName}`);
           }
-          jobs.push(jobs);
-        });
-      }
+          if (jobIDs.length > 0) {
+            for (let job of jobs) {
+              kue.Job.get(job.id, (err, job) => {
+                if (err) {
+                  that._handleError(err);
+                }
 
-      for (let jobID of jobIDs) {
-        this.queue._readJobData(jobID, (error, job) => {
-          if (error) {
-            that._handleError(`Error reading job ${jobID}: ${error}`);
+                let uniqueKey = _.snakeCase(job.data.unique);
+                const dataKey = that.queue._getJobDataKey(uniqueKey);
+                if (jobIDs.indexOf(dataKey > -1)) {
+                  jobs.push(job);
+                }
+              });
+            }
+          } else {
+            jobs.push(jobs);
           }
-
-          jobs.push(that._filterQueuedJob(job));
         });
+      } else if (jobIDs.length > 0) {
+        for (let jobID of jobIDs) {
+          this.queue._readJobData(jobID, (error, job) => {
+            if (error) {
+              that._handleError(`Error reading job ${jobID}: ${error}`);
+            }
+            jobs.push(that._filterQueuedJob(job));
+          });
+        }
       }
     }
 
