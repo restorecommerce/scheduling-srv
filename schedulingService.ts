@@ -396,13 +396,9 @@ export class SchedulingService implements JobService {
       jobs = await this._getJobList();
     } else {
       const that = this;
-      const uuid = call.request.filter.job_ids;
       const typeFilterName = call.request.filter.type;
 
       let jobIDs = [];
-      if (uuid) {
-        jobIDs.push(uuid);
-      }
 
       if (typeFilterName) {
         kue.Job.rangeByType(typeFilterName, '*', 0, -1, 'asc', (err, jobs) => {
