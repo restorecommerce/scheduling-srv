@@ -396,7 +396,7 @@ export class SchedulingService implements JobService {
       jobs = await this._getJobList();
     } else {
       const that = this;
-      const jobIDs = call.request.filter.job_ids;
+      const jobIDs = call.request.filter.job_ids || [];
       const typeFilterName = call.request.filter.type;
 
       if (typeFilterName) {
