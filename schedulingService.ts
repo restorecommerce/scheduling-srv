@@ -198,7 +198,7 @@ export class SchedulingService implements JobService {
         if (scheduleType == 'ONCE') {
           const when = new Date(job.promote_at);
           const now = new Date();
-          const elapsed = (now.getMilliseconds() - when.getMilliseconds()) > 0;
+          const elapsed = (now.getTime() - when.getTime()) > 0;
           if (elapsed) {
             that.logger.warn(`Unable to schedule job ${jobDataKey}; scheduled time has elapsed`);
             return;
