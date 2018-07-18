@@ -6,7 +6,13 @@
 [depend]: https://img.shields.io/david/restorecommerce/scheduling-srv.svg?style=flat-square
 [cover]: http://img.shields.io/coveralls/restorecommerce/scheduling-srv/master.svg?style=flat-square
 
-A generic microservice for scheduling jobs and emitting them over [Apache Kafka](https://kafka.apache.org/). Job scheduling is implemented using [kue-scheduler](https://github.com/lykmapipo/kue-scheduler) which is a job scheduling extension of [kue](https://github.com/Automattic/kue) backed by [Redis](https://redis.io/). This service provides a [gRPC](https://grpc.io/docs/) interface for scheduling new jobs as well as manage the existing ones. Jobs can also be managed asynchronously using Kafka. The jobs emitted to Kafka can be consumed by other microservices which listen to the `queuedJob`. After processing the job an event should be emitted by the respective microservice indicating job failure or completion. A job is always deleted upon being receiving failure or completion data, unless it is a reccurring job.
+A generic microservice for scheduling jobs and emitting them over [Apache Kafka](https://kafka.apache.org/). Job scheduling is implemented using [kue-scheduler](https://github.com/lykmapipo/kue-scheduler) which is a job scheduling extension of [kue](https://github.com/Automattic/kue) backed by [Redis](https://redis.io/). This service provides a [gRPC](https://grpc.io/docs/) interface for scheduling new jobs as well as manage the existing ones. Jobs can also be managed asynchronously using Kafka. 
+Currently, three kinds of jobs can be scheduled:
+- immediate jobs;
+- one-time future jobs;
+- recurring jobs.
+
+Jobs emitted by this service to Kafka can be consumed by other microservices by listening to the `queuedJob` event. After processing the job an event should be emitted by the respective microservice indicating job failure or completion. A job is always deleted upon being receiving failure or completion data, unless it is a reccurring job.
 
 ## gRPC Interface
 
@@ -34,8 +40,8 @@ This microservice exposes the following gRPC endpoints for the Job resource.
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
 | timezone | string | optional | Timezone specification for job scheduling (ex: 'Europe/Amsterdam') |
-| creator | string | optional | User ID of the job's creator |
-| payload | [ ] `google.protobuf.Any` | optional | Generic data type for different job data structures (see [google.protobuf.Any](https://github.com/restorecommerce/protos/blob/master/google/protobuf/any.proto)) |
+| meta | [`io.restorecommerce.meta.Meta`](https://github.com/restorecommerce/protos/blob/master/io/restorecommerce/meta.proto) | required | Job resource meta info; only contains creation and modification timestamps |
+| payload | [ ] [`google.protobuf.Any`](https://github.com/restorecommerce/protos/blob/master/google/protobuf/any.proto) | optional | Generic data type for job-specific data |
 
 `io.restorecommerce.job.Job.Priority`
 
@@ -63,9 +69,6 @@ This microservice exposes the following gRPC endpoints for the Job resource.
 
 #### CRUD Operations
 
-It exposes the below CRUD operations for creating or
-modifying Job resource.
-
 `io.restorecommerce.job.Service`
 
 | Method Name | Request Type | Response Type | Description |
@@ -73,18 +76,19 @@ modifying Job resource.
 | Create | `io.restorecommerce.job.JobList` | `io.restorecommerce.job.JobList` | Create a list of Job resources |
 | Read | `io.restorecommerce.job.JobReadRequest` | `io.restorecommerce.job.JobList` | Read a list of Job resources |
 | Update | `io.restorecommerce.job.JobList` | `io.restorecommerce.job.JobList` | Update a list of Job resources |
-| Delete | `io.restorecommerce.resourcebase.DeleteRequest` | Empty | Delete a list of Job resources |
+| Delete | `io.restorecommerce.resourcebase.DeleteRequest` | [`google.protobuf.Empty`](https://github.com/restorecommerce/protos/blob/master/google/protobuf/empty.proto) | Delete a list of Job resources |
 
-Please note that the `update` operation literally just deletes an existing job and reschedules it with new properties.
 
 `io.restorecommerce.job.JobList`
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| items | [ ]`io.restorecommerce.job.JobList` | required | List of Jobs |
-| total_count | number | optional | number of Jobs |
+| items | [ ]`io.restorecommerce.job.Job` | required | List of Jobs |
+| total_count | number | optional | Number of Jobs |
 
-For the detailed protobuf message structure of `io.restorecommerce.resourcebase.ReadRequest` and `io.restorecommerce.resourcebase.DeleteRequest` refer [resource-base-interface](https://github.com/restorecommerce/resource-base-interface).
+Please note that the `update` operation literally just deletes an existing job and reschedules it with new data.
+
+For the detailed protobuf message structure of `io.restorecommerce.job.ReadRequest` and `io.restorecommerce.job.DeleteRequest` refer [job.proto](https://github.com/restorecommerce/protos/blob/master/io/restorecommerce/job.proto).
 
 ## Kafka Events
 
@@ -144,8 +148,7 @@ Events from the `io.restorecommerce.jobs.resource` topic are issued whenever a C
 This service uses [chassis-srv](http://github.com/restorecommerce/chassis-srv), a base module for [restorecommerce](https://github.com/restorecommerce) microservices, in order to provide the following functionalities:
 - exposure of all previously mentioned gRPC endpoints
 - implementation of a [command-interface](https://github.com/restorecommerce/chassis-srv/blob/master/command-interface.md) which provides endpoints for retrieving the system status and resetting/restoring the system in case of failure. These endpoints can be called via gRPC or Kafka events (through the `io.restorecommerce.command` topic).
-- stores the offset values for Kafka topics at regular intervals to Redis
-- Job store through a Redis cache 
+- a Redis database connection, which is used to store the offset values for Kafka topics at regular intervals and to store scheduled jobs
 
 ## Usage
 
