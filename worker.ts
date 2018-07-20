@@ -107,7 +107,7 @@ export class Worker {
         const eventNames = kafkaCfg.topics[topicType].events;
         for (let eventName of eventNames) {
           await topic.on(eventName, schedulingServiceEventsListener,
-            offsetValue);
+            { startingOffset: offsetValue });
         }
       }
     }
