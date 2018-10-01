@@ -14,7 +14,7 @@
       "provider": "kafka",
       "groupId": "scheduling-srv",
       "clientId": "scheduling-srv",
-      "connectionString": "localhost:2181",
+      "kafkaHost": "localhost:9092",
       "latestOffset": true,
       "queuedJob": {
         "protos": [
