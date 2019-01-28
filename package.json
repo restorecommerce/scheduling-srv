@@ -26,6 +26,7 @@
     "cache-manager": "^2.9.0",
     "cache-manager-redis": "^0.5.0",
     "co": "^4.6.0",
+    "cross-env": "^5.2.0",
     "kue-scheduler": "^0.7.4",
     "lodash": "^4.17.5"
   },
@@ -43,17 +44,17 @@
   },
   "scripts": {
     "start": "npm run createtopics && node start.js",
-    "dev": "export NODE_ENV=development; npm run createtopics && node start.js",
+    "dev": "cross-env NODE_ENV=development npm run createtopics && node start.js",
     "postinstall": "tsc -d",
     "pretest": "tsc -d && npm run tsctests && npm run createtopics",
-    "tsctests": "tsc test/*.ts --module commonjs -target ES6",
+    "tsctests": "tsc test/grpc_test.ts test/kafka_test.ts --module commonjs -target ES6",
     "createtopics": "node setupTopics.js io.restorecommerce.jobs io.restorecommerce.jobs.resource io.restorecommerce.command",
     "test": "npm run lint && npm run mocha",
     "test-debug": "npm run mochadebug",
-    "lint": "tslint './*.ts'",
-    "mocha": "export NODE_ENV=test; mocha -R spec ./test/*.js --full-trace --exit --trace-warnings",
-    "mochadebug": "export NODE_ENV=test; mocha -R spec ./test/*_test.js --inspect-brk --full-trace --exit",
-    "coveralls": "export NODE_ENV=test; istanbul cover ./node_modules/mocha/bin/_mocha --report lcovonly -- -R spec ./test/*_test.js --exit"
+    "lint": "tslint *.ts",
+    "mocha": "cross-env NODE_ENV=test mocha -R spec test/grpc_test.js test/kafka_test.js --full-trace --exit --trace-warnings",
+    "mochadebug": "cross-env NODE_ENV=test mocha -R spec test/grpc_test.js test/kafka_test.js --inspect-brk --full-trace --exit",
+    "coveralls": "cross-env NODE_ENV=test istanbul cover node_modules/mocha/bin/_mocha --report lcovonly -- -R spec test/grpc_test.js test/kafka_test.js --exit"
   },
   "engines": {
     "node": ">= 9.2.0"
