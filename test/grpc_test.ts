@@ -26,6 +26,7 @@ describe('testing scheduling-srv: gRPC', () => {
   let jobResourceEvents: Topic;
   let serviceClient: Client;
   let grpcSchedulingSrv: any;
+
   before(async () => {
     worker = new Worker();
 
@@ -50,6 +51,9 @@ describe('testing scheduling-srv: gRPC', () => {
     await jobResourceEvents.removeAllListeners('jobsDeleted');
   });
   after(async () => {
+    await jobEvents.removeAllListeners('queuedJob');
+    await jobResourceEvents.removeAllListeners('jobsCreated');
+    await jobResourceEvents.removeAllListeners('jobsDeleted');
     await worker.schedulingService.clear();
     await worker.stop();
     await serviceClient.end();
@@ -66,7 +70,6 @@ describe('testing scheduling-srv: gRPC', () => {
       });
       const data = {
         timezone: "Europe/Berlin",
-        creator: 'test-creator',
         payload: marshallProtobufAny({
           testValue: 'test-value'
         })
@@ -192,7 +195,7 @@ describe('testing scheduling-srv: gRPC', () => {
       createdJob.data.items.should.have.length(1);
 
       jobID = createdJob.data.items[0].id;
-      // wait for 3 'queuedJob'-'jobDone' events
+      // wait for 3 'queuedJob' and 2 'jobDone' events
       await jobEvents.$wait(jobOffset + 5);
       // wait for 'jobsCreated' and 'jobsDeleted' events
       await jobResourceEvents.$wait(jobResourceOffset + 1);
@@ -208,7 +211,7 @@ describe('testing scheduling-srv: gRPC', () => {
         })
       };
 
-      // schedule the job to be executed 4 seconds from now.
+      // schedule the job to be executed tomorrow
       // we can specify any Date instance for scheduling the job
       const scheduledTime = new Date();
       scheduledTime.setDate(scheduledTime.getDate() + 1);
@@ -269,16 +272,13 @@ describe('testing scheduling-srv: gRPC', () => {
       await jobResourceEvents.$wait(jobResourceOffset + 1);
     });
     it('should delete all remaining scheduled jobs upon request', async () => {
-
+      const jobResourceOffset = await jobResourceEvents.$offset(-1);
       await grpcSchedulingSrv.delete({
         collection: true
       }, {});
-
-      const jobResourceOffset = await jobResourceEvents.$offset(-1);
       const result = await grpcSchedulingSrv.read({}, {});
       shouldBeEmpty(result);
       await jobResourceEvents.$wait(jobResourceOffset + 3);
-
     });
   });
 });

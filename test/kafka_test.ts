@@ -10,7 +10,6 @@ import { Worker } from '../worker';
 
 import { Topic } from '@restorecommerce/kafka-client';
 import * as sconfig from '@restorecommerce/service-config';
-import * as Logger from '@restorecommerce/logger';
 
 import {
   validateJobResource,
@@ -54,8 +53,11 @@ describe('testing scheduling-srv: Kafka', () => {
     await jobResourceTopic.removeAllListeners('jobsDeleted');
   });
   after(async () => {
-    await worker.schedulingService.clear();
-    await worker.stop();
+    await jobTopic.removeAllListeners('queuedJob');
+    await jobResourceTopic.removeAllListeners('jobsCreated');
+    await jobResourceTopic.removeAllListeners('jobsDeleted');
+    // await worker.schedulingService.clear();
+    // await worker.stop();
   });
   describe('create a one-time job', function postJob(): void {
     this.timeout(15000);
@@ -64,13 +66,11 @@ describe('testing scheduling-srv: Kafka', () => {
         validateScheduledJob(job, 'NOW');
 
         const { id, schedule_type } = job;
-
         await jobTopic.emit('jobDone', { id, schedule_type });
       });
 
       const data = {
-        timezone: "Europe/Berlin",
-        creator: 'test-creator',
+        timezone: 'Europe/Berlin',
         payload: marshallProtobufAny({
           testValue: 'test-value'
         })
@@ -94,7 +94,6 @@ describe('testing scheduling-srv: Kafka', () => {
         request: {}
       });
       shouldBeEmpty(result);
-
       await jobTopic.$wait(offset + 2); // createJobs, queued, jobDone
     });
     it('should create a new job and execute it at a scheduled time', async () => {
@@ -106,12 +105,11 @@ describe('testing scheduling-srv: Kafka', () => {
       });
 
       const data = {
-        timezone: "Europe/Berlin",
-        creator: 'test-creator',
+        timezone: 'Europe/Berlin',
         payload:
-        marshallProtobufAny({
-          testValue: 'test-value'
-        })
+          marshallProtobufAny({
+            testValue: 'test-value'
+          })
       };
 
       // schedule the job to be executed 4 seconds from now.
@@ -142,6 +140,7 @@ describe('testing scheduling-srv: Kafka', () => {
       await jobResourceTopic.$wait(jobResourceOffset + 1);
     });
   });
+
   describe('creating a recurring job', function (): void {
     this.timeout(15000);
     it('should create a recurring job and delete it after some executions', async () => {
@@ -173,12 +172,11 @@ describe('testing scheduling-srv: Kafka', () => {
       });
 
       const data = {
-        timezone: "Europe/Berlin",
-        creator: 'test-creator',
+        timezone: 'Europe/Berlin',
         payload:
-        marshallProtobufAny({
-          testValue: 'test-value'
-        })
+          marshallProtobufAny({
+            testValue: 'test-value'
+          })
       };
 
       const job = {
@@ -213,16 +211,16 @@ describe('testing scheduling-srv: Kafka', () => {
       await jobResourceTopic.$wait(jobResourceOffset + 1);
     });
   });
+
   describe('managing jobs', function (): void {
     this.timeout(15000);
     it('should schedule some jobs for tomorrow', async () => {
       const data = {
-        timezone: "Europe/Berlin",
-        creator: 'test-creator',
+        timezone: 'Europe/Berlin',
         payload:
-        marshallProtobufAny({
-          testValue: 'test-value'
-        })
+          marshallProtobufAny({
+            testValue: 'test-value'
+          })
       };
 
       // schedule the job to be executed 4 seconds from now.

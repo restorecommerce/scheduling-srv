@@ -150,6 +150,42 @@ This service uses [chassis-srv](http://github.com/restorecommerce/chassis-srv), 
 - implementation of a [command-interface](https://github.com/restorecommerce/chassis-srv/blob/master/command-interface.md) which provides endpoints for retrieving the system status and resetting/restoring the system in case of failure. These endpoints can be called via gRPC or Kafka events (through the `io.restorecommerce.command` topic).
 - a Redis database connection, which is used to store the offset values for Kafka topics at regular intervals and to store scheduled jobs
 
-## Usage
+## Development
+
+### Tests
 
 See [tests](test/).
+
+## Usage
+
+### Development
+
+- Install dependencies
+
+```sh
+npm install
+```
+
+- Build application
+
+```sh
+# compile the code
+npm run build
+```
+
+- Run application and restart it on changes in the code
+
+```sh
+# Start scheduling-srv in dev mode
+npm run dev
+```
+
+### Production
+
+```sh
+# compile the code
+npm run build
+
+# run compiled server
+npm start
+```
