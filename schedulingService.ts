@@ -3,8 +3,8 @@ import * as kue from 'kue-scheduler';
 import { schedule } from './kue_extensions';
 import { errors } from '@restorecommerce/chassis-srv';
 import * as kafkaClient from '@restorecommerce/kafka-client';
-import { RedisClient, createClient } from 'redis';
-import { identifier } from 'babel-types';
+import { RedisClient } from 'redis';
+import * as cronparser from 'cron-parser';
 
 const JOB_DONE_EVENT = 'jobDone';
 const JOB_FAILED_EVENT = 'jobFailed';
@@ -93,15 +93,15 @@ export class SchedulingService implements JobService {
 
     const options = _.defaults(kueOptions, {
       prefix: 'scheduling-srv',
-      redis: redisConfig
+      redis: redisConfig,
     });
     this.queue = kue.createQueue(options);
 
     const that = this;
     redisCache.store.getClient((err, redisConn) => {
+      // this redis client object is for storing recurrTime to DB index 7
       this.redisClient = redisConn.client;
     });
-
     this.canceledJobs = new Set<string>();
   }
 
@@ -121,7 +121,7 @@ export class SchedulingService implements JobService {
         let job = msg;
 
         if (eventName === JOB_FAILED_EVENT) {
-          logger.error(`job@${job.type}#${job.id} failed with error`, job.error,
+          logger.error(`job@${job.type}#${job.id} failed with error #${job.error}`,
             that._filterQueuedJob(job));
         } else if (eventName === JOB_DONE_EVENT) {
           logger.verbose(`job#${job.id} done`, that._filterQueuedJob(job));
@@ -153,13 +153,11 @@ export class SchedulingService implements JobService {
     this.queue.on('scheduler unknown job expiry key', (message) => {
       logger.warn('scheduler unknown job expiry key', message);
     });
-
     await this._rescheduleJobs();
   }
 
   async _rescheduleJobs(): Promise<any> {
     const that = this;
-
     const deleteDispatch = [];
     const createDispatch = [];
 
@@ -183,11 +181,11 @@ export class SchedulingService implements JobService {
         that._handleError(err);
       }
 
-      _.forEach(jobs, (job) => {
+      _.forEach(jobs, async (job) => {
         const scheduleType = job.data.schedule;
         const unique = job.data.unique;
         const jobDataKey = that.queue._getJobDataKey(unique);
-
+        const jobTimezone = job.data.timezone;
         // delete the job and reschedule it
         deleteDispatch.push(that.delete({
           request: {
@@ -204,10 +202,61 @@ export class SchedulingService implements JobService {
             return;
           }
         }
-
+        if (scheduleType === 'RECCUR') {
+          // Get last runtime for the job time from redis
+          const jobTime = await new Promise<any>((resolve, reject) => {
+            this.redisClient.get(unique, (err, response) => {
+              if (err) {
+                reject(err);
+              }
+              resolve(response);
+            });
+          });
+          if (jobTime) {
+            const now = new Date().getHours();
+            const lastRunTime = JSON.parse(jobTime);
+            const LastrunTime = lastRunTime.time;
+            const when = new Date(LastrunTime).getHours();
+            const elapsed = now - when;
+            if (elapsed > 0) {
+              let options = {
+                currentDate: new Date(LastrunTime),
+                endDate: new Date(),
+                iterator: true
+              };
+              const intervalTime = cronparser.parseExpression(job.reccurInterval, options);
+              while (intervalTime.hasNext()) {
+                const filteredJob: any = that._filterKueJob(job);
+                let nextInterval: any = intervalTime.next();
+                const nextIntervalTime = nextInterval.value.toString();
+                filteredJob.id = '';
+                filteredJob.interval = '';
+                filteredJob.now = true;
+                filteredJob.when = '';
+                filteredJob.backoff = {
+                  delay: 1000,
+                  type: 'FIXED',
+                },
+                  filteredJob.priority = 0;
+                filteredJob.attempts = 1;
+                filteredJob.parallel = 1;
+                filteredJob.redisUnique = unique;
+                if (filteredJob.data && filteredJob.data.payload) {
+                  let JobBufferObj = JSON.parse(job.data.payload.value.toString());
+                  const jobInterval = Object.assign(JobBufferObj, { time: nextIntervalTime });
+                  job.data.payload.value = Buffer.from(JSON.stringify(jobInterval));
+                }
+                createDispatch.push(that.create({
+                  request: {
+                    items: [filteredJob]
+                  }
+                }));
+              }
+            }
+          }
+        }
         const filteredJob = that._filterKueJob(job);
         delete job.id;
-
         createDispatch.push(that.create({
           request: {
             items: [filteredJob]
@@ -219,7 +268,17 @@ export class SchedulingService implements JobService {
     await deleteDispatch;
     await createDispatch;
   }
-
+  async getRediskey(key: any): Promise<any> {
+    const jobTime = await new Promise<any>((resolve, reject) => {
+      this.redisClient.get(key, (err, response) => {
+        if (err) {
+          reject(err);
+        }
+        resolve(response);
+      });
+    });
+    return jobTime;
+  }
   /**
    * Disabling of CRUD events.
    */
@@ -240,7 +299,6 @@ export class SchedulingService implements JobService {
     this.queue.process(jobType, parallel, (job, done) => {
       const jobInstID = job.id;
       job.schedule = job.data.schedule;
-
       const uniqueName = job.data.unique;
       const jobDataKey = that.queue._getJobDataKey(uniqueName);
       if (!_.isNil(uniqueName) && that.canceledJobs.has(jobDataKey) && job.schedule != 'NOW') {
@@ -258,9 +316,33 @@ export class SchedulingService implements JobService {
           });
         });
       } else {
+        const jobSchedule = job.schedule;
         jobCbs[jobInstID] = done;
         job = that._filterQueuedJob(job);
-
+        let redisJobTime;
+        if (jobSchedule == 'RECCUR') {
+          if (job && job.data) {
+            const dateTime = new Date();
+            const bufObj = Buffer.from(JSON.stringify({ time: dateTime }));
+            if (job.data.payload) {
+              if (job.data.payload.value) {
+                let JobBufferObj = JSON.parse(job.data.payload.value.toString());
+                const objTime = Object.assign(JobBufferObj, { time: dateTime });
+                redisJobTime = JSON.stringify({ time: dateTime });
+                this.redisClient.set(uniqueName, redisJobTime);
+                job.data.payload.value = Buffer.from(JSON.stringify(objTime));
+              } else {
+                this.redisClient.set(uniqueName, redisJobTime);
+                job.data.payload = { value: bufObj };
+              }
+            } else {
+              this.redisClient.set(uniqueName, redisJobTime);
+              job.data = {
+                payload: { value: bufObj }
+              };
+            }
+          }
+        }
         that.jobEvents.emit('queuedJob', {
           id: jobInstID,
           type: job.type,
@@ -318,19 +400,15 @@ export class SchedulingService implements JobService {
     }
     const that = this;
     const jobs = _.map(call.request.items, that._validateJob.bind(this));
-
     // scheduling jobs
     for (let i = 0; i < jobs.length; i += 1) {
       let job = jobs[i];
       job.data.timezone = job.data.timezone || 'Europe/London'; // fallback to GMT
-
       const data: any = _.cloneDeep(job.data);
-
       let qjob = this.queue.createJob(job.type, data);
       let uniqueName = new Date().toISOString().replace(/:/g, "_"); // unique name is a timestamp
       uniqueName = _.snakeCase(uniqueName);
       qjob = qjob.unique(uniqueName);
-
       let priority;
       if (_.isString(job.priority) && !_.isNil(Priority[job.priority])) {
         priority = Priority[job.priority];
@@ -347,14 +425,22 @@ export class SchedulingService implements JobService {
       if (!_.isNil(job.backoff) && !_.isNil(Backoffs[job.backoff])) {
         qjob = qjob.backoff(job.backoff);
       }
-
+      if (job.redisUnique) {
+        this.redisClient.del(job.redisUnique);
+      }
       const now = Date.now();
-      job.data.meta = {
-        created: now,
-        modified: now,
-        modified_by: '',
-        owner: []
-      };
+      if (!qjob.data.meta) {
+        const metaObj = {
+          created: now,
+          modified: now,
+          modified_by: '',
+          owner: []
+        };
+        Object.assign(qjob.data, { meta: metaObj });
+      }
+      if (qjob && qjob.data && qjob.data.payload && qjob.data.payload.value) {
+        qjob.data.payload.value = qjob.data.payload.value.toString();
+      }
       if (_.size(job.interval) > 0) {
         this.queue.every(job.interval, qjob);
       } else if (_.size(job.when) > 0) {
@@ -364,7 +450,6 @@ export class SchedulingService implements JobService {
       } else {
         this._handleError('No schedule specified for job.');
       }
-
       const parallel: number = job.parallel || 1;
       const jobDataKey: string = this.queue._getJobDataKey(uniqueName);
       this.process(job.type, jobDataKey, parallel);

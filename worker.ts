@@ -1,6 +1,4 @@
-import * as co from 'co';
 import * as _ from 'lodash';
-import * as protobuf from 'protobufjs';
 import * as chassis from '@restorecommerce/chassis-srv';
 import { Events, Topic } from '@restorecommerce/kafka-client';
 import * as Logger from '@restorecommerce/logger';
@@ -43,7 +41,10 @@ export class Worker {
     // Get a redis connection
     const redisConfig = cfg.get('redis');
     redisConfig.db = cfg.get('redis:db-indexes:db-jobStore');
-    const redis = await chassis.cache.get([redisConfig], logger);
+
+    const reccurTimeCfg = cfg.get('redis');
+    reccurTimeCfg.db = cfg.get('redis:db-indexes:db-reccurTime');
+    const redis = await chassis.cache.get([reccurTimeCfg], logger);
 
     // Create events
     const kafkaCfg = cfg.get('events:kafka');
@@ -62,7 +63,6 @@ export class Worker {
     // Create the business logic
     const schedulingService: SchedulingService = new SchedulingService(jobEvents, jobResourceEvents, redisConfig, logger, redis, kueOptions);
     await schedulingService.start();
-
     // Bind business logic to server
     const serviceNamesCfg = cfg.get('serviceNames');
     await server.bind(serviceNamesCfg.scheduling, schedulingService);
@@ -274,13 +274,15 @@ class JobsCommandInterface extends chassis.CommandInterface {
 
 if (require.main === module) {
   const worker = new Worker();
-  co(worker.start).catch((err) => {
-    console.error('startup error', err);
+  const cfg = sconfig(process.cwd());
+  worker.start(cfg).then().catch((err) => {
+    this.logger.error('startup error', err);
     process.exit(1);
   });
+
   process.on('SIGINT', () => {
-    co(worker.stop).catch((err) => {
-      console.error('shutdown error', err);
+    worker.stop().then().catch((err) => {
+      this.logger.error('shutdown error', err);
       process.exit(1);
     });
   });

@@ -6,7 +6,8 @@
     "offsetStoreInterval": 1000,
     "db-indexes": {
       "db-offsetStore": 0,
-      "db-jobStore": 1
+      "db-jobStore": 1,
+      "db-reccurTime": 7
     }
   },
   "events": {

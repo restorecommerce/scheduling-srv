@@ -25,10 +25,10 @@
     "@restorecommerce/service-config": "^0.1.0",
     "cache-manager": "^2.9.0",
     "cache-manager-redis": "^0.6.0",
-    "co": "^4.6.0",
     "cross-env": "^5.2.0",
     "kue-scheduler": "^0.8.1",
-    "lodash": "^4.17.5"
+    "lodash": "^4.17.5",
+    "cron-parser": "^2.9.0"
   },
   "devDependencies": {
     "@restorecommerce/grpc-client": "github:restorecommerce/grpc-client",
