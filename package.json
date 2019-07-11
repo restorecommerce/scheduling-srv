@@ -23,26 +23,26 @@
     "@restorecommerce/logger": "github:restorecommerce/logger",
     "@restorecommerce/protos": "github:restorecommerce/protos",
     "@restorecommerce/service-config": "^0.1.0",
-    "cache-manager": "^2.9.0",
+    "cache-manager": "^2.9.1",
     "cache-manager-redis": "^0.6.0",
     "cross-env": "^5.2.0",
-    "kue-scheduler": "^0.8.1",
-    "lodash": "^4.17.5",
-    "cron-parser": "^2.9.0"
+    "kue-scheduler": "0.8.1",
+    "lodash": "^4.17.14",
+    "cron-parser": "^2.12.0"
   },
   "devDependencies": {
     "@restorecommerce/grpc-client": "github:restorecommerce/grpc-client",
-    "@types/mocha": "^5.0.0",
-    "@types/node": "^11.12.1",
-    "@types/redis": "^2.8.6",
-    "coveralls": "^3.0.0",
-    "istanbul": "^0.4.5",
-    "mocha": "^6.0.2",
+    "@types/mocha": "^5.2.7",
+    "@types/node": "^12.6.2",
+    "@types/redis": "^2.8.13",
+    "coveralls": "^3.0.4",
+    "nyc": "^14.1.1",
+    "mocha": "^6.1.4",
     "npm-run-all": "^4.1.5",
     "rimraf": "^2.6.3",
-    "should": "^13.2.1",
-    "tslint": "^5.9.1",
-    "typescript": "^3.3.4000"
+    "should": "^13.2.3",
+    "tslint": "^5.18.0",
+    "typescript": "^3.5.3"
   },
   "scripts": {
     "start": "npm run createtopics && node start.js",
@@ -57,7 +57,7 @@
     "mocha_kafka": "cross-env NODE_ENV=test mocha -R spec test/kafka_test.js --full-trace --exit --trace-warnings --exit",
     "mocha_grpc": "cross-env NODE_ENV=test mocha -R spec test/grpc_test.js --full-trace --exit --trace-warnings --exit",
     "mochadebug": "cross-env NODE_ENV=test mocha -R spec test/kafka_test.js test/grpc_test.js --inspect-brk --full-trace --exit",
-    "coveralls": "cross-env NODE_ENV=test istanbul cover _mocha --report lcovonly -- -R spec test/kafka_test.js test/grpc_test.js --exit",
+    "coveralls": "cross-env NODE_ENV=test; nyc --reporter text --reporter lcov npm run test",
     "build:tsc": "tsc -d",
     "build:clean": "rimraf start.js service.js schedulingService.js worker.js kue_extensions.js",
     "build": "npm-run-all lint build:clean build:tsc"
