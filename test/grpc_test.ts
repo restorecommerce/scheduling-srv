@@ -7,7 +7,7 @@ import { Worker } from '../worker';
 import { Topic } from '@restorecommerce/kafka-client';
 import * as sconfig from '@restorecommerce/service-config';
 import { Client } from '@restorecommerce/grpc-client';
-import * as Logger from '@restorecommerce/logger';
+import { Logger } from '@restorecommerce/logger';
 
 import {
   validateJobResource, shouldBeEmpty, validateScheduledJob
@@ -200,7 +200,7 @@ describe('testing scheduling-srv: gRPC', () => {
       // wait for 'jobsCreated' and 'jobsDeleted' events
       await jobResourceEvents.$wait(jobResourceOffset + 1);
     });
-   });
+  });
   describe('managing jobs', function (): void {
     this.timeout(5000);
     it('should schedule some jobs for tomorrow', async () => {

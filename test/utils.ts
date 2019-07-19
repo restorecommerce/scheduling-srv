@@ -1,4 +1,4 @@
-import { Priority, marshallProtobufAny, unmarshallProtobufAny } from '../schedulingService';
+import { Priority, unmarshallProtobufAny } from '../schedulingService';
 import * as should from 'should';
 
 export function validateScheduledJob(job: any, expectedSchedule: string): void {

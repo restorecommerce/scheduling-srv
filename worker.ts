@@ -1,7 +1,7 @@
 import * as _ from 'lodash';
 import * as chassis from '@restorecommerce/chassis-srv';
 import { Events, Topic } from '@restorecommerce/kafka-client';
-import * as Logger from '@restorecommerce/logger';
+import { Logger } from '@restorecommerce/logger';
 import { SchedulingService } from './schedulingService';
 import * as sconfig from '@restorecommerce/service-config';
 import * as cacheManager from 'cache-manager';
