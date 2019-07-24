@@ -1,50 +1,13 @@
 import * as _ from 'lodash';
-import * as kue from 'kue-scheduler';
-import { schedule } from './kue_extensions';
+import * as kue from 'kue';
 import { errors } from '@restorecommerce/chassis-srv';
 import * as kafkaClient from '@restorecommerce/kafka-client';
 import { RedisClient } from 'redis';
 import * as cronparser from 'cron-parser';
 
+const kueScheduler = require('kue-scheduler');
 const JOB_DONE_EVENT = 'jobDone';
 const JOB_FAILED_EVENT = 'jobFailed';
-
-function decodeValue(value: any): Object {
-  let ret = {};
-  if (value.number_value) {
-    ret = value.number_value;
-  }
-  else if (value.string_value) {
-    ret = value.string_value;
-  }
-  else if (value.bool_value) {
-    ret = value.bool_value;
-  }
-  else if (value.list_value) {
-    ret = _.map(value.list_value.values, (v) => {
-      return toObject(v, true);
-    });
-  }
-  else if (value.struct_value) {
-    ret = toObject(value.struct_value);
-  }
-  return ret;
-}
-
-function toObject(struct: any, fromArray: any = false): Object {
-  let obj = {};
-  if (!fromArray) {
-    _.forEach(struct.fields, (value, key) => {
-      obj[key] = decodeValue(value);
-    });
-  }
-  else {
-    obj = decodeValue(struct);
-  }
-  return obj;
-}
-
-kue.prototype.schedule = schedule;
 
 export enum Priority {
   NORMAL = 0,
@@ -84,7 +47,9 @@ export class SchedulingService implements JobService {
   redisClient: RedisClient;
   resourceEventsEnabled: boolean;
   canceledJobs: Set<string>;
-  constructor(jobEvents: kafkaClient.Topic, jobResourceEvents: kafkaClient.Topic, redisConfig: any, logger: any, redisCache: any, kueOptions: any) {
+  constructor(jobEvents: kafkaClient.Topic,
+    jobResourceEvents: kafkaClient.Topic, redisConfig: any, logger: any,
+    redisCache: any, kueOptions: any) {
     this.jobEvents = jobEvents;
     this.jobResourceEvents = jobResourceEvents;
     this.resourceEventsEnabled = true;
@@ -95,7 +60,7 @@ export class SchedulingService implements JobService {
       prefix: 'scheduling-srv',
       redis: redisConfig,
     });
-    this.queue = kue.createQueue(options);
+    this.queue = kueScheduler.createQueue(options);
 
     const that = this;
     redisCache.store.getClient((err, redisConn) => {
@@ -185,7 +150,6 @@ export class SchedulingService implements JobService {
         const scheduleType = job.data.schedule;
         const unique = job.data.unique;
         const jobDataKey = that.queue._getJobDataKey(unique);
-        const jobTimezone = job.data.timezone;
         // delete the job and reschedule it
         deleteDispatch.push(that.delete({
           request: {
@@ -268,17 +232,7 @@ export class SchedulingService implements JobService {
     await deleteDispatch;
     await createDispatch;
   }
-  async getRediskey(key: any): Promise<any> {
-    const jobTime = await new Promise<any>((resolve, reject) => {
-      this.redisClient.get(key, (err, response) => {
-        if (err) {
-          reject(err);
-        }
-        resolve(response);
-      });
-    });
-    return jobTime;
-  }
+
   /**
    * Disabling of CRUD events.
    */
@@ -474,46 +428,56 @@ export class SchedulingService implements JobService {
    */
   async read(call: any, context?: any): Promise<any> {
     let jobs = [];
-    if (_.isEmpty(call) || _.isEmpty(call.request)
-      || _.isEmpty(call.request.filter)
-      || _.isEmpty(call.request.filter.job_ids)
-      || _.isEmpty(call.request.filter.type)) {
+    if (_.isEmpty(call) || _.isEmpty(call.request) || _.isEmpty(call.request.filter)
+      && (!call.request.filter || !call.request.filter.job_ids
+        || _.isEmpty(call.request.filter.job_ids))
+      && (!call.request.filter || !call.request.filter.type ||
+        _.isEmpty(call.request.filter.type))) {
       jobs = await this._getJobList();
     } else {
       const that = this;
       const jobIDs = call.request.filter.job_ids || [];
       const typeFilterName = call.request.filter.type;
-
       if (typeFilterName) {
-        kue.Job.rangeByType(typeFilterName, '*', 0, -1, 'asc', (err, jobs) => {
-          if (err) {
-            that._handleError(`Error reading jobs based on ${typeFilterName}`);
-          }
-          if (jobIDs.length > 0) {
-            for (let job of jobs) {
-              kue.Job.get(job.id, (err, job) => {
-                if (err) {
-                  that._handleError(err);
+        let jobStates = ['active', 'inactive', 'delayed', 'completed'];
+        for (let jobState of jobStates) {
+          await new Promise((resolve, reject) => {
+            kue.Job.rangeByType(typeFilterName, jobState, 0, -1, 'asc', (err, jobsRead) => {
+              if (err) {
+                that._handleError(`Error reading jobs based on ${typeFilterName}`);
+              }
+              resolve(jobsRead);
+              if (jobIDs.length > 0) {
+                for (let job of jobsRead) {
+                  kue.Job.get(job.id, (err, job) => {
+                    if (err) {
+                      that._handleError(err);
+                    }
+                    let uniqueKey = _.snakeCase(job.data.unique);
+                    const dataKey = that.queue._getJobDataKey(uniqueKey);
+                    if (jobIDs.indexOf(dataKey) > -1) {
+                      jobs.push(that._filterKueJob(job));
+                    }
+                  });
                 }
-
-                let uniqueKey = _.snakeCase(job.data.unique);
-                const dataKey = that.queue._getJobDataKey(uniqueKey);
-                if (jobIDs.indexOf(dataKey > -1)) {
-                  jobs.push(job);
+              } else {
+                for (let job of jobsRead) {
+                  jobs.push(that._filterKueJob(job));
                 }
-              });
-            }
-          } else {
-            jobs.push(jobs);
-          }
-        });
+              }
+            });
+          });
+        }
       } else if (jobIDs.length > 0) {
         for (let jobID of jobIDs) {
-          this.queue._readJobData(jobID, (error, job) => {
-            if (error) {
-              that._handleError(`Error reading job ${jobID}: ${error}`);
-            }
-            jobs.push(that._filterQueuedJob(job));
+          await new Promise((resolve, reject) => {
+            this.queue._readJobData(jobID, (error, job) => {
+              if (error) {
+                that._handleError(`Error reading job ${jobID}: ${error}`);
+              }
+              resolve(job);
+              jobs.push(that._filterKueJob(job));
+            });
           });
         }
       }
@@ -685,7 +649,7 @@ export class SchedulingService implements JobService {
       this._handleError(new errors.InvalidArgument('Missing items in upsert request.'));
     }
 
-    let upserted = [];
+    let upserted = {};
     let createJobsList = [];
     let updateJobsList = [];
     const jobIDs = _.map(call.request.items, (job) => { return job.id; });
@@ -700,11 +664,11 @@ export class SchedulingService implements JobService {
     }
 
     if (updateJobsList.length > 0) {
-      upserted.push(await this.update({ request: { items: updateJobsList } }));
+      upserted = await this.update({ request: { items: updateJobsList } });
     }
 
     if (createJobsList.length > 0) {
-      upserted.push(await this.create({ request: { items: createJobsList } }));
+      upserted = await this.create({ request: { items: createJobsList } });
     }
 
     return upserted;
@@ -763,10 +727,14 @@ export class SchedulingService implements JobService {
 
     if (job.priority) {
       job.priority = Priority[Priority[job.priority]];
+    } else if (job._priority) {
+      job.priority = Priority[job._priority];
     }
 
     if (job.attempts && job.attempts.max) {
       job.attempts = job.attempts.max;
+    } else if (job._max_attempts) {
+      job.attempts = job._max_attempts;
     }
 
     if (job.state && job.state == 'delayed') {
@@ -777,7 +745,7 @@ export class SchedulingService implements JobService {
     // note: 'backoff; and 'parallel' are not currently provided
     return _.pick(job, [
       'id', 'type', 'data', 'priority', 'attempts',
-      'backoff', 'interval', 'when'
+      'interval', 'when'
     ]);
   }
 

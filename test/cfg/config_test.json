@@ -189,6 +189,11 @@
           "transport": [
             "schedulingGRPC"
           ]
+        },
+        "upsert": {
+          "transport": [
+            "schedulingGRPC"
+          ]
         }
       },
       "io-restorecommerce-scheduling-cis": {
@@ -271,7 +276,8 @@
         "read": {},
         "create": {},
         "delete": {},
-        "update": {}
+        "update": {},
+        "upsert": {}
       }
     }
   },

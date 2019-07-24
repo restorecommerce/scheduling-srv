@@ -1,14 +1,11 @@
 import * as mocha from 'mocha';
 import * as should from 'should';
-
 import { Priority, Backoffs, marshallProtobufAny, unmarshallProtobufAny } from '../schedulingService';
 import { Worker } from '../worker';
-
 import { Topic } from '@restorecommerce/kafka-client';
 import * as sconfig from '@restorecommerce/service-config';
 import { Client } from '@restorecommerce/grpc-client';
 import { Logger } from '@restorecommerce/logger';
-
 import {
   validateJobResource, shouldBeEmpty, validateScheduledJob
 } from './utils';
@@ -238,14 +235,45 @@ describe('testing scheduling-srv: gRPC', () => {
 
       await jobResourceEvents.$wait(jobResourceOffset + 3);
     });
-    it('should retrieve all job properties correctly', async () => {
-      const result = await grpcSchedulingSrv.read({}, {});
+    it('should retrieve all job properties correctly with empty filter', async () => {
+      const result = await grpcSchedulingSrv.read({ sort: 'DESCENDING' }, {});
       should.exist(result);
       should.exist(result.data);
       should.exist(result.data.items);
       result.data.items.should.be.length(4);
-
       result.data.items.forEach((job) => {
+        validateJobResource(job);
+      });
+    });
+    it('should retrieve all job properties correctly with filter type or id', async () => {
+      const result = await grpcSchedulingSrv.read({ filter: { type: 'test-job' }, sort: 'ASCENDING' }, {});
+      should.exist(result);
+      should.exist(result.data);
+      should.exist(result.data.items);
+      result.data.items.should.be.length(4);
+      result.data.items.forEach((job) => {
+        validateJobResource(job);
+      });
+
+      const result_id_type = await grpcSchedulingSrv.read({
+        filter: { type: 'test-job', job_ids: result.data.items[0].id }
+      }, {});
+      should.exist(result_id_type);
+      should.exist(result_id_type.data);
+      should.exist(result_id_type.data.items);
+      result_id_type.data.items.should.be.length(1);
+      result_id_type.data.items.forEach((job) => {
+        validateJobResource(job);
+      });
+
+      const result_id = await grpcSchedulingSrv.read({
+        filter: { job_ids: result.data.items[0].id }
+      }, {});
+      should.exist(result_id);
+      should.exist(result_id.data);
+      should.exist(result_id.data.items);
+      result_id.data.items.should.be.length(1);
+      result_id.data.items.forEach((job) => {
         validateJobResource(job);
       });
     });
@@ -268,6 +296,28 @@ describe('testing scheduling-srv: gRPC', () => {
 
       const updatedJob = result.data.items[0];
       validateJobResource(updatedJob);
+      // waiting for event creation
+      await jobResourceEvents.$wait(jobResourceOffset + 1);
+    });
+    it('should upsert a job', async () => {
+      let result = await grpcSchedulingSrv.read({}, {});
+      const job = result.data.items[0];
+
+      const scheduledTime = new Date();
+      scheduledTime.setDate(scheduledTime.getDate() + 3); // three days from now
+      job.when = scheduledTime.toISOString();
+
+      const jobResourceOffset = await jobResourceEvents.$offset(-1);
+      result = await grpcSchedulingSrv.upsert({
+        items: [job]
+      });
+      should.exist(result);
+      should.exist(result.data);
+      should.exist(result.data.items);
+      result.data.items.should.have.length(1);
+
+      const upsertedJob = result.data.items[0];
+      validateJobResource(upsertedJob);
       // waiting for event creation
       await jobResourceEvents.$wait(jobResourceOffset + 1);
     });
