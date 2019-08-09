@@ -14,7 +14,7 @@ before_install:
   - 'npm config set loglevel error'
   - docker network create --driver bridge scheduling_net
   - docker run --name scheduling_zk -d --net=scheduling_net -p 2181:2181 zookeeper:3.5.5
-  - docker run --name scheduling_kafka -d --net=scheduling_net -p 9092:9092 -e KAFKA_ADVERTISED_HOST_NAME=127.0.0.1 -e KAFKA_ZOOKEEPER_CONNECT=zk:2181 -v /var/run/docker.sock:/var/run/docker.sock --link scheduling_zk:zk bitnami/kafka:2.3.0
+  - docker run --name scheduling_kafka -d --net=scheduling_net -p 9092:9092 -e KAFKA_CFG_LISTENERS=PLAINTEXT://:9092 -e KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://127.0.0.1:9092 -e ALLOW_PLAINTEXT_LISTENER=yes -e KAFKA_CFG_ZOOKEEPER_CONNECT=zk:2181 -v /var/run/docker.sock:/var/run/docker.sock --link resource_zk:zk bitnami/kafka:2.3.0
   - docker run --name scheduling_redis -d --net=scheduling_net -p 127.0.0.1:6379:6379  redis:5.0.3-alpine
   - docker create --name arangodb-persist arangodb true
   - docker run --name scheduling_adb -d -p 127.0.0.1:8529:8529 --volumes-from arangodb-persist -e ARANGO_NO_AUTH=1 arangodb/arangodb:3.4.7
@@ -27,5 +27,5 @@ before_install:
 scripts:
   - 'npm test'
 after_success:
-  - sleep 30
-  - npm run coveralls
+  - 'npm run coveralls'
+  - 'cat ./coverage/lcov.info | ./node_modules/coveralls/bin/coveralls.js'
