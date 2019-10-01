@@ -58,8 +58,9 @@
     "mochadebug": "cross-env NODE_ENV=test mocha -R spec test/kafka_test.js test/grpc_test.js --inspect-brk --full-trace --exit",
     "coveralls": "nyc report --reporter=text-lcov | coveralls",
     "build:tsc": "tsc -d",
-    "build:clean": "rimraf start.js service.js schedulingService.js worker.js kue_extensions.js",
-    "build": "npm-run-all lint build:clean build:tsc"
+    "build:clean": "rimraf start.js service.js schedulingService.js worker.js kue_extensions.js healthcheck.js",
+    "build": "npm-run-all lint build:clean build:tsc",
+    "healthcheck": "node healthcheck.js"
   },
   "engines": {
     "node": ">= 9.2.0"
