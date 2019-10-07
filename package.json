@@ -31,7 +31,7 @@
     "lodash": "^4.17.15"
   },
   "devDependencies": {
-    "@restorecommerce/grpc-client": "github:restorecommerce/grpc-client",
+    "@restorecommerce/grpc-client": "^0.0.1",
     "@types/mocha": "^5.2.7",
     "@types/node": "^12.7.5",
     "@types/redis": "^2.8.13",
