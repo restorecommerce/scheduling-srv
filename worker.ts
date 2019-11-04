@@ -59,9 +59,9 @@ export class Worker {
     const jobResourceEvents: Topic = events.topic(JOBS_RESOURCE_TOPIC_NAME);
     const jobEvents: Topic = events.topic(JOBS_TOPIC_NAME);
 
-    const kueOptions = cfg.get('kue');
+    const bullOptions = cfg.get('bull');
     // Create the business logic
-    const schedulingService: SchedulingService = new SchedulingService(jobEvents, jobResourceEvents, redisConfig, logger, redis, kueOptions);
+    const schedulingService: SchedulingService = new SchedulingService(jobEvents, jobResourceEvents, redisConfig, logger, redis, bullOptions, cfg);
     await schedulingService.start();
     // Bind business logic to server
     const serviceNamesCfg = cfg.get('serviceNames');

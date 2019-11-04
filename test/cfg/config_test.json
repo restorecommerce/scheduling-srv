@@ -28,119 +28,119 @@
         "protos": [
           "io/restorecommerce/job.proto"
         ],
-        "protoRoot": "node_modules/@restorecommerce/protos/",
+        "protoRoot": "protos/",
         "messageObject": "io.restorecommerce.job.ScheduledJob"
       },
       "createJobs": {
         "protos": [
           "io/restorecommerce/job.proto"
         ],
-        "protoRoot": "node_modules/@restorecommerce/protos/",
+        "protoRoot": "protos/",
         "messageObject": "io.restorecommerce.job.JobList"
       },
       "modifyJobs": {
         "protos": [
           "io/restorecommerce/job.proto"
         ],
-        "protoRoot": "node_modules/@restorecommerce/protos/",
+        "protoRoot": "protos/",
         "messageObject": "io.restorecommerce.job.JobList"
       },
       "deleteJobs": {
         "protos": [
           "io/restorecommerce/job.proto"
         ],
-        "protoRoot": "node_modules/@restorecommerce/protos/",
+        "protoRoot": "protos/",
         "messageObject": "io.restorecommerce.resourcebase.DeleteRequest"
       },
       "jobsCreated": {
         "protos": [
           "io/restorecommerce/job.proto"
         ],
-        "protoRoot": "node_modules/@restorecommerce/protos/",
+        "protoRoot": "protos/",
         "messageObject": "io.restorecommerce.job.Job"
       },
       "jobsModified": {
         "protos": [
           "io/restorecommerce/job.proto"
         ],
-        "protoRoot": "node_modules/@restorecommerce/protos/",
+        "protoRoot": "protos/",
         "messageObject": "io.restorecommerce.job.Job"
       },
       "jobsDeleted": {
         "protos": [
           "io/restorecommerce/job.proto"
         ],
-        "protoRoot": "node_modules/@restorecommerce/protos/",
+        "protoRoot": "protos/",
         "messageObject": "io.restorecommerce.job.Deleted"
       },
       "jobDone": {
         "protos": [
           "io/restorecommerce/job.proto"
         ],
-        "protoRoot": "node_modules/@restorecommerce/protos/",
+        "protoRoot": "protos/",
         "messageObject": "io.restorecommerce.job.JobDone"
       },
       "jobFailed": {
         "protos": [
           "io/restorecommerce/job.proto"
         ],
-        "protoRoot": "node_modules/@restorecommerce/protos/",
+        "protoRoot": "protos/",
         "messageObject": "io.restorecommerce.job.JobFailed"
       },
       "healthCheckCommand": {
         "protos": [
           "io/restorecommerce/commandinterface.proto"
         ],
-        "protoRoot": "node_modules/@restorecommerce/protos/",
+        "protoRoot": "protos/",
         "messageObject": "io.restorecommerce.commandinterface.CommandRequest"
       },
       "healthCheckResponse": {
         "protos": [
           "io/restorecommerce/commandinterface.proto"
         ],
-        "protoRoot": "node_modules/@restorecommerce/protos/",
+        "protoRoot": "protos/",
         "messageObject": "io.restorecommerce.commandinterface.CommandResponse"
       },
       "versionCommand": {
         "protos": [
           "io/restorecommerce/commandinterface.proto"
         ],
-        "protoRoot": "node_modules/@restorecommerce/protos/",
+        "protoRoot": "protos/",
         "messageObject": "io.restorecommerce.commandinterface.CommandRequest"
       },
       "versionResponse": {
         "protos": [
           "io/restorecommerce/commandinterface.proto"
         ],
-        "protoRoot": "node_modules/@restorecommerce/protos/",
+        "protoRoot": "protos/",
         "messageObject": "io.restorecommerce.commandinterface.CommandResponse"
       },
       "restoreCommand": {
         "protos": [
           "io/restorecommerce/commandinterface.proto"
         ],
-        "protoRoot": "node_modules/@restorecommerce/protos/",
+        "protoRoot": "protos/",
         "messageObject": "io.restorecommerce.commandinterface.CommandRequest"
       },
       "restoreResponse": {
         "protos": [
           "io/restorecommerce/commandinterface.proto"
         ],
-        "protoRoot": "node_modules/@restorecommerce/protos/",
+        "protoRoot": "protos/",
         "messageObject": "io.restorecommerce.commandinterface.CommandResponse"
       },
       "resetCommand": {
         "protos": [
           "io/restorecommerce/commandinterface.proto"
         ],
-        "protoRoot": "node_modules/@restorecommerce/protos/",
+        "protoRoot": "protos/",
         "messageObject": "io.restorecommerce.commandinterface.CommandRequest"
       },
       "resetResponse": {
         "protos": [
           "io/restorecommerce/commandinterface.proto"
         ],
-        "protoRoot": "node_modules/@restorecommerce/protos/",
+        "protoRoot": "protos/",
         "messageObject": "io.restorecommerce.commandinterface.CommandResponse"
       },
       "topics": {
@@ -241,7 +241,7 @@
           "grpc/reflection/v1alpha/reflection.proto",
           "google/protobuf/descriptor.proto"
         ],
-        "protoRoot": "node_modules/@restorecommerce/protos/",
+        "protoRoot": "protos/",
         "addr": "localhost:50054"
       }
     ]
@@ -259,7 +259,7 @@
           "protos": [
             "io/restorecommerce/job.proto"
           ],
-          "protoRoot": "node_modules/@restorecommerce/protos/",
+          "protoRoot": "protos/",
           "timeout": 3000
         }
       },
@@ -281,5 +281,15 @@
       }
     }
   },
-  "kue-prefix": "scheduling-srv-test"
+  "kue-prefix": "scheduling-srv-test",
+  "bull": {
+    "allJobTypes": [
+      "waiting",
+      "active",
+      "completed",
+      "failed",
+      "delayed",
+      "paused"
+    ]
+  }
 }

@@ -27,13 +27,26 @@ This microservice exposes the following gRPC endpoints for the Job resource.
 | id | string | required | Job resource ID |
 | type | string | required | Arbitrary job type (e.g: 'daily_email_dispatcher'). |
 | data | Data | optional | Job data to persist in Redis |
+
+`io.restorecommerce.job.JobOptions`.
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
 | priority | `io.restorecommerce.job.Job.Priority` | optional | Job priority |
 | attempts | number | optional | Amount of possible failing runs until a job fails |
 | backoff | `io.restorecommerce.job.Backoff` | optional | Delay settings between failed job runs |
-| parallel | number | optional | Maximum number of parallel jobs |
-| interval | string | optional | Interval to run a job periodically. It is possible to specify the interval in a cron format (e.g: "0 0 5 * * *") or a human-readable format (e.g: "2 minutes"), as specified on [kue-scheduler](https://github.com/lykmapipo/kue-scheduler). This should only be used in recurring jobs.
+| timeout | number | optional | If set, job will expire after `timeout` milliseconds |
 | when | string | optional | Used to define the exact time at which a single job instance is processed. Ex: "Jan 15, 2018 10:30:00". This should only be used in one-time jobs. |
-| now | boolean | optional | If set to true job is run once immediately (job is not stored in Redis in this case). |
+
+`io.restorecommerce.job.Repeat`.
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| every | number | optional | Interval to run a job periodically in milliseconds.
+| cron | string | optional | Interval to run a job periodically in a cron format (e.g: "0 0 5 * * *"). This should only be used in recurring jobs.
+| startDate | string | optional | Used to define the exact time at which job should start repeating. Ex: "Jan 15, 2018 10:30:00". |
+| endDate | string | optional | Used to define the exact time at which job should stop repeating. Ex: "Jan 15, 2018 10:30:00". |
+| count | number | optional | How many times a job has repeated.
 
 `io.restorecommerce.job.Data`
 
@@ -92,18 +105,30 @@ For the detailed protobuf message structure of `io.restorecommerce.job.ReadReque
 
 ## Kafka Events
 
-This microservice subscribes to the following Kafka events by topic:
-- `io.restorecommerce.jobs`
-  - createJobs
-  - modifyJobs
-  - deleteJobs
-  - jobDone
-  - jobFailed
-- `io.restorecommerce.command`
-  - restoreCommand
-  - resetCommand
-  - healthCheckCommand
-  - versionCommand
+This microservice subscribes to the following events by topic:
+
+| Topic Name | Event Name | Description |
+| ---------- | ---------- | ----------- |
+| io.restorecommerce.jobs | createJobs | for creating jobs |
+|  | modifyJobs | for modifying specific jobs |
+|  | deleteJobs | for deleting jobs |
+|  | jobDone | for when a job has finished |
+|  | jobFailed | for when a job has failed |
+| io.restorecommerce.command | restoreCommand | for triggering for system restore |
+|  | resetCommand | for triggering system reset |
+|  | healthCheckCommand | to get system health check |
+|  | versionCommand | to get system version |
+
+List of events emitted by this microservice for below topics:
+
+| Topic Name | Event Name | Description |
+| ---------- | ---------- | ----------- |
+| io.restorecommerce.jobs.resource | jobsCreated | emitted when a job is created |
+|  | jobsDeleted | emitted when a job is deleted |
+| io.restorecommerce.command | restoreResponse | system restore response |
+|  | resetResponse | system reset response |
+|  | healthCheckResponse | system health check response |
+|  | versionResponse | system version response |
 
 Jobs can be created, updated or deleted by issuing Kafka messages to topic `io.restorecommerce.jobs`. These operations are exposed with the same input as the gRPC endpoints (note that it is only possible to *read* a job through gRPC). 
 
@@ -122,6 +147,7 @@ Jobs can be created, updated or deleted by issuing Kafka messages to topic `io.r
 | ----- | ---- | ----- | ----------- |
 | id | number | required | Job instance ID in Redis |
 | schedule_type | string | required | Job type ex: `ONCE`, `RECURR` etc. |
+| delete_scheduled | boolean | optional | Whether to delete this repeating job. |
 
 `io.restorecommerce.job.JobFailed`
 
@@ -130,16 +156,6 @@ Jobs can be created, updated or deleted by issuing Kafka messages to topic `io.r
 | id | number | required | Job instance ID in redis |
 | schedule_type | string | required | Job type ex: `ONCE`, `RECURR` etc. |
 | error | string | required | Failure details. |
-
-List of events emitted to Kafka by this microservice for below topics:
-- `io.restorecommerce.jobs.resource`
-  - jobsCreated
-  - jobsDeleted
-- io.restorecommerce.command
-  - restoreResponse
-  - resetResponse
-  - healthCheckResponse
-  - versionResponse
 
 Events from the `io.restorecommerce.jobs.resource` topic are issued whenever a CRUD opertion is performed. They are useful for job rescheduling in case of Redis failure.
 

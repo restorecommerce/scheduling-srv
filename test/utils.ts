@@ -1,5 +1,6 @@
-import { Priority, unmarshallProtobufAny } from '../schedulingService';
+import { unmarshallProtobufAny } from '../schedulingService';
 import * as should from 'should';
+import {Priority} from "../types";
 
 export function validateScheduledJob(job: any, expectedSchedule: string): void {
   should.exist(job.data);
@@ -23,10 +24,10 @@ export function validateJobResource(job: any): void {
   should.exist(job.id);
   should.exist(job.type);
   job.type.should.equal('test-job');
-  should.exist(job.priority);
-  Priority.should.hasOwnProperty(job.priority);
-  should.exist(job.attempts);
-  job.attempts.should.equal(1);
+  should.exist(job.options.priority);
+  Priority.should.hasOwnProperty(job.options.priority);
+  should.exist(job.options.attempts);
+  job.options.attempts.should.equal(1);
 }
 
 export function shouldBeEmpty(result: any): void {

@@ -23,6 +23,7 @@
     "@restorecommerce/logger": "^0.1.11",
     "@restorecommerce/protos": "github:restorecommerce/protos",
     "@restorecommerce/service-config": "^0.1.5",
+    "bull": "^3.11.0",
     "cache-manager": "^2.10.0",
     "cache-manager-redis": "^0.6.0",
     "cron-parser": "^2.13.0",
@@ -32,6 +33,7 @@
   },
   "devDependencies": {
     "@restorecommerce/grpc-client": "^0.0.1",
+    "@types/bull": "^3.10.4",
     "@types/mocha": "^5.2.7",
     "@types/node": "^12.7.11",
     "@types/redis": "^2.8.14",
@@ -49,6 +51,7 @@
     "dev": "cross-env NODE_ENV=development npm run createtopics && node start.js",
     "pretest": "tsc -d && npm run tsctests && npm run createtopics",
     "tsctests": "tsc -d -p tsconfig.test.json",
+    "tsctests:watch": "tsc -d -p tsconfig.test.json --watch",
     "createtopics": "node setupTopics.js io.restorecommerce.jobs io.restorecommerce.jobs.resource io.restorecommerce.command",
     "test": "npm run lint && nyc npm run mocha_grpc && nyc npm run mocha_kafka",
     "test-debug": "npm run mochadebug",
@@ -58,6 +61,7 @@
     "mochadebug": "cross-env NODE_ENV=test mocha -R spec test/kafka_test.js test/grpc_test.js --inspect-brk --full-trace --exit",
     "coveralls": "nyc report --reporter=text-lcov | coveralls",
     "build:tsc": "tsc -d",
+    "build:tsc:watch": "tsc -d --watch",
     "build:clean": "rimraf start.js service.js schedulingService.js worker.js kue_extensions.js healthcheck.js",
     "build": "npm-run-all lint build:clean build:tsc",
     "healthcheck": "node healthcheck.js"
