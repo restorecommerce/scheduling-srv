@@ -61,7 +61,7 @@ export class SchedulingService implements JobService {
     this.canceledJobs = new Set<string>();
 
     const root = new Root();
-    root.resolvePath = (origin, target) => cfg.get('client:schedulingClient:transports:grpc:protoRoot') + target;
+    root.resolvePath = (origin, target) => cfg.get('server:transports:0:protoRoot') + target;
     this.jobProtoRoot = root.loadSync("io/restorecommerce/job.proto");
   }
 
