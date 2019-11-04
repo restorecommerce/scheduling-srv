@@ -152,8 +152,7 @@ describe('testing scheduling-srv: Kafka', () => {
 
       await jobTopic.emit('createJobs', { items: [job] });
 
-      // Sleep for createJobs to get processed
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await jobResourceTopic.$wait(jobResourceOffset);
 
       let result = await schedulingService.read({
         request: {}
