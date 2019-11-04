@@ -28,7 +28,6 @@
     "cache-manager-redis": "^0.6.0",
     "cron-parser": "^2.13.0",
     "cross-env": "^6.0.3",
-    "kue-scheduler": "^0.9.8",
     "lodash": "^4.17.15"
   },
   "devDependencies": {
@@ -62,7 +61,7 @@
     "coveralls": "nyc report --reporter=text-lcov | coveralls",
     "build:tsc": "tsc -d",
     "build:tsc:watch": "tsc -d --watch",
-    "build:clean": "rimraf start.js service.js schedulingService.js worker.js kue_extensions.js healthcheck.js",
+    "build:clean": "rimraf start.js service.js schedulingService.js worker.js healthcheck.js",
     "build": "npm-run-all lint build:clean build:tsc",
     "healthcheck": "node healthcheck.js"
   },
