@@ -516,31 +516,31 @@ export class SchedulingService implements JobService {
   _filterQueuedJob<T extends any>(job: T): Pick<T, 'id' | 'type' | 'data' | 'opts' | 'name'> {
     job.type = job.name;
 
-    job = _.pick(job, [
+    const picked = _.pick(job, [
       'id', 'type', 'data', 'opts', 'name'
     ]);
 
-    if (job.data) {
-      job.data = this._filterJobData(job.data, false);
-      if (job.data.payload && job.data.payload.value) {
-        job.data.payload.value = Buffer.from(job.data.payload.value);
+    if (picked.data) {
+      (picked as any).data = this._filterJobData(picked.data, false);
+      if (picked.data.payload && picked.data.payload.value) {
+        picked.data.payload.value = Buffer.from(picked.data.payload.value);
       }
     }
 
-    return job as any;
+    return picked as any;
   }
 
   _filterKafkaJob<T extends any>(job: T): Pick<T, 'id' | 'type' | 'data' | 'options' | 'when'> {
-    job = _.pick(job, [
+    const picked = _.pick(job, [
       'id', 'type', 'data', 'options', 'when'
     ]);
 
-    if (job.data && job.data.payload && job.data.payload.value) {
+    if (picked.data && picked.data.payload && picked.data.payload.value) {
       // Re-marshal because protobuf messes up toJSON
-      job.data.payload = marshallProtobufAny(unmarshallProtobufAny(job.data.payload));
+      picked.data.payload = marshallProtobufAny(unmarshallProtobufAny(picked.data.payload));
     }
 
-    return job as any;
+    return picked as any;
   }
 
   _filterJobData<T extends any>(data: T, encode: boolean): Pick<T, 'meta' | 'payload' | 'timezone'> {
@@ -550,11 +550,11 @@ export class SchedulingService implements JobService {
 
     if (encode) {
       if (picked.payload && picked.payload.value && typeof picked.payload.value === 'string') {
-        picked.payload = marshallProtobufAny(unmarshallProtobufAny(picked.payload));
+        (picked as any).payload = marshallProtobufAny(unmarshallProtobufAny(picked.payload));
       }
     }
 
-    return picked;
+    return picked as any;
   }
 
   _filterJobOptions(data: JobOptions): Pick<JobOptions, 'priority' | 'attempts' | 'backoff' | 'repeat'> {
@@ -563,7 +563,7 @@ export class SchedulingService implements JobService {
     ]);
 
     if (typeof picked.priority === 'number') {
-      picked.priority = Priority[picked.priority];
+      picked.priority = parseInt(Priority[picked.priority], 10);
     }
 
     if (typeof picked.backoff === 'object') {
