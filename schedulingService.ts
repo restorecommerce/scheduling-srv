@@ -563,7 +563,7 @@ export class SchedulingService implements JobService {
     ]);
 
     if (typeof picked.priority === 'number') {
-      picked.priority = parseInt(Priority[picked.priority], 10);
+      picked.priority = Priority[picked.priority] as any;
     }
 
     if (typeof picked.backoff === 'object') {
