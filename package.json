@@ -62,7 +62,7 @@
     "coveralls": "nyc report --reporter=text-lcov | coveralls",
     "build:tsc": "tsc -d",
     "build:tsc:watch": "tsc -d --watch",
-    "build:clean": "rimraf start.js service.js schedulingService.js worker.js healthcheck.js",
+    "build:clean": "rimraf start.js service.js schedulingService.js worker.js healthcheck.js external-jobs/*.js",
     "build": "npm-run-all lint build:clean build:tsc",
     "healthcheck": "node healthcheck.js"
   },

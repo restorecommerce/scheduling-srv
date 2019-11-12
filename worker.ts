@@ -6,6 +6,7 @@ import { SchedulingService } from './schedulingService';
 import * as sconfig from '@restorecommerce/service-config';
 import * as cacheManager from 'cache-manager';
 import * as redisStore from 'cache-manager-redis';
+import * as fs from 'fs';
 
 const JOBS_CREATE_EVENT = 'createJobs';
 const JOBS_MODIFY_EVENT = 'modifyJobs';
@@ -118,6 +119,14 @@ export class Worker {
     const transport = server.transport[transportName];
     const reflectionService = new chassis.grpc.ServerReflection(transport.$builder, server.config);
     await server.bind(reflectionServiceName, reflectionService);
+
+    // Hook any external jobs
+    const externalJobFiles = fs.readdirSync('./external-jobs');
+    externalJobFiles.forEach((externalFile) => {
+      if (externalFile.endsWith('.js')) {
+        (async () => require('./external-jobs/' + externalFile).default())();
+      }
+    });
 
     // Start server
     await server.start();
