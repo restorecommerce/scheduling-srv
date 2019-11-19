@@ -27,6 +27,7 @@ This microservice exposes the following gRPC endpoints for the Job resource.
 | id | string | required | Job resource ID |
 | type | string | required | Arbitrary job type (e.g: 'daily_email_dispatcher'). |
 | data | Data | optional | Job data to persist in Redis |
+| when | string | optional | Used to define the exact time at which a single job instance is processed. Ex: "Jan 15, 2018 10:30:00". This should only be used in one-time jobs. |
 
 `io.restorecommerce.job.JobOptions`.
 
@@ -35,8 +36,7 @@ This microservice exposes the following gRPC endpoints for the Job resource.
 | priority | `io.restorecommerce.job.Job.Priority` | optional | Job priority |
 | attempts | number | optional | Amount of possible failing runs until a job fails |
 | backoff | `io.restorecommerce.job.Backoff` | optional | Delay settings between failed job runs |
-| timeout | number | optional | If set, job will expire after `timeout` milliseconds |
-| when | string | optional | Used to define the exact time at which a single job instance is processed. Ex: "Jan 15, 2018 10:30:00". This should only be used in one-time jobs. |
+| timeout | number | optional | If set, job will expire after `timeout` milliseconds. If set to 1, job will be treated as an "instant" job and won't get stored. |
 
 `io.restorecommerce.job.Repeat`.
 
