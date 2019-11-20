@@ -2,7 +2,7 @@ import * as _ from 'lodash';
 import { errors } from '@restorecommerce/chassis-srv';
 import * as kafkaClient from '@restorecommerce/kafka-client';
 import { RedisClient } from 'redis';
-import {Job, JobId, JobOptions} from 'bull';
+import { Job, JobId, JobOptions } from 'bull';
 import * as Queue from 'bull';
 import {
   CreateCall,
@@ -14,7 +14,7 @@ import {
   SortOrder,
   GRPCResult, Priority, Backoffs
 } from "./types";
-import {load, Root} from 'protobufjs';
+import { Root } from 'protobufjs';
 
 const JOB_DONE_EVENT = 'jobDone';
 const JOB_FAILED_EVENT = 'jobFailed';
@@ -134,7 +134,7 @@ export class SchedulingService implements JobService {
       logger.verbose(`job#${jobId} scheduled`, jobId);
     });
 
-    this.queue.process('*', async(job, done) => {
+    this.queue.process('*', async (job, done) => {
       this.jobCbs[job.id] = done;
 
       const filteredJob = that._filterQueuedJob(job);

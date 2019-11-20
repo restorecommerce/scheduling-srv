@@ -79,7 +79,10 @@ export class Worker {
         // protobuf.js appends unnecessary properties to object
         msg.items = _.map(msg.items, schedulingService._filterKafkaJob.bind(schedulingService));
         const call = { request: { items: msg.items } };
-        await schedulingService.create(call, {});
+        await schedulingService.create(call, {}).catch(
+          (err) => {
+            logger.error('Error occured scheduling job', { err });
+          });
       }
       else if (eventName === JOBS_MODIFY_EVENT) {
         msg.items = msg.items.map((job) => {
