@@ -14,7 +14,7 @@ import {
   SortOrder,
   GRPCResult, Priority, Backoffs
 } from "./types";
-import { Root } from 'protobufjs';
+import { parseExpression } from 'cron-parser';
 
 const JOB_DONE_EVENT = 'jobDone';
 const JOB_FAILED_EVENT = 'jobFailed';
@@ -33,7 +33,6 @@ export class SchedulingService implements JobService {
   resourceEventsEnabled: boolean;
   canceledJobs: Set<string>;
   bullOptions: any;
-  jobProtoRoot: Root;
 
   constructor(jobEvents: kafkaClient.Topic,
     jobResourceEvents: kafkaClient.Topic, redisConfig: any, logger: any,
@@ -59,10 +58,6 @@ export class SchedulingService implements JobService {
       this.redisClient = redisConn.client;
     });
     this.canceledJobs = new Set<string>();
-
-    const root = new Root();
-    root.resolvePath = (origin, target) => cfg.get('server:transports:0:protoRoot') + target;
-    this.jobProtoRoot = root.loadSync("io/restorecommerce/job.proto");
   }
 
   /**
@@ -98,7 +93,9 @@ export class SchedulingService implements JobService {
         } else {
           delete that.jobCbs[job.id];
           cb();
-          if (job.schedule_type != 'RECCUR') {
+          if (job.schedule_type == 'RECCUR') {
+            // every time a new job instance is created for recurring job, so delete
+            // it after we get the response from job processing
             await that._deleteJobInstance(job.id);
             logger.verbose(`job#${job.id} successfully deleted`, that._filterQueuedJob(job));
             deleted = true;
@@ -138,6 +135,36 @@ export class SchedulingService implements JobService {
       this.jobCbs[job.id] = done;
 
       const filteredJob = that._filterQueuedJob(job);
+      // For recurrning job add time so if service goes down we can fire jobs
+      // for the missed schedules comparing the last run time
+      let lastRunTime;
+      if (filteredJob.opts && filteredJob.opts.repeat &&
+        ((filteredJob.opts.repeat as Queue.EveryRepeatOptions).every ||
+          (filteredJob.opts.repeat as Queue.CronRepeatOptions).cron)) {
+        if (filteredJob.data) {
+          // adding time to payload data for recurring jobs
+          const dateTime = new Date();
+          const bufObj = Buffer.from(JSON.stringify({ time: dateTime }));
+          if (filteredJob.data.payload) {
+            if (filteredJob.data.payload.value) {
+              let jobBufferObj = JSON.parse(filteredJob.data.payload.value.toString());
+              const jobTimeObj = Object.assign(jobBufferObj, { time: dateTime });
+              lastRunTime = JSON.stringify({ time: dateTime });
+              // set last run time on DB index 7 with jobType identifier
+              this.redisClient.set(filteredJob.name, lastRunTime);
+              filteredJob.data.payload.value = Buffer.from(JSON.stringify(jobTimeObj));
+            } else {
+              this.redisClient.set(filteredJob.name, lastRunTime);
+              filteredJob.data.payload = { value: bufObj };
+            }
+          } else {
+            this.redisClient.set(filteredJob.name, lastRunTime);
+            filteredJob.data = {
+              payload: { value: bufObj }
+            };
+          }
+        }
+      }
 
       await that.jobEvents.emit('queuedJob', {
         id: filteredJob.id,
@@ -152,6 +179,84 @@ export class SchedulingService implements JobService {
 
       that.logger.verbose(`job@${filteredJob.name}#${filteredJob.id} queued`, filteredJob);
     });
+    // if the scheduling service goes down and if there were recurring jobs which have missed
+    // schedules then we will need to reschedule it for those missing intervals
+    await this._rescheduleMissedJobs();
+  }
+
+  /**
+   * To reschedule the missed recurring jobs upon service restart
+   */
+  async  _rescheduleMissedJobs(): Promise<void> {
+    const createDispatch = [];
+    let result: any[] = [];
+    let thiz = this;
+    // get all the jobs
+    await this.queue.getJobs(this.bullOptions['allJobTypes']).then(jobs => {
+      result = jobs;
+    }).catch(error => {
+      thiz._handleError(`Error reading jobs: ${error}`);
+    });
+    let lastRunTime;
+    for (let job of result) {
+      // get the last run time for the job, we store the last run time only
+      // for recurring jobs
+      lastRunTime = await new Promise<string>((resolve, reject) => {
+        this.redisClient.get(job.name, (err, response) => {
+          if (err) {
+            reject(err);
+          } else {
+            resolve(response);
+          }
+        });
+      }).catch(
+        (err) => {
+          this.logger.error('Error occured reading the last run time for job type:', { name: job.name, err });
+        }
+      );
+      // we store lastRunTime only for recurring jobs and if it exists check
+      // cron interval and schedule immediate jobs for missed intervals
+      this.logger.info(`Last run time of ${job.name} Job was:`, lastRunTime);
+      if (lastRunTime) {
+        // convert redis string value to object and get actual time value
+        lastRunTime = JSON.parse(lastRunTime);
+        if (job.opts && job.opts.repeat &&
+          (job.opts.repeat as Queue.CronRepeatOptions).cron) {
+          let options = {
+            currentDate: new Date(lastRunTime.time),
+            endDate: new Date(),
+            iterator: true
+          };
+          const intervalTime = parseExpression((job.opts.repeat as Queue.CronRepeatOptions).cron, options);
+          while (intervalTime.hasNext()) {
+            let nextInterval: any = intervalTime.next();
+            const nextIntervalTime = nextInterval.value.toString();
+            // schedule it as one time job for now or immediately
+            const data = {
+              payload: marshallProtobufAny({
+                value: { time: nextIntervalTime }
+              })
+            };
+            const currentTime = new Date();
+            const immediateJob = {
+              type: job.name,
+              data,
+              // give a delay of 2 sec between each job
+              // to avoid time out of queued jobs
+              when: currentTime.setSeconds(currentTime.getSeconds() + 2).toString(),
+              options: {}
+            };
+            createDispatch.push(thiz.create({
+              request: {
+                items: [immediateJob]
+              }
+            }));
+          }
+        }
+
+      }
+    }
+    await createDispatch;
   }
 
   /**
@@ -248,6 +353,11 @@ export class SchedulingService implements JobService {
           owner: []
         };
         Object.assign(job.data, { meta: metaObj });
+      }
+      // if only owner is specified in meta
+      if (job.data.meta && (!job.data.meta.created || !job.data.meta.modified)) {
+        job.data.meta.created = Date.now();
+        job.data.meta.modified = Date.now();
       }
 
       if (job && job.data && job.data.payload && job.data.payload.value) {
@@ -615,4 +725,3 @@ export function unmarshallProtobufAny(data: any): any {
 
   return unmarshalled;
 }
-
