@@ -93,13 +93,9 @@ export class SchedulingService implements JobService {
         } else {
           delete that.jobCbs[job.id];
           cb();
-          if (job.schedule_type == 'RECCUR') {
-            // every time a new job instance is created for recurring job, so delete
-            // it after we get the response from job processing
             await that._deleteJobInstance(job.id);
             logger.verbose(`job#${job.id} successfully deleted`, that._filterQueuedJob(job));
             deleted = true;
-          }
         }
 
         if (jobData && job.delete_scheduled) {
