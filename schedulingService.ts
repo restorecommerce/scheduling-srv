@@ -93,9 +93,9 @@ export class SchedulingService implements JobService {
         } else {
           delete that.jobCbs[job.id];
           cb();
-            await that._deleteJobInstance(job.id);
-            logger.verbose(`job#${job.id} successfully deleted`, that._filterQueuedJob(job));
-            deleted = true;
+          await that._deleteJobInstance(job.id);
+          logger.verbose(`job#${job.id} successfully deleted`, that._filterQueuedJob(job));
+          deleted = true;
         }
 
         if (jobData && job.delete_scheduled) {
@@ -439,7 +439,6 @@ export class SchedulingService implements JobService {
       }
       result = _.orderBy(result, ['id'], [sort]);
     }
-
     return {
       items: result.map(job => ({
         id: job.id,
@@ -491,7 +490,11 @@ export class SchedulingService implements JobService {
         if (typeof jobDataKey === 'string' && jobDataKey.startsWith('repeat:')) {
           callback = this.queue.removeRepeatableByKey(jobDataKey);
         } else {
-          callback = this.queue.getJob(jobDataKey).then(async (jobData) => this._removeBullJob(jobData.id));
+          callback = this.queue.getJob(jobDataKey).then(async (jobData) => {
+            if (jobData) {
+              this._removeBullJob(jobData.id);
+            }
+          });
         }
 
         callback.then(() => {
