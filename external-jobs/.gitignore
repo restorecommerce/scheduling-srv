@@ -1,5 +1,0 @@
-# Should not contain any jobs by default
-*
-
-# Do not ignore the gitignore
-!.gitignore
