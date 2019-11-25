@@ -245,10 +245,10 @@
   },
   "exteranalJobs": [
     { "deleteStalledJobs": true,
-      "stalled_job": {
+      "stalledJob": {
         "options": {
           "jobType": "flushStalledJobs",
-          "cronPparser": "0 0 2 * * *"
+          "cronParser": "0 0 2 * * *"
         }
       }
     }

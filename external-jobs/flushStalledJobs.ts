@@ -1,6 +1,7 @@
 import * as sconfig from '@restorecommerce/service-config';
 import { Logger } from '@restorecommerce/logger';
 import { Events } from '@restorecommerce/kafka-client';
+import { marshallProtobufAny } from '../schedulingService';
 
 const QUEUED_JOBS_TOPIC = 'io.restorecommerce.jobs';
 let logger: Logger;
@@ -13,7 +14,7 @@ export default async () => {
   const events: Events = new Events(kafkaCfg, logger);
   await events.start();
   const jobTopic = events.topic(QUEUED_JOBS_TOPIC);
-  const externalJobsCfg = cfg.exteranalJobs;
+  const externalJobsCfg = cfg.get('exteranalJobs');
   let deleteStalledJobs = false;
   let stalledJobOptions;
   for (let extJobCfg of externalJobsCfg) {
@@ -27,10 +28,16 @@ export default async () => {
   // Emit job and subscribe a listener for jobDone or jobFailed and check if the id matches
   if (deleteStalledJobs) {
     // create job with the job options in cfg and emit as queedJob event
+    const data = {
+      payload:
+        marshallProtobufAny({
+          jobType: 'stalledJob'
+        })
+    };
     const job = {
       id: 'stalledJobID',
       type: stalledJobOptions.jobType,
-      data: {},
+      data,
       options: {
         repeat: {
           cron: stalledJobOptions.cronParser
