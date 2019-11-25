@@ -11,6 +11,8 @@ import * as fs from 'fs';
 const JOBS_CREATE_EVENT = 'createJobs';
 const JOBS_MODIFY_EVENT = 'modifyJobs';
 const JOBS_DELETE_EVENT = 'deleteJobs';
+const QUEUED_JOB = 'queuedJob';
+const FULSH_STALLED_JOBS_TYPE = 'flushStalledJob';
 
 chassis.cache.register('redis', (cacheConfig, logger) => {
   const options = {
@@ -81,7 +83,7 @@ export class Worker {
         const call = { request: { items: msg.items } };
         await schedulingService.create(call, {}).catch(
           (err) => {
-            logger.error('Error occured scheduling job', { err });
+            logger.error('Error occured scheduling jobs:', err.message);
           });
       }
       else if (eventName === JOBS_MODIFY_EVENT) {
@@ -89,13 +91,25 @@ export class Worker {
           return schedulingService._filterKafkaJob(job);
         });
         const call = { request: { items: msg.items } };
-        await schedulingService.update(call, {});
+        await schedulingService.update(call, {}).catch(
+          (err) => {
+            logger.error('Error occured updating jobs:', err.message);
+          });
       }
       else if (eventName === JOBS_DELETE_EVENT) {
         const ids = msg.ids;
         const collection = msg.collection;
         const call = { request: { ids, collection } };
-        await schedulingService.delete(call, {});
+        await schedulingService.delete(call, {}).catch(
+          (err) => {
+            logger.error('Error occured deleting jobs:', err.message);
+          });
+      } else if (eventName === QUEUED_JOB && msg &&
+        msg.type === FULSH_STALLED_JOBS_TYPE) {
+        await schedulingService.flushStalledJobs().catch(
+          (err) => {
+            logger.error('Error occured flushing jobs:', err.message);
+          });
       } else {  // commands
         await cis.command(msg, context);
       }

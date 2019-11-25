@@ -622,6 +622,26 @@ export class SchedulingService implements JobService {
     });
   }
 
+  /**
+  * retreives and deletes the stalled (failed and completed) Jobs
+  */
+  async flushStalledJobs(): Promise<void> {
+    let result;
+    let jobIdsToDelete = [];
+    await this.queue.getJobs(['completed', 'failed']).then(jobs => {
+      result = jobs;
+    }).catch(error => {
+      this._handleError(`Error getting stalled jobs: ${error}`);
+    });
+    for (let job of result) {
+      jobIdsToDelete.push(job.id);
+    }
+    this.logger.debug('Following stalled job instaces will be deleted:', jobIdsToDelete);
+    await this.delete({ request: { ids: jobIdsToDelete } }).catch(error => {
+      this._handleError(`Error occured deleting jobs ${jobIdsToDelete} : ${error}`);
+    });
+  }
+
   _filterQueuedJob<T extends any>(job: T): Pick<T, 'id' | 'type' | 'data' | 'opts' | 'name'> {
     job.type = job.name;
 

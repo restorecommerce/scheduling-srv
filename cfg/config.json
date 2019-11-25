@@ -242,5 +242,15 @@
       "delayed",
       "paused"
     ]
-  }
+  },
+  "exteranalJobs": [
+    { "deleteStalledJobs": true,
+      "stalled_job": {
+        "options": {
+          "jobType": "flushStalledJobs",
+          "cronPparser": "0 0 2 * * *"
+        }
+      }
+    }
+  ]
 }
