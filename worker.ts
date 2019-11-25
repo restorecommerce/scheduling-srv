@@ -12,7 +12,7 @@ const JOBS_CREATE_EVENT = 'createJobs';
 const JOBS_MODIFY_EVENT = 'modifyJobs';
 const JOBS_DELETE_EVENT = 'deleteJobs';
 const QUEUED_JOB = 'queuedJob';
-const FULSH_STALLED_JOBS_TYPE = 'flushStalledJob';
+const FULSH_STALLED_JOBS_TYPE = 'flushStalledJobs';
 
 chassis.cache.register('redis', (cacheConfig, logger) => {
   const options = {

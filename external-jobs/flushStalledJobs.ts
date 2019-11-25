@@ -51,13 +51,13 @@ export default async () => {
 
     jobTopic.on('jobDone', async (job) => {
       if (job.type === stalledJobOptions.jobType) {
-        this.logger.verbose('Job done, stalled Jobs deleted successfully:', job);
+        logger.verbose('Job done, stalled Jobs deleted successfully:', job);
       }
     }).catch((err) => logger.error(err));
 
     jobTopic.on('jobFailed', async (job) => {
       if (job.type === stalledJobOptions.jobType) {
-        this.logger.verbose('Job Failed, stalled Jobs could not be deleted successfully:', job);
+        logger.verbose('Job Failed, stalled Jobs could not be deleted successfully:', job);
       }
     }).catch((err) => logger.error(err));
   }
