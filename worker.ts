@@ -106,7 +106,7 @@ export class Worker {
           });
       } else if (eventName === QUEUED_JOB && msg &&
         msg.type === FULSH_STALLED_JOBS_TYPE) {
-        await schedulingService.flushStalledJobs().catch(
+        await schedulingService.flushStalledJobs(msg.id, msg.type).catch(
           (err) => {
             logger.error('Error occured flushing jobs:', err.message);
           });

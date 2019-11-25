@@ -31,11 +31,10 @@ export default async () => {
     const data = {
       payload:
         marshallProtobufAny({
-          jobType: 'stalledJob'
+          jobType: stalledJobOptions.jobType
         })
     };
     const job = {
-      id: 'stalledJobID',
       type: stalledJobOptions.jobType,
       data,
       options: {
@@ -51,13 +50,13 @@ export default async () => {
     }
 
     jobTopic.on('jobDone', async (job) => {
-      if (job.id === 'stalledJobID') {
+      if (job.type === stalledJobOptions.jobType) {
         this.logger.verbose('Job done, stalled Jobs deleted successfully:', job);
       }
     }).catch((err) => logger.error(err));
 
     jobTopic.on('jobFailed', async (job) => {
-      if (job.id === 'stalledJobID') {
+      if (job.type === stalledJobOptions.jobType) {
         this.logger.verbose('Job Failed, stalled Jobs could not be deleted successfully:', job);
       }
     }).catch((err) => logger.error(err));

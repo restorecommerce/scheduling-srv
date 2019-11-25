@@ -625,21 +625,35 @@ export class SchedulingService implements JobService {
   /**
   * retreives and deletes the stalled (failed and completed) Jobs
   */
-  async flushStalledJobs(): Promise<void> {
+  async flushStalledJobs(stalledJobID: string, jobType: string): Promise<void> {
     let result;
     let jobIdsToDelete = [];
-    await this.queue.getJobs(['completed', 'failed']).then(jobs => {
-      result = jobs;
-    }).catch(error => {
-      this._handleError(`Error getting stalled jobs: ${error}`);
-    });
-    for (let job of result) {
-      jobIdsToDelete.push(job.id);
+    try {
+      await this.queue.getJobs(['completed', 'failed']).then(jobs => {
+        result = jobs;
+      }).catch(error => {
+        this._handleError(`Error getting stalled jobs: ${error}`);
+      });
+      for (let job of result) {
+        jobIdsToDelete.push(job.id);
+      }
+      this.logger.debug('Following stalled job instaces will be deleted:', jobIdsToDelete);
+      await this.delete({ request: { ids: jobIdsToDelete } }).catch(error => {
+        this._handleError(`Error occured deleting jobs ${jobIdsToDelete} : ${error}`);
+      });
+      await this.jobEvents.emit('jobDone', {
+        id: stalledJobID,
+        type: jobType,
+        schedule_type: 'RECCUR'
+      });
+    } catch (err) {
+      await this.jobEvents.emit('jobFailed', {
+        id: stalledJobID,
+        error: err.message,
+        schedule_type: 'RECCUR',
+        type: jobType
+      });
     }
-    this.logger.debug('Following stalled job instaces will be deleted:', jobIdsToDelete);
-    await this.delete({ request: { ids: jobIdsToDelete } }).catch(error => {
-      this._handleError(`Error occured deleting jobs ${jobIdsToDelete} : ${error}`);
-    });
   }
 
   _filterQueuedJob<T extends any>(job: T): Pick<T, 'id' | 'type' | 'data' | 'opts' | 'name'> {
