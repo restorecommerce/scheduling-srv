@@ -2,12 +2,16 @@ import * as sconfig from '@restorecommerce/service-config';
 import { Logger } from '@restorecommerce/logger';
 import { Events } from '@restorecommerce/kafka-client';
 import { marshallProtobufAny } from '../schedulingService';
+import * as _ from 'lodash';
 
 const QUEUED_JOBS_TOPIC = 'io.restorecommerce.jobs';
 let logger: Logger;
 
-export default async () => {
-  const cfg = sconfig(process.cwd());
+export default async (cfg?: any) => {
+  if (!cfg) {
+    cfg = sconfig(process.cwd());
+  }
+  console.log('Cfg get logger is...', cfg.get('logger'));
   logger = new Logger(cfg.get('logger'));
 
   const kafkaCfg = cfg.get('events:kafka');
@@ -17,11 +21,13 @@ export default async () => {
   const externalJobsCfg = cfg.get('exteranalJobs');
   let deleteStalledJobs = false;
   let stalledJobOptions;
-  for (let extJobCfg of externalJobsCfg) {
-    if (extJobCfg && extJobCfg.deleteStalledJobs) {
-      deleteStalledJobs = extJobCfg.deleteStalledJobs;
-      stalledJobOptions = extJobCfg.stalledJob.options;
-      break;
+  if (externalJobsCfg && _.isArray(externalJobsCfg) && externalJobsCfg.length > 0) {
+    for (let extJobCfg of externalJobsCfg) {
+      if (extJobCfg && extJobCfg.deleteStalledJobs) {
+        deleteStalledJobs = extJobCfg.deleteStalledJobs;
+        stalledJobOptions = extJobCfg.stalledJob.options;
+        break;
+      }
     }
   }
 

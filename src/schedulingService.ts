@@ -13,11 +13,37 @@ import {
   UpdateCall,
   SortOrder,
   GRPCResult, Priority, Backoffs
-} from "./types";
+} from './types';
 import { parseExpression } from 'cron-parser';
 
 const JOB_DONE_EVENT = 'jobDone';
 const JOB_FAILED_EVENT = 'jobFailed';
+
+/**
+ * Marshall any job payload to google.protobuf.Any
+ */
+export const marshallProtobufAny = (data: any): any => {
+  const stringified = JSON.stringify(data);
+  return {
+    type_url: '',
+    value: Buffer.from(stringified)
+  };
+};
+
+
+/**
+ * Unmarshall a job payload.
+ */
+export const unmarshallProtobufAny = (data: any): any => {
+  let unmarshalled = {};
+
+  if (!_.isEmpty(data)) {
+    const payloadValue = data.value;
+    const decoded = payloadValue.toString();
+    unmarshalled = JSON.parse(decoded);
+  }
+  return unmarshalled;
+};
 
 /**
  * A job scheduling service.
@@ -70,8 +96,8 @@ export class SchedulingService implements JobService {
     const that = this;
     const events = [JOB_DONE_EVENT, JOB_FAILED_EVENT];
     for (let eventName of events) {
-      await this.jobEvents.on(eventName, async function listener(msg: any, ctx: any,
-        config: any, eventName: string): Promise<any> {
+      await this.jobEvents.on(eventName, async (msg: any, ctx: any,
+        config: any, eventName: string): Promise<any> => {
         let job = msg;
 
         if (eventName === JOB_FAILED_EVENT) {
@@ -729,32 +755,4 @@ export class SchedulingService implements JobService {
       this._handleError(err);
     });
   }
-}
-
-
-/**
- * Marshall any job payload to google.protobuf.Any
- */
-export function marshallProtobufAny(data: any): any {
-  const stringified = JSON.stringify(data);
-  return {
-    type_url: '',
-    value: Buffer.from(stringified)
-  };
-}
-
-
-/**
- * Unmarshall a job payload.
- */
-export function unmarshallProtobufAny(data: any): any {
-  let unmarshalled = {};
-
-  if (!_.isEmpty(data)) {
-    const payloadValue = data.value;
-    const decoded = payloadValue.toString();
-    unmarshalled = JSON.parse(decoded);
-  }
-
-  return unmarshalled;
 }

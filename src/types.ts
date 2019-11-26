@@ -1,4 +1,4 @@
-import {JobId, JobOptions} from "bull";
+import {JobId, JobOptions} from 'bull';
 
 export enum Priority {
   NORMAL = 0,
