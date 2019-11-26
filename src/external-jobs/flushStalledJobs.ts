@@ -11,7 +11,6 @@ export default async (cfg?: any) => {
   if (!cfg) {
     cfg = sconfig(process.cwd());
   }
-  console.log('Cfg get logger is...', cfg.get('logger'));
   logger = new Logger(cfg.get('logger'));
 
   const kafkaCfg = cfg.get('events:kafka');
