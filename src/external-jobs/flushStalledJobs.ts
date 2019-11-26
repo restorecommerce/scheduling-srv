@@ -9,7 +9,7 @@ let logger: Logger;
 
 export default async (cfg?: any) => {
   if (!cfg) {
-    cfg = sconfig(process.cwd());
+    cfg = sconfig(__dirname + '/../../');
   }
   logger = new Logger(cfg.get('logger'));
 
@@ -17,7 +17,7 @@ export default async (cfg?: any) => {
   const events: Events = new Events(kafkaCfg, logger);
   await events.start();
   const jobTopic = events.topic(QUEUED_JOBS_TOPIC);
-  const externalJobsCfg = cfg.get('exteranalJobs');
+  const externalJobsCfg = cfg.get('externalJobs');
   let deleteStalledJobs = false;
   let stalledJobOptions;
   if (externalJobsCfg && _.isArray(externalJobsCfg) && externalJobsCfg.length > 0) {
