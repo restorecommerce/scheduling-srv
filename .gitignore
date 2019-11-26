@@ -9,8 +9,7 @@ coverage/
 .vscode
 .idea
 
-*.js
-*.d.ts
+lib
 !setupTopics.js
 
 *.log

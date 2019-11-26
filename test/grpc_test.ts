@@ -1,7 +1,7 @@
 import * as mocha from 'mocha';
 import * as should from 'should';
-import { marshallProtobufAny, unmarshallProtobufAny } from '../schedulingService';
-import { Worker } from '../worker';
+import { marshallProtobufAny } from '../lib/schedulingService';
+import { Worker } from '../lib/worker';
 import { Topic } from '@restorecommerce/kafka-client';
 import * as sconfig from '@restorecommerce/service-config';
 import { Client } from '@restorecommerce/grpc-client';
@@ -9,7 +9,7 @@ import { Logger } from '@restorecommerce/logger';
 import {
   validateJobResource, shouldBeEmpty, validateScheduledJob
 } from './utils';
-import {Backoffs, NewJob, Priority, SortOrder} from "../types";
+import { Backoffs, Priority, SortOrder, NewJob } from "../lib/types";
 
 /**
  * NOTE: Running instances of Redis and Kafka are required to run the tests.

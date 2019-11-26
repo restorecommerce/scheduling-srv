@@ -1,19 +1,24 @@
 {
   "compilerOptions": {
-    "target": "es6",
+    "target": "ES6",
     "module": "commonjs",
     "moduleResolution": "node",
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
     "allowSyntheticDefaultImports": true,
-    "alwaysStrict": true
+    "noUnusedLocals": false,
+    "skipLibCheck": false,
+    "outDir": "lib",
+    "typeRoots": [
+      "node_modules/@types"
+    ]
   },
   "include": [
-     "./*.ts",
-     "./external-jobs/*.ts"
+    "./src/**/*.ts"
   ],
   "exclude": [
     "node_modules",
-    "docs"
+    "lib",
+    "doc"
   ]
 }

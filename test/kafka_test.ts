@@ -2,10 +2,8 @@ import * as _ from 'lodash';
 import * as mocha from 'mocha';
 import * as should from 'should';
 
-import {SchedulingService,
-  marshallProtobufAny, unmarshallProtobufAny
-} from '../schedulingService';
-import { Worker } from '../worker';
+import { SchedulingService, marshallProtobufAny } from '../lib/schedulingService';
+import { Worker } from '../lib/worker';
 
 import { Topic } from '@restorecommerce/kafka-client';
 import * as sconfig from '@restorecommerce/service-config';
@@ -14,7 +12,7 @@ import {
   validateJobResource,
   shouldBeEmpty, validateScheduledJob
 } from './utils';
-import {Backoffs, NewJob, Priority} from "../types";
+import { Backoffs, NewJob, Priority } from "../lib/types";
 
 /**
  * NOTE: Running instances of Redis and Kafka are required to run the tests.
@@ -110,7 +108,7 @@ describe('testing scheduling-srv: Kafka', () => {
       // Simulate timeout
       await new Promise((resolve) => setTimeout(resolve, 100));
 
-      const result = await schedulingService.read({request: {}});
+      const result = await schedulingService.read({ request: {} });
       shouldBeEmpty(result);
     });
     it('should create a new job and execute it at a scheduled time', async () => {

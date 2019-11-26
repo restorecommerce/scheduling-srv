@@ -1,6 +1,6 @@
-import { unmarshallProtobufAny } from '../schedulingService';
+import { unmarshallProtobufAny } from '../lib/schedulingService';
 import * as should from 'should';
-import {Priority} from "../types";
+import { Priority } from '../lib/types';
 
 export function validateScheduledJob(job: any, expectedSchedule: string): void {
   should.exist(job.data);
