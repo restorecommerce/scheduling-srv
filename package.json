@@ -30,11 +30,11 @@
     "lodash": "^4.17.15"
   },
   "devDependencies": {
-    "@restorecommerce/grpc-client": "^0.0.1",
+    "@restorecommerce/grpc-client": "0.0.4",
     "@types/bull": "^3.10.4",
     "@types/lodash": "^4.14.144",
     "@types/mocha": "^5.2.7",
-    "@types/node": "^12.7.11",
+    "@types/node": "^12.12.14",
     "@types/redis": "^2.8.14",
     "@typescript-eslint/eslint-plugin": "^2.8.0",
     "@typescript-eslint/eslint-plugin-tslint": "^2.8.0",
