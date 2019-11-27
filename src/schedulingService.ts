@@ -748,7 +748,9 @@ export class SchedulingService implements JobService {
 
   _removeBullJob(jobInstID: JobId): Promise<void> {
     return this.queue.getJob(jobInstID).then(job => {
-      return job.remove();
+      if (job) {
+        return job.remove();
+      }
     }).then(() => {
       this.logger.info(`Immediate job#${jobInstID} removed`);
     }).catch(err => {
