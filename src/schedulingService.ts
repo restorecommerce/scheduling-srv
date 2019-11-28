@@ -663,7 +663,7 @@ export class SchedulingService implements JobService {
       for (let job of result) {
         jobIdsToDelete.push(job.id);
       }
-      this.logger.debug('Following stalled job instaces will be deleted:', jobIdsToDelete);
+      this.logger.debug('Following stalled job instaces will be deleted:', { jobIDs: jobIdsToDelete });
       await this.delete({ request: { ids: jobIdsToDelete } }).catch(error => {
         this._handleError(`Error occured deleting jobs ${jobIdsToDelete} : ${error}`);
       });

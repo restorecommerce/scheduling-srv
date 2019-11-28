@@ -243,12 +243,13 @@ export class Worker {
           (err) => {
             logger.error('Error occured deleting jobs:', err.message);
           });
-      } else if (eventName === QUEUED_JOB && msg &&
-        msg.type === FULSH_STALLED_JOBS_TYPE) {
-        await schedulingService.flushStalledJobs(msg.id, msg.type).catch(
-          (err) => {
-            logger.error('Error occured flushing jobs:', err.message);
-          });
+      } else if (eventName === QUEUED_JOB) {
+        if (msg && msg.type === FULSH_STALLED_JOBS_TYPE) {
+          await schedulingService.flushStalledJobs(msg.id, msg.type).catch(
+            (err) => {
+              logger.error('Error occured flushing jobs:', err.message);
+            });
+        }
       } else {  // commands
         await cis.command(msg, context);
       }
