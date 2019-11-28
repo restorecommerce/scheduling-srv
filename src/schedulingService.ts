@@ -120,7 +120,7 @@ export class SchedulingService implements JobService {
           delete that.jobCbs[job.id];
           cb();
           await that._deleteJobInstance(job.id);
-          logger.verbose(`job#${job.id} successfully deleted`, that._filterQueuedJob(job));
+          logger.info(`job#${job.id} successfully deleted`, that._filterQueuedJob(job));
           deleted = true;
         }
 
