@@ -24,6 +24,7 @@
     "@restorecommerce/protos": "github:restorecommerce/protos",
     "@restorecommerce/service-config": "^0.1.6",
     "bull": "^3.12.1",
+    "bull-board": "^0.6.0",
     "cache-manager": "^2.10.1",
     "cache-manager-redis": "^0.6.0",
     "cron-parser": "^2.13.0",

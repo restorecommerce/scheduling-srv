@@ -7,6 +7,8 @@ import * as sconfig from '@restorecommerce/service-config';
 import * as cacheManager from 'cache-manager';
 import * as redisStore from 'cache-manager-redis';
 import * as fs from 'fs';
+import { UI, setQueues } from 'bull-board';
+import * as express from 'express';
 
 const JOBS_CREATE_EVENT = 'createJobs';
 const JOBS_MODIFY_EVENT = 'modifyJobs';
@@ -169,6 +171,7 @@ export class Worker {
   server: any;
   offsetStore: chassis.OffsetStore;
   logger: Logger;
+  app: express.Application;
 
   async start(cfg: any): Promise<any> {
     // Load config
@@ -291,6 +294,14 @@ export class Worker {
     this.schedulingService = schedulingService;
     this.events = events;
     this.server = server;
+
+    setQueues(this.schedulingService.queue);
+
+    this.app = express();
+    this.app.use(cfg.get('bull:board:path'), UI);
+    this.app.listen(cfg.get('bull:board:port'), () => {
+      logger.info(`Bull board listening on port ${cfg.get('bull:board:port')} at ${cfg.get('bull:board:path')}`);
+    });
   }
 
   async stop(): Promise<any> {

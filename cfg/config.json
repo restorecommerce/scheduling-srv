@@ -242,7 +242,11 @@
       "failed",
       "delayed",
       "paused"
-    ]
+    ],
+    "board":  {
+      "port": 3000,
+      "path": "/admin/queues"
+    }
   },
   "externalJobs": [
     { "deleteStalledJobs": true,

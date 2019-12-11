@@ -41,7 +41,12 @@ RUN npm run build
 
 HEALTHCHECK CMD npm run healthcheck
 
+# For bull-board
+EXPOSE 3000
+
+#For GRPC
 EXPOSE 50051
+
 CMD [ "npm", "start" ]
 
 # To build the image:
