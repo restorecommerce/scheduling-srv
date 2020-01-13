@@ -15,3 +15,8 @@ lib
 *.log
 *~
 .nyc_output
+
+known_hosts
+config
+id_rsa
+id_rsa.pub
