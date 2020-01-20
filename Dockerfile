@@ -44,7 +44,7 @@ HEALTHCHECK CMD npm run healthcheck
 # For bull-board
 EXPOSE 3000
 
-#For GRPC
+# For GRPC
 EXPOSE 50051
 
 CMD [ "npm", "start" ]
