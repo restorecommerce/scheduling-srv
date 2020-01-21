@@ -1,7 +1,6 @@
-# Setup of RSA keys
+# scheduling-srv
+<img src="http://img.shields.io/npm/v/%40restorecommerce%2Fscheduling%2Dsrv.svg?style=flat-square" alt="">[![Build Status][build]](https://travis-ci.org/restorecommerce/scheduling-srv?branch=master)[![Dependencies][depend]](https://david-dm.org/restorecommerce/scheduling-srv)[![Coverage Status][cover]](https://coveralls.io/github/restorecommerce/scheduling-srv?branch=master)
 
-<<<<<<< Updated upstream
-[version]: http://img.shields.io/npm/v/scheduling-srv.svg?style=flat-square
 [build]: http://img.shields.io/travis/restorecommerce/scheduling-srv/master.svg?style=flat-square
 [depend]: https://img.shields.io/david/restorecommerce/scheduling-srv.svg?style=flat-square
 [cover]: http://img.shields.io/coveralls/restorecommerce/scheduling-srv/master.svg?style=flat-square
@@ -217,8 +216,6 @@ npm run build
 # run compiled server
 npm start
 ```
-=======
 You can either use provided keys for appserver@n-fuse.co user or copy the RSA private key ( file location - ~/.ssh/id_rsa ), 
 ssh config file ( file location - ~/.ssh/config ) and ssh known hosts file ( file location ~/.ssh/known_hosts ) to this 
 directory before creating the images.
->>>>>>> Stashed changes
