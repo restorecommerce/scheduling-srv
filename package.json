@@ -17,11 +17,11 @@
     "scheduling"
   ],
   "dependencies": {
-    "@restorecommerce/chassis-srv": "git+https://git@github.com/restorecommerce/chassis-srv.git",
+    "@restorecommerce/chassis-srv": "^0.0.1",
     "@restorecommerce/cluster-service": "^0.1.4",
-    "@restorecommerce/kafka-client": "^0.1.7",
+    "@restorecommerce/kafka-client": "^0.1.8",
     "@restorecommerce/logger": "^0.1.12",
-    "@restorecommerce/protos": "git+https://git@github.com/restorecommerce/protos.git",
+    "@restorecommerce/protos": "^0.0.1",
     "@restorecommerce/service-config": "^0.1.6",
     "bull": "^3.12.1",
     "bull-board": "^0.6.0",
