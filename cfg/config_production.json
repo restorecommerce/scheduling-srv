@@ -33,7 +33,7 @@
           "google/protobuf/descriptor.proto"
         ],
         "protoRoot": "node_modules/@restorecommerce/protos/",
-        "addr": "scheduling-srv:50051"
+        "addr": "scheduling-srv:50054"
       }
     ]
   }

@@ -183,39 +183,39 @@ Refer to [System](https://github.com/restorecommerce/system) repository to start
 npm run test
 ```
 
-## Usage
+## Running as Docker Container
 
-### Development
+This service depends on a set of _backing services_ that can be started using a
+dedicated [docker compose definition](https://github.com/restorecommerce/system).
 
-- Install dependencies
+```sh
+docker run \
+ --name restorecommerce_scheduling_srv \
+ --hostname scheduling-srv \
+ --network=system_test \
+ -e NODE_ENV=production \
+ -p 50054:50054 \
+ restorecommerce/scheduling-srv
+```
+
+## Running Locally
+
+Install dependencies
 
 ```sh
 npm install
 ```
 
-- Build application
+Build service
 
 ```sh
 # compile the code
 npm run build
 ```
 
-- Run application and restart it on changes in the code
+Start service
 
 ```sh
-# Start scheduling-srv in dev mode
-npm run dev
-```
-
-### Production
-
-```sh
-# compile the code
-npm run build
-
-# run compiled server
+# run compiled service
 npm start
 ```
-You can either use provided keys for appserver@n-fuse.co user or copy the RSA private key ( file location - ~/.ssh/id_rsa ), 
-ssh config file ( file location - ~/.ssh/config ) and ssh known hosts file ( file location ~/.ssh/known_hosts ) to this 
-directory before creating the images.
