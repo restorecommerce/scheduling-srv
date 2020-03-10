@@ -1,4 +1,4 @@
-FROM node:12.4.0-stretch
+FROM node:12.6.1-stretch
 
 # Install dependencies
 RUN apt-get update && apt-get install -y libc6-dev
@@ -14,9 +14,6 @@ RUN groupadd -r app &&\
 # Create app directory
 ENV HOME=/home/app
 ENV APP_HOME=/home/app/scheduling-srv
-
-# Install global dependencies
-RUN npm install -g typescript
 
 ## SETTING UP THE APP ##
 WORKDIR $APP_HOME
@@ -48,12 +45,3 @@ EXPOSE 3000
 EXPOSE 50051
 
 CMD [ "npm", "start" ]
-
-# To build the image:
-# docker build -t restorecommerce/scheduling-srv .
-#
-# To create a container:
-# docker create --name scheduling-srv --net restorecms_default restorecommerce/scheduling-srv
-#
-# To run the container:
-# docker start scheduling-srv
