@@ -386,7 +386,15 @@ export class SchedulingService implements JobService {
         job.data.payload.value = job.data.payload.value.toString();
       }
 
-      result.push(await this.queue.add(job.type, job.data, job.options));
+      const bullOptions = {
+        ...job.options
+      };
+
+      if (bullOptions.timeout === 1) {
+        delete bullOptions['timeout'];
+      }
+
+      result.push(await this.queue.add(job.type, job.data, bullOptions));
 
       this.logger.verbose(`job@${job.type} created`, job);
 
