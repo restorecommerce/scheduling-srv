@@ -16,7 +16,7 @@ A microservice for scheduling jobs.
 [#configuration]
 == Configuration
 
-* This service will hook any modules that are placed in the link:src/external-jobs[`external-jobs`] directory.
+* This service will hook any modules that are placed in the link:src/external-jobs[external-jobs] directory.
 Use this to execute jobs on the scheduling-srv itself.
 
 [#API]
@@ -89,7 +89,7 @@ This microservice exposes the following gRPC endpoints:
 |======================================================================================================================================
 | Field | Type | Label | Description
 | delay | number | required | Time until retry in milliseconds.
-| type | `io.restorecommerce.job.Backoff.Type` | optional | Calucation of the delay for retries.
+| type | `io.restorecommerce.job.Backoff.Type` | optional | Calculation of the delay for retries.
 |======================================================================================================================================
 
 `io.restorecommerce.job.Backoff.Type`
