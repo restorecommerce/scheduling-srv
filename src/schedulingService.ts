@@ -720,9 +720,9 @@ export class SchedulingService implements JobService {
     return picked as any;
   }
 
-  _filterJobData<T extends any>(data: T, encode: boolean): Pick<T, 'meta' | 'payload' | 'timezone'> {
+  _filterJobData<T extends any>(data: T, encode: boolean): Pick<T, 'meta' | 'payload' | 'timezone' | 'subject_id'> {
     const picked = _.pick(data, [
-      'meta', 'payload', 'timezone'
+      'meta', 'payload', 'timezone', 'subject_id'
     ]);
 
     if (encode) {

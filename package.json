@@ -21,7 +21,7 @@
     "@restorecommerce/cluster-service": "^0.1.4",
     "@restorecommerce/kafka-client": "^0.1.8",
     "@restorecommerce/logger": "^0.1.16",
-    "@restorecommerce/protos": "0.0.4",
+    "@restorecommerce/protos": "^0.0.7",
     "@restorecommerce/service-config": "^0.1.6",
     "bull": "^3.13.0",
     "bull-board": "^0.7.0",
