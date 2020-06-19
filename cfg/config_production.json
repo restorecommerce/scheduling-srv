@@ -36,5 +36,10 @@
         "addr": "scheduling-srv:50051"
       }
     ]
+  },
+  "authorization": {
+    "cache":  {
+      "host": "redis"
+    }
   }
 }

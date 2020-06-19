@@ -17,11 +17,12 @@
     "scheduling"
   ],
   "dependencies": {
+    "@restorecommerce/acs-client": "https://github.com/restorecommerce/acs-client#acs-client-ctx-removed",
     "@restorecommerce/chassis-srv": "0.0.3",
     "@restorecommerce/cluster-service": "^0.1.4",
     "@restorecommerce/kafka-client": "^0.1.8",
     "@restorecommerce/logger": "^0.1.16",
-    "@restorecommerce/protos": "^0.0.7",
+    "@restorecommerce/protos": "https://github.com/restorecommerce/protos#protos-acs",
     "@restorecommerce/service-config": "^0.1.6",
     "bull": "^3.13.0",
     "bull-board": "^0.7.0",

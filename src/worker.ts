@@ -9,6 +9,7 @@ import * as redisStore from 'cache-manager-redis';
 import * as fs from 'fs';
 import { UI, setQueues } from 'bull-board';
 import * as express from 'express';
+import { initAuthZ, ACSAuthZ } from '@restorecommerce/acs-client';
 
 const JOBS_CREATE_EVENT = 'createJobs';
 const JOBS_MODIFY_EVENT = 'modifyJobs';
@@ -172,6 +173,7 @@ export class Worker {
   offsetStore: chassis.OffsetStore;
   logger: Logger;
   app: express.Application;
+  authZ: ACSAuthZ;
 
   async start(cfg: any): Promise<any> {
     // Load config
@@ -206,7 +208,14 @@ export class Worker {
 
     const bullOptions = cfg.get('bull');
     // Create the business logic
-    const schedulingService: SchedulingService = new SchedulingService(jobEvents, jobResourceEvents, redisConfig, logger, redis, bullOptions, cfg);
+    let authZ = await initAuthZ(cfg) as ACSAuthZ;
+    this.authZ = authZ;
+    // redis subject HR client
+    const subjectHRCfg = cfg.get('redis');
+    subjectHRCfg.db = cfg.get('redis:db-indexes:db-subject');
+    const redisSubjectHR = await chassis.cache.get([subjectHRCfg], logger);
+    const schedulingService: SchedulingService = new SchedulingService(jobEvents,
+      jobResourceEvents, redisConfig, logger, redis, bullOptions, cfg, redisSubjectHR, this.authZ);
     await schedulingService.start();
     // Bind business logic to server
     const serviceNamesCfg = cfg.get('serviceNames');

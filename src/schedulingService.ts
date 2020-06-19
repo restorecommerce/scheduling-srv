@@ -1,6 +1,7 @@
 import * as _ from 'lodash';
 import { errors } from '@restorecommerce/chassis-srv';
 import * as kafkaClient from '@restorecommerce/kafka-client';
+import { Subject, AuthZAction, ACSAuthZ, Decision, PermissionDenied } from '@restorecommerce/acs-client';
 import { RedisClient } from 'redis';
 import { Job, JobId, JobOptions } from 'bull';
 import * as Queue from 'bull';
@@ -15,6 +16,8 @@ import {
   GRPCResult, Priority, Backoffs
 } from './types';
 import { parseExpression } from 'cron-parser';
+import { getSubjectFromRedis, AccessResponse, checkAccessRequest, ReadPolicyResponse } from './utilts';
+import { toStruct } from '@restorecommerce/grpc-client';
 
 const JOB_DONE_EVENT = 'jobDone';
 const JOB_FAILED_EVENT = 'jobFailed';
@@ -59,10 +62,13 @@ export class SchedulingService implements JobService {
   resourceEventsEnabled: boolean;
   canceledJobs: Set<string>;
   bullOptions: any;
+  cfg: any;
+  redisSubjectClient: RedisClient;
+  authZ: ACSAuthZ;
 
   constructor(jobEvents: kafkaClient.Topic,
     jobResourceEvents: kafkaClient.Topic, redisConfig: any, logger: any,
-    redisCache: any, bullOptions: any, cfg: any) {
+    redisCache: any, bullOptions: any, cfg: any, redisSubjectCache: any, authZ: ACSAuthZ) {
     this.jobEvents = jobEvents;
     this.jobResourceEvents = jobResourceEvents;
     this.resourceEventsEnabled = true;
@@ -83,7 +89,13 @@ export class SchedulingService implements JobService {
       // this redis client object is for storing recurrTime to DB index 7
       this.redisClient = redisConn.client;
     });
+    redisSubjectCache.store.getClient((err, redisConn) => {
+      // this redis client object is for retreiving HR scope data
+      this.redisSubjectClient = redisConn.client;
+    });
     this.canceledJobs = new Set<string>();
+    this.cfg = cfg;
+    this.authZ = authZ;
   }
 
   /**
@@ -353,8 +365,22 @@ export class SchedulingService implements JobService {
    * @param {any} context RPC context
    */
   async create(call: CreateCall, context?: any): Promise<GRPCResult> {
+    let subject = await getSubjectFromRedis(call, this.redisSubjectClient);
     if (_.isNil(call) || _.isNil(call.request) || _.isNil(call.request.items)) {
       this._handleError(new errors.InvalidArgument('Missing items in create request.'));
+    }
+
+    await this.createMetadata(call.request.items, AuthZAction.CREATE, subject);
+    let acsResponse: AccessResponse;
+    try {
+      acsResponse = await checkAccessRequest(subject, call.request.items, AuthZAction.CREATE,
+        'job', this);
+    } catch (err) {
+      this.logger.error('Error occurred requesting access-control-srv:', err);
+      throw err;
+    }
+    if (acsResponse.decision != Decision.PERMIT) {
+      throw new PermissionDenied(acsResponse.response.status.message, acsResponse.response.status.code.toString());
     }
 
     const jobs = call.request.items.map(x => this._validateJob(x));
@@ -420,6 +446,20 @@ export class SchedulingService implements JobService {
    * @param {any} context RPC context
    */
   async read(call: ReadCall, context?: any): Promise<GRPCResult> {
+    const readRequest = call.request;
+    let subject = await getSubjectFromRedis(call, this.redisSubjectClient);
+    let acsResponse: ReadPolicyResponse;
+    try {
+      acsResponse = await checkAccessRequest(subject, readRequest, AuthZAction.READ,
+        'job', this);
+    } catch (err) {
+      this.logger.error('Error occurred requesting access-control-srv:', err);
+      throw err;
+    }
+    if (acsResponse.decision != Decision.PERMIT) {
+      throw new PermissionDenied(acsResponse.response.status.message, acsResponse.response.status.code.toString());
+    }
+
     let result: Job[] = [];
     if (_.isEmpty(call) || _.isEmpty(call.request) || _.isEmpty(call.request.filter)
       && (!call.request.filter || !call.request.filter.job_ids
@@ -550,6 +590,20 @@ export class SchedulingService implements JobService {
    * Reschedules a job - deletes it and recreates it with a new generated ID.
    */
   async update(call: UpdateCall, context?: any): Promise<GRPCResult> {
+    let subject = await getSubjectFromRedis(call, this.redisSubjectClient);
+    // update meta data for owner information
+    await this.createMetadata(call.request.items, AuthZAction.MODIFY, subject);
+    let acsResponse: AccessResponse;
+    try {
+      acsResponse = await checkAccessRequest(subject, call.request.items, AuthZAction.MODIFY,
+        'job', this);
+    } catch (err) {
+      this.logger.error('Error occurred requesting access-control-srv:', err);
+      throw err;
+    }
+    if (acsResponse.decision != Decision.PERMIT) {
+      throw new PermissionDenied(acsResponse.response.status.message, acsResponse.response.status.code.toString());
+    }
     if (_.isNil(call) || _.isNil(call.request) || _.isNil(call.request.items)) {
       this._handleError(new errors.InvalidArgument('Missing items in update request.'));
     }
@@ -606,6 +660,20 @@ export class SchedulingService implements JobService {
    * existing one if it already exists.
    */
   async upsert(call: any, context?: any): Promise<GRPCResult> {
+    let subject = await getSubjectFromRedis(call, this.redisSubjectClient);
+    await this.createMetadata(call.request.items, AuthZAction.MODIFY, subject);
+    let acsResponse;
+    try {
+      acsResponse = await checkAccessRequest(subject, call.request.items, AuthZAction.MODIFY,
+        'job', this);
+    } catch (err) {
+      this.logger.error('Error occurred requesting access-control-srv:', err);
+      throw err;
+    }
+
+    if (acsResponse.decision != Decision.PERMIT) {
+      throw new PermissionDenied(acsResponse.response.status.message, acsResponse.response.status.code.toString());
+    }
     if (_.isNil(call) || _.isNil(call.request) || _.isNil(call.request.items)) {
       this._handleError(new errors.InvalidArgument('Missing items in upsert request.'));
     }
@@ -764,5 +832,84 @@ export class SchedulingService implements JobService {
     }).catch(err => {
       this._handleError(err);
     });
+  }
+
+  /**
+   * reads meta data from DB and updates owner information in resource if action is UPDATE / DELETE
+   * @param reaources list of resources
+   * @param entity entity name
+   * @param action resource action
+   */
+  async createMetadata(resources: any, action: string, subject?: Subject): Promise<any> {
+    let orgOwnerAttributes = [];
+    if (resources && !_.isArray(resources)) {
+      resources = [resources];
+    }
+    const urns = this.cfg.get('authorization:urns');
+    if (subject && subject.scope && (action === AuthZAction.CREATE || action === AuthZAction.MODIFY)) {
+      // add subject scope as default owner
+      orgOwnerAttributes.push(
+        {
+          id: urns.ownerIndicatoryEntity,
+          value: urns.organization
+        },
+        {
+          id: urns.ownerInstance,
+          value: subject.scope
+        });
+    }
+
+    if (resources) {
+      for (let resource of resources) {
+        if (!resource.meta) {
+          resource.meta = {};
+        }
+        if (action === AuthZAction.MODIFY || action === AuthZAction.DELETE) {
+          // TODO read from the same api disabling AC
+          let result = await this.read({
+            request: {
+              filter: toStruct({
+                job_ids: {
+                  $in: resource.id
+                }
+              }),
+              subject
+            }
+          });
+          // update owner info
+          if (result.items.length === 1) {
+            let item = result.items[0];
+            resource.meta.owner = item.meta.owner;
+          } else if (result.items.length === 0 && !resource.meta.owner) {
+            let ownerAttributes = _.cloneDeep(orgOwnerAttributes);
+            // add user as default owner
+            ownerAttributes.push(
+              {
+                id: urns.ownerIndicatoryEntity,
+                value: urns.user
+              },
+              {
+                id: urns.ownerInstance,
+                value: resource.id
+              });
+            resource.meta.owner = ownerAttributes;
+          }
+        } else if (action === AuthZAction.CREATE && !resource.meta.owner) {
+          let ownerAttributes = _.cloneDeep(orgOwnerAttributes);
+          // add user as default owner
+          ownerAttributes.push(
+            {
+              id: urns.ownerIndicatoryEntity,
+              value: urns.user
+            },
+            {
+              id: urns.ownerInstance,
+              value: resource.id
+            });
+          resource.meta.owner = ownerAttributes;
+        }
+      }
+    }
+    return resources;
   }
 }

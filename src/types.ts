@@ -1,4 +1,5 @@
 import {JobId, JobOptions} from 'bull';
+import { Subject } from '@restorecommerce/acs-client';
 
 export enum Priority {
   NORMAL = 0,
@@ -48,6 +49,7 @@ export interface ReadCall {
       type?: string;
     };
     sort?: SortOrder;
+    subject?: Subject;
   };
 }
 
