@@ -7,7 +7,8 @@ import * as sconfig from '@restorecommerce/service-config';
 import { Client } from '@restorecommerce/grpc-client';
 import { Logger } from '@restorecommerce/logger';
 import {
-  validateJobResource, shouldBeEmpty, validateScheduledJob
+  validateJobResource, shouldBeEmpty, validateScheduledJob, jobPolicySetRQ,
+  startGrpcMockServer, stopGrpcMockServer
 } from './utils';
 import { Backoffs, Priority, SortOrder, NewJob } from "../lib/types";
 
@@ -17,6 +18,9 @@ import { Backoffs, Priority, SortOrder, NewJob } from "../lib/types";
 
 const QUEUED_JOBS_TOPIC = 'io.restorecommerce.jobs';
 const JOB_RESOURCE_TOPIC = 'io.restorecommerce.jobs.resource';
+
+let mockServer: any;
+let logger: Logger;
 
 describe('testing scheduling-srv: gRPC', () => {
   let worker: Worker;
@@ -28,17 +32,18 @@ describe('testing scheduling-srv: gRPC', () => {
   before(async function (): Promise<any> {
     this.timeout(4000);
     worker = new Worker();
-
     const cfg = sconfig(process.cwd() + '/test');
     await worker.start(cfg);
+    logger = worker.logger;
 
     jobEvents = worker.events.topic(QUEUED_JOBS_TOPIC);
     jobResourceEvents = worker.events.topic(JOB_RESOURCE_TOPIC);
 
-    const logger = new Logger(cfg.get('logger'));
+    // strat acs mock service
+    mockServer = await startGrpcMockServer([{ method: 'WhatIsAllowed', input: '\{.*\:\{.*\:.*\}\}', output: jobPolicySetRQ },
+    { method: 'IsAllowed', input: '\{.*\:\{.*\:.*\}\}', output: { decision: 'PERMIT' } }], logger);
     serviceClient = new Client(cfg.get('client:schedulingClient'), logger);
     grpcSchedulingSrv = await serviceClient.connect();
-
     const toDelete = (await grpcSchedulingSrv.read({}, {})).total_count;
     const jobResourceOffset = await jobResourceEvents.$offset(-1);
 
@@ -61,6 +66,7 @@ describe('testing scheduling-srv: gRPC', () => {
     await jobResourceEvents.removeAllListeners('jobsDeleted');
   });
   after(async () => {
+    await stopGrpcMockServer(mockServer, logger);
     await jobEvents.removeAllListeners('queuedJob');
     await jobResourceEvents.removeAllListeners('jobsCreated');
     await jobResourceEvents.removeAllListeners('jobsDeleted');
@@ -72,7 +78,7 @@ describe('testing scheduling-srv: gRPC', () => {
     this.timeout(8000);
     it('should create a new job and execute it immediately', async () => {
       await jobEvents.on('queuedJob', async (job, context, configRet, eventNameRet) => {
-        validateScheduledJob(job, 'NOW');
+        validateScheduledJob(job, 'ONCE');
 
         const { id, schedule_type } = job;
         await jobEvents.emit('jobDone', { id, schedule_type });
@@ -107,7 +113,6 @@ describe('testing scheduling-srv: gRPC', () => {
 
       // Simulate timeout
       await new Promise((resolve) => setTimeout(resolve, 100));
-
       const result = await grpcSchedulingSrv.read({});
       shouldBeEmpty(result);
     });

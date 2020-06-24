@@ -1,5 +1,5 @@
-import {JobId, JobOptions} from 'bull';
-import { Subject } from '@restorecommerce/acs-client';
+import { JobId, JobOptions } from 'bull';
+import { Subject, ApiKey } from '@restorecommerce/acs-client';
 
 export enum Priority {
   NORMAL = 0,
@@ -29,6 +29,8 @@ export interface NewJob {
 export interface CreateCall {
   request: {
     items: NewJob[];
+    subject?: Subject;
+    api_key?: ApiKey;
   };
 }
 
@@ -39,6 +41,8 @@ export interface UpdateJob extends NewJob {
 export interface UpdateCall {
   request: {
     items: UpdateJob[];
+    subject?: Subject;
+    api_key?: ApiKey;
   };
 }
 
@@ -50,14 +54,16 @@ export interface ReadCall {
     };
     sort?: SortOrder;
     subject?: Subject;
+    api_key?: ApiKey;
   };
 }
 
 export interface DeleteCall {
   request: {
-    ids: JobId[];
-  } | {
-    collection: boolean;
+    ids?: JobId[];
+    subject?: Subject;
+    api_key?: ApiKey;
+    collection?: boolean;
   };
 }
 

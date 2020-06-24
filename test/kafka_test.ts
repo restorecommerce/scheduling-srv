@@ -10,9 +10,10 @@ import * as sconfig from '@restorecommerce/service-config';
 
 import {
   validateJobResource,
-  shouldBeEmpty, validateScheduledJob
+  shouldBeEmpty, validateScheduledJob, jobPolicySetRQ, startGrpcMockServer, stopGrpcMockServer
 } from './utils';
 import { Backoffs, NewJob, Priority } from "../lib/types";
+import { Logger } from '@restorecommerce/chassis-srv';
 
 /**
  * NOTE: Running instances of Redis and Kafka are required to run the tests.
@@ -22,7 +23,8 @@ import { Backoffs, NewJob, Priority } from "../lib/types";
 const QUEUED_JOBS_TOPIC = 'io.restorecommerce.jobs';
 const JOB_RESOURCE_TOPIC = 'io.restorecommerce.jobs.resource';
 
-let jobInstID;
+let mockServer: any;
+let logger: Logger;
 
 describe('testing scheduling-srv: Kafka', () => {
   let worker: Worker;
@@ -37,11 +39,16 @@ describe('testing scheduling-srv: Kafka', () => {
     await worker.start(cfg);
 
     schedulingService = worker.schedulingService;
+    logger = worker.logger;
 
     jobTopic = worker.events.topic(QUEUED_JOBS_TOPIC);
     jobResourceTopic = worker.events.topic(JOB_RESOURCE_TOPIC);
 
-    const toDelete = (await schedulingService.read({}, {})).total_count;
+    // strat acs mock service
+    mockServer = await startGrpcMockServer([{ method: 'WhatIsAllowed', input: '\{.*\:\{.*\:.*\}\}', output: jobPolicySetRQ },
+    { method: 'IsAllowed', input: '\{.*\:\{.*\:.*\}\}', output: { decision: 'PERMIT' } }], logger);
+
+    const toDelete = (await schedulingService.read({ request: {} }, {})).total_count;
     const jobResourceOffset = await jobResourceTopic.$offset(-1);
 
     await jobTopic.emit('deleteJobs', { collection: true });
@@ -50,7 +57,7 @@ describe('testing scheduling-srv: Kafka', () => {
       await jobResourceTopic.$wait(jobResourceOffset + toDelete - 1);
     }
 
-    shouldBeEmpty(await schedulingService.read({}, {}));
+    shouldBeEmpty(await schedulingService.read({ request: {} }, {}));
   });
   beforeEach(async () => {
     for (let event of ['jobsCreated', 'jobsDeleted']) {
@@ -63,6 +70,7 @@ describe('testing scheduling-srv: Kafka', () => {
     await jobResourceTopic.removeAllListeners('jobsDeleted');
   });
   after(async () => {
+    await stopGrpcMockServer(mockServer, logger);
     await jobTopic.removeAllListeners('queuedJob');
     await jobResourceTopic.removeAllListeners('jobsCreated');
     await jobResourceTopic.removeAllListeners('jobsDeleted');
@@ -73,7 +81,7 @@ describe('testing scheduling-srv: Kafka', () => {
     this.timeout(15000);
     it('should create a new job and execute it immediately', async () => {
       await jobTopic.on('queuedJob', async (job, context, configRet, eventNameRet) => {
-        validateScheduledJob(job, 'NOW');
+        validateScheduledJob(job, 'ONCE');
 
         const { id, schedule_type } = job;
         await jobTopic.emit('jobDone', { id, schedule_type });
@@ -222,7 +230,7 @@ describe('testing scheduling-srv: Kafka', () => {
       // wait for 'jobsCreated'
       await jobResourceTopic.$wait(jobResourceOffset);
 
-      const created = await schedulingService.read({}, {});
+      const created = await schedulingService.read({ request: {} }, {});
       should.exist(created);
       should.exist(created.items);
 
@@ -306,7 +314,7 @@ describe('testing scheduling-srv: Kafka', () => {
 
       const jobResourceOffset = await jobResourceTopic.$offset(-1);
       await jobResourceTopic.$wait(jobResourceOffset + 3);
-      const result = await schedulingService.read({}, {});
+      const result = await schedulingService.read({ request: {} }, {});
       shouldBeEmpty(result);
     });
   });

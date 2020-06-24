@@ -16,6 +16,16 @@
       "kafkaHost": "kafka:9092"
     }
   },
+  "client": {
+    "acs-srv": {
+      "publisher": {
+        "name": "static",
+        "instances": [
+          "grpc://access-control-srv:50061"
+        ]
+      }
+    }
+  },
   "server": {
     "transports": [
       {

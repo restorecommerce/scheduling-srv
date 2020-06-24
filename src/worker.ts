@@ -195,7 +195,6 @@ export class Worker {
 
     // Create events
     const kafkaCfg = cfg.get('events:kafka');
-    const commandTopic = kafkaCfg.topics.command.topic;
     const events: Events = new Events(kafkaCfg, logger);
     await events.start();
     this.offsetStore = new chassis.OffsetStore(events, cfg, logger);
@@ -208,8 +207,7 @@ export class Worker {
 
     const bullOptions = cfg.get('bull');
     // Create the business logic
-    let authZ = await initAuthZ(cfg) as ACSAuthZ;
-    this.authZ = authZ;
+    this.authZ = await initAuthZ(cfg) as ACSAuthZ;
     // redis subject HR client
     const subjectHRCfg = cfg.get('redis');
     subjectHRCfg.db = cfg.get('redis:db-indexes:db-subject');
@@ -232,10 +230,13 @@ export class Worker {
         // protobuf.js appends unnecessary properties to object
         msg.items = _.map(msg.items, schedulingService._filterKafkaJob.bind(schedulingService));
         const call = { request: { items: msg.items } };
+        // to disableAC and enable scheduling jobs emitted via kafka event 'createJobs'
+        this.schedulingService.disableAC();
         await schedulingService.create(call, {}).catch(
           (err) => {
-            logger.error('Error occured scheduling jobs:', err.message);
+            logger.error('Error occured scheduling jobs:', { err });
           });
+        this.schedulingService.enableAC();
       }
       else if (eventName === JOBS_MODIFY_EVENT) {
         msg.items = msg.items.map((job) => {

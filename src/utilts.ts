@@ -4,6 +4,7 @@ import {
 import * as _ from 'lodash';
 import { SchedulingService } from './schedulingService';
 import { RedisClient } from 'redis';
+import { CreateCall, ReadCall, UpdateCall, DeleteCall } from './types';
 
 export interface HierarchicalScope {
   id: string;
@@ -93,8 +94,9 @@ export async function checkAccessRequest(subject: Subject, resources: any, actio
   };
 }
 
-export const getSubjectFromRedis = async (call: any, redisClient: RedisClient) => {
-  let subject = call.request.subject;
+export const getSubjectFromRedis = async (call: CreateCall | ReadCall | UpdateCall | DeleteCall,
+  redisClient: RedisClient) => {
+  let subject: any = call.request.subject;
   if (!subject) {
     subject = {};
   }

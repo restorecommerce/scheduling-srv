@@ -1,7 +1,7 @@
 import * as _ from 'lodash';
 import { errors } from '@restorecommerce/chassis-srv';
 import * as kafkaClient from '@restorecommerce/kafka-client';
-import { Subject, AuthZAction, ACSAuthZ, Decision, PermissionDenied } from '@restorecommerce/acs-client';
+import { Subject, AuthZAction, ACSAuthZ, Decision, PermissionDenied, updateConfig } from '@restorecommerce/acs-client';
 import { RedisClient } from 'redis';
 import { Job, JobId, JobOptions } from 'bull';
 import * as Queue from 'bull';
@@ -65,6 +65,8 @@ export class SchedulingService implements JobService {
   cfg: any;
   redisSubjectClient: RedisClient;
   authZ: ACSAuthZ;
+  authZCheck: boolean;
+
 
   constructor(jobEvents: kafkaClient.Topic,
     jobResourceEvents: kafkaClient.Topic, redisConfig: any, logger: any,
@@ -96,6 +98,7 @@ export class SchedulingService implements JobService {
     this.canceledJobs = new Set<string>();
     this.cfg = cfg;
     this.authZ = authZ;
+    this.authZCheck = this.cfg.get('authorization:enabled');
   }
 
   /**
@@ -380,7 +383,7 @@ export class SchedulingService implements JobService {
       throw err;
     }
     if (acsResponse.decision != Decision.PERMIT) {
-      throw new PermissionDenied(acsResponse.response.status.message, acsResponse.response.status.code.toString());
+      throw new PermissionDenied(acsResponse.response.status.message, acsResponse.response.status.code);
     }
 
     const jobs = call.request.items.map(x => this._validateJob(x));
@@ -457,8 +460,9 @@ export class SchedulingService implements JobService {
       throw err;
     }
     if (acsResponse.decision != Decision.PERMIT) {
-      throw new PermissionDenied(acsResponse.response.status.message, acsResponse.response.status.code.toString());
+      throw new PermissionDenied(acsResponse.response.status.message, acsResponse.response.status.code);
     }
+    // TODO need to apply filters based on Org scoping for the meta owner stored in redis
 
     let result: Job[] = [];
     if (_.isEmpty(call) || _.isEmpty(call.request) || _.isEmpty(call.request.filter)
@@ -540,9 +544,34 @@ export class SchedulingService implements JobService {
     if (_.isEmpty(call)) {
       this._handleError(new errors.InvalidArgument('No arguments provided for delete operation'));
     }
-
+    const subject = await getSubjectFromRedis(call, this.redisSubjectClient);
+    const jobIDs = call.request.ids;
+    let resources = [];
+    if (jobIDs) {
+      if (_.isArray(jobIDs)) {
+        for (let id of jobIDs) {
+          resources.push({ id });
+        }
+      } else {
+        resources = [{ id: jobIDs }];
+      }
+      await this.createMetadata(resources, AuthZAction.DELETE, subject);
+    }
+    if (call.request.collection) {
+      Object.assign(resources, { collection: call.request.collection });
+    }
+    let acsResponse: AccessResponse;
+    try {
+      acsResponse = await checkAccessRequest(subject, resources, AuthZAction.DELETE,
+        'job', this);
+    } catch (err) {
+      this.logger.error('Error occurred requesting access-control-srv:', err);
+      throw err;
+    }
+    if (acsResponse.decision != Decision.PERMIT) {
+      throw new PermissionDenied(acsResponse.response.status.message, acsResponse.response.status.code);
+    }
     const dispatch = [];
-
     this.logger.info('Received delete request');
     if ('collection' in call.request && call.request.collection) {
       this.logger.verbose('Deleting all jobs');
@@ -602,7 +631,7 @@ export class SchedulingService implements JobService {
       throw err;
     }
     if (acsResponse.decision != Decision.PERMIT) {
-      throw new PermissionDenied(acsResponse.response.status.message, acsResponse.response.status.code.toString());
+      throw new PermissionDenied(acsResponse.response.status.message, acsResponse.response.status.code);
     }
     if (_.isNil(call) || _.isNil(call.request) || _.isNil(call.request.items)) {
       this._handleError(new errors.InvalidArgument('Missing items in update request.'));
@@ -613,6 +642,8 @@ export class SchedulingService implements JobService {
       return obj;
     }, {});
 
+    // disable AC for read operation and re-enable
+    this.disableAC();
     const jobData = await this.read({
       request: {
         filter: {
@@ -620,6 +651,7 @@ export class SchedulingService implements JobService {
         }
       }
     });
+    this.enableAC();
 
     await this.delete({
       request: {
@@ -672,7 +704,7 @@ export class SchedulingService implements JobService {
     }
 
     if (acsResponse.decision != Decision.PERMIT) {
-      throw new PermissionDenied(acsResponse.response.status.message, acsResponse.response.status.code.toString());
+      throw new PermissionDenied(acsResponse.response.status.message, acsResponse.response.status.code);
     }
     if (_.isNil(call) || _.isNil(call.request) || _.isNil(call.request.items)) {
       this._handleError(new errors.InvalidArgument('Missing items in upsert request.'));
@@ -834,6 +866,26 @@ export class SchedulingService implements JobService {
     });
   }
 
+  disableAC() {
+    try {
+      this.cfg.set('authorization:enabled', false);
+      updateConfig(this.cfg);
+    } catch (err) {
+      this.logger.error('Error caught disabling authorization:', { err });
+      this.cfg.set('authorization:enabled', this.authZCheck);
+    }
+  }
+
+  enableAC() {
+    try {
+      this.cfg.set('authorization:enabled', this.authZCheck);
+      updateConfig(this.cfg);
+    } catch (err) {
+      this.logger.error('Error caught enabling authorization:', { err });
+      this.cfg.set('authorization:enabled', this.authZCheck);
+    }
+  }
+
   /**
    * reads meta data from DB and updates owner information in resource if action is UPDATE / DELETE
    * @param reaources list of resources
@@ -865,7 +917,8 @@ export class SchedulingService implements JobService {
           resource.meta = {};
         }
         if (action === AuthZAction.MODIFY || action === AuthZAction.DELETE) {
-          // TODO read from the same api disabling AC
+          // disable AC for read operation and re-enable
+          this.disableAC();
           let result = await this.read({
             request: {
               filter: toStruct({
@@ -876,6 +929,7 @@ export class SchedulingService implements JobService {
               subject
             }
           });
+          this.enableAC();
           // update owner info
           if (result.items.length === 1) {
             let item = result.items[0];

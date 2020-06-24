@@ -11,6 +11,14 @@
       "db-reccurTime": 7
     }
   },
+  "logger": {
+    "console": {
+      "handleExceptions": false,
+      "level": "error",
+      "colorize": true,
+      "prettyPrint": true
+    }
+  },
   "events": {
     "kafka": {
       "provider": "kafka",
@@ -162,6 +170,33 @@
       }
     }
   },
+  "client": {
+    "acs-srv": {
+      "transports": {
+        "grpc": {
+          "service": "io.restorecommerce.access_control.Service",
+          "protos": [
+            "io/restorecommerce/access_control.proto"
+          ],
+          "protoRoot": "node_modules/@restorecommerce/protos/",
+          "timeout": 3000
+        }
+      },
+      "loadbalancer": {
+        "name": "roundRobin"
+      },
+      "publisher": {
+        "name": "static",
+        "instances": [
+          "grpc://localhost:50061"
+        ]
+      },
+      "endpoints": {
+        "isAllowed": {},
+        "whatIsAllowed": {}
+      }
+    }
+  },
   "server": {
     "services": {
       "io-restorecommerce-scheduling-srv": {
@@ -295,6 +330,16 @@
       "db-index": 5,
       "ttl": 3600,
       "prefix": "acs:"
+    }
+  },
+  "errors": {
+    "USER_NOT_LOGGED_IN": {
+      "code": "401",
+      "message": "Invalid authentication context, please log in first"
+    },
+    "ACTION_NOT_ALLOWED": {
+      "code": "403",
+      "message": "Action not allowed on this resource"
     }
   }
 }
