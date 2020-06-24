@@ -14,6 +14,7 @@ import {
 } from './utils';
 import { Backoffs, NewJob, Priority } from "../lib/types";
 import { Logger } from '@restorecommerce/chassis-srv';
+import { updateConfig } from '@restorecommerce/acs-client';
 
 /**
  * NOTE: Running instances of Redis and Kafka are required to run the tests.
@@ -25,6 +26,7 @@ const JOB_RESOURCE_TOPIC = 'io.restorecommerce.jobs.resource';
 
 let mockServer: any;
 let logger: Logger;
+let cfg;
 
 describe('testing scheduling-srv: Kafka', () => {
   let worker: Worker;
@@ -35,7 +37,7 @@ describe('testing scheduling-srv: Kafka', () => {
     this.timeout(4000);
     worker = new Worker();
 
-    const cfg = sconfig(process.cwd() + '/test');
+    cfg = sconfig(process.cwd() + '/test');
     await worker.start(cfg);
 
     schedulingService = worker.schedulingService;
@@ -43,6 +45,10 @@ describe('testing scheduling-srv: Kafka', () => {
 
     jobTopic = worker.events.topic(QUEUED_JOBS_TOPIC);
     jobResourceTopic = worker.events.topic(JOB_RESOURCE_TOPIC);
+
+    cfg.set('authorization:enabled', false);
+    cfg.set('authorization:enforce', false);
+    updateConfig(cfg);
 
     // strat acs mock service
     mockServer = await startGrpcMockServer([{ method: 'WhatIsAllowed', input: '\{.*\:\{.*\:.*\}\}', output: jobPolicySetRQ },
@@ -116,6 +122,10 @@ describe('testing scheduling-srv: Kafka', () => {
       // Simulate timeout
       await new Promise((resolve) => setTimeout(resolve, 100));
 
+      // since after creating the job via kafka the authorization will
+      // be restored to original value using restoreAC in worker
+      // so disable AC to read again
+      schedulingService.disableAC();
       const result = await schedulingService.read({ request: {} });
       shouldBeEmpty(result);
     });
@@ -160,6 +170,7 @@ describe('testing scheduling-srv: Kafka', () => {
 
       await jobResourceTopic.$wait(jobResourceOffset);
 
+      schedulingService.disableAC();
       let result = await schedulingService.read({
         request: {}
       });
@@ -168,6 +179,7 @@ describe('testing scheduling-srv: Kafka', () => {
       await jobTopic.$wait(offset + 2);
       await jobResourceTopic.$wait(jobResourceOffset + 1);
 
+      schedulingService.disableAC();
       result = await schedulingService.read({
         request: {}
       });
@@ -188,6 +200,7 @@ describe('testing scheduling-srv: Kafka', () => {
         // Sleep for jobDone to get processed
         await new Promise(resolve => setTimeout(resolve, 100));
 
+        schedulingService.disableAC();
         let result = await schedulingService.read({ request: {} }, {});
         should.exist(result);
 
@@ -230,6 +243,7 @@ describe('testing scheduling-srv: Kafka', () => {
       // wait for 'jobsCreated'
       await jobResourceTopic.$wait(jobResourceOffset);
 
+      schedulingService.disableAC();
       const created = await schedulingService.read({ request: {} }, {});
       should.exist(created);
       should.exist(created.items);
@@ -283,10 +297,12 @@ describe('testing scheduling-srv: Kafka', () => {
 
       await jobResourceTopic.$wait(jobResourceOffset + 3);
 
+      schedulingService.disableAC();
       let result = await schedulingService.read({ request: {} }, {});
       result.total_count.should.be.equal(4);
     });
     it('should update / reschedule a job', async () => {
+      schedulingService.disableAC();
       let result = await schedulingService.read({ request: {} }, {});
       const job = result.items[0];
 
@@ -300,6 +316,7 @@ describe('testing scheduling-srv: Kafka', () => {
       });
       await jobResourceTopic.$wait(jobResourceOffset + 1);
 
+      schedulingService.disableAC();
       result = await schedulingService.read({ request: {} }, {});
       should.exist(result);
       should.exist(result.items);
@@ -314,6 +331,7 @@ describe('testing scheduling-srv: Kafka', () => {
 
       const jobResourceOffset = await jobResourceTopic.$offset(-1);
       await jobResourceTopic.$wait(jobResourceOffset + 3);
+      schedulingService.disableAC();
       const result = await schedulingService.read({ request: {} }, {});
       shouldBeEmpty(result);
     });

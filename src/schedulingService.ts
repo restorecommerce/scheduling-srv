@@ -225,6 +225,8 @@ export class SchedulingService implements JobService {
    * To reschedule the missed recurring jobs upon service restart
    */
   async  _rescheduleMissedJobs(): Promise<void> {
+    // for jobs created via Kafka currently there are no acs checks
+    this.disableAC();
     const createDispatch = [];
     let result: any[] = [];
     let thiz = this;
@@ -293,6 +295,7 @@ export class SchedulingService implements JobService {
 
       }
     }
+    this.restoreAC();
     await createDispatch;
   }
 
@@ -449,7 +452,7 @@ export class SchedulingService implements JobService {
    * @param {any} context RPC context
    */
   async read(call: ReadCall, context?: any): Promise<GRPCResult> {
-    const readRequest = call.request;
+    const readRequest = _.cloneDeep(call.request);
     let subject = await getSubjectFromRedis(call, this.redisSubjectClient);
     let acsResponse: ReadPolicyResponse;
     try {
@@ -642,20 +645,19 @@ export class SchedulingService implements JobService {
       return obj;
     }, {});
 
-    // disable AC for read operation and re-enable
-    this.disableAC();
     const jobData = await this.read({
       request: {
         filter: {
           job_ids: Object.keys(mappedJobs)
-        }
+        },
+        subject
       }
     });
-    this.enableAC();
 
     await this.delete({
       request: {
-        ids: Object.keys(mappedJobs)
+        ids: Object.keys(mappedJobs),
+        subject
       }
     });
 
@@ -682,7 +684,8 @@ export class SchedulingService implements JobService {
 
     return this.create({
       request: {
-        items: result
+        items: result,
+        subject
       }
     });
   }
@@ -727,14 +730,14 @@ export class SchedulingService implements JobService {
     if (updateJobsList.length > 0) {
       result = [
         ...result,
-        ...(await this.update({ request: { items: updateJobsList } })).items
+        ...(await this.update({ request: { items: updateJobsList, subject } })).items
       ];
     }
 
     if (createJobsList.length > 0) {
       result = [
         ...result,
-        ...(await this.create({ request: { items: createJobsList } })).items
+        ...(await this.create({ request: { items: createJobsList, subject } })).items
       ];
     }
 
@@ -866,6 +869,9 @@ export class SchedulingService implements JobService {
     });
   }
 
+  /**
+   *  disable access control
+   */
   disableAC() {
     try {
       this.cfg.set('authorization:enabled', false);
@@ -876,7 +882,23 @@ export class SchedulingService implements JobService {
     }
   }
 
+  /**
+   *  enables access control
+   */
   enableAC() {
+    try {
+      this.cfg.set('authorization:enabled', true);
+      updateConfig(this.cfg);
+    } catch (err) {
+      this.logger.error('Error caught enabling authorization:', { err });
+      this.cfg.set('authorization:enabled', this.authZCheck);
+    }
+  }
+
+  /**
+   *  restore AC state to previous vale either before enabling or disabling AC
+   */
+  restoreAC() {
     try {
       this.cfg.set('authorization:enabled', this.authZCheck);
       updateConfig(this.cfg);
@@ -917,8 +939,6 @@ export class SchedulingService implements JobService {
           resource.meta = {};
         }
         if (action === AuthZAction.MODIFY || action === AuthZAction.DELETE) {
-          // disable AC for read operation and re-enable
-          this.disableAC();
           let result = await this.read({
             request: {
               filter: toStruct({
@@ -929,7 +949,6 @@ export class SchedulingService implements JobService {
               subject
             }
           });
-          this.enableAC();
           // update owner info
           if (result.items.length === 1) {
             let item = result.items[0];

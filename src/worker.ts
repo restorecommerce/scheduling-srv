@@ -236,26 +236,30 @@ export class Worker {
           (err) => {
             logger.error('Error occured scheduling jobs:', { err });
           });
-        this.schedulingService.enableAC();
+        this.schedulingService.restoreAC();
       }
       else if (eventName === JOBS_MODIFY_EVENT) {
         msg.items = msg.items.map((job) => {
           return schedulingService._filterKafkaJob(job);
         });
         const call = { request: { items: msg.items } };
+        this.schedulingService.disableAC();
         await schedulingService.update(call, {}).catch(
           (err) => {
             logger.error('Error occured updating jobs:', err.message);
           });
+        this.schedulingService.restoreAC();
       }
       else if (eventName === JOBS_DELETE_EVENT) {
         const ids = msg.ids;
         const collection = msg.collection;
         const call = { request: { ids, collection } };
+        this.schedulingService.disableAC();
         await schedulingService.delete(call, {}).catch(
           (err) => {
             logger.error('Error occured deleting jobs:', err.message);
           });
+        this.schedulingService.restoreAC();
       } else if (eventName === QUEUED_JOB) {
         if (msg && msg.type === FULSH_STALLED_JOBS_TYPE) {
           await schedulingService.flushStalledJobs(msg.id, msg.type).catch(
