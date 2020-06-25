@@ -62,7 +62,7 @@
     "tsctests": "tsc -d -p tsconfig.test.json",
     "tsctests:watch": "tsc -d -p tsconfig.test.json --watch",
     "createtopics": "node setupTopics.js io.restorecommerce.jobs io.restorecommerce.jobs.resource io.restorecommerce.command",
-    "test": "npm run lint && nyc npm run mocha_grpc && nyc npm run mocha_kafka && npm run mocha:acs",
+    "test": "npm run lint && nyc npm run mocha_grpc && nyc npm run mocha_kafka && nyc npm run mocha:acs",
     "test-debug": "npm run mochadebug",
     "lint": "eslint src --ext .ts",
     "mocha_kafka": "cross-env NODE_ENV=test mocha -R spec test/kafka_test.js --full-trace --exit --trace-warnings --exit",
