@@ -935,8 +935,10 @@ export class SchedulingService implements JobService {
 
     if (resources) {
       for (let resource of resources) {
-        if (!resource.meta) {
-          resource.meta = {};
+        if (!resource.data) {
+          resource.data = { meta: {} };
+        } else if (!resource.data.meta) {
+          resource.data.meta = {};
         }
         if (action === AuthZAction.MODIFY || action === AuthZAction.DELETE) {
           let result = await this.read({
@@ -952,7 +954,10 @@ export class SchedulingService implements JobService {
           // update owner info
           if (result.items.length === 1) {
             let item = result.items[0];
-            resource.meta.owner = item.meta.owner;
+            resource.data.meta.owner = item.meta.owner;
+            // adding meta to resource root (needed by access-contorl-srv for owner information check)
+            // meta is inside data of resource since the data is persisted in redis using bull
+            resource.meta = { owner: item.meta.owner };
           } else if (result.items.length === 0 && !resource.meta.owner) {
             let ownerAttributes = _.cloneDeep(orgOwnerAttributes);
             // add user as default owner
@@ -965,21 +970,25 @@ export class SchedulingService implements JobService {
                 id: urns.ownerInstance,
                 value: resource.id
               });
-            resource.meta.owner = ownerAttributes;
+            resource.data.meta.owner = ownerAttributes;
+            resource.meta = { owner: ownerAttributes };
           }
-        } else if (action === AuthZAction.CREATE && !resource.meta.owner) {
+        } else if (action === AuthZAction.CREATE && !resource.data.meta.owner) {
           let ownerAttributes = _.cloneDeep(orgOwnerAttributes);
           // add user as default owner
-          ownerAttributes.push(
-            {
-              id: urns.ownerIndicatoryEntity,
-              value: urns.user
-            },
-            {
-              id: urns.ownerInstance,
-              value: resource.id
-            });
-          resource.meta.owner = ownerAttributes;
+          if (resource.id) {
+            ownerAttributes.push(
+              {
+                id: urns.ownerIndicatoryEntity,
+                value: urns.user
+              },
+              {
+                id: urns.ownerInstance,
+                value: resource.id
+              });
+          }
+          resource.data.meta.owner = ownerAttributes;
+          resource.meta = { owner: ownerAttributes };
         }
       }
     }
