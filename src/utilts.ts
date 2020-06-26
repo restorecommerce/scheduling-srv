@@ -102,19 +102,19 @@ export const getSubjectFromRedis = async (call: CreateCall | ReadCall | UpdateCa
   }
   let api_key = call.request.api_key;
   if (subject && subject.id && !subject.hierarchical_scopes) {
-    let redisKey = `gql-cache:${subject.id}:subject`;
-    let hierarchical_scopes: HierarchicalScope[];
+    let redisKey = `cache:${subject.id}:subject`;
     // update ctx with HR scope from redis
     subject = await new Promise((resolve, reject) => {
       redisClient.get(redisKey, async (err, response) => {
         if (!err && response) {
-          // update user HR scope from redis
-          subject.hierarchical_scopes = JSON.parse(response);
+          // update user HR scope and role_associations from redis
+          const redisResp = JSON.parse(response);
+          subject.role_associations = redisResp.role_associations;
+          subject.hierarchical_scopes = redisResp.hierarchical_scopes;
           resolve(subject);
         }
-        // when not set in redis use default_scope as hrScope
+        // when not set in redis
         if (err || (!err && !response)) {
-          subject.hierarchical_scopes = [];
           resolve(subject);
           return subject;
         }
