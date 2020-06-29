@@ -192,7 +192,7 @@ export class SchedulingService implements JobService {
         id: filteredJob.id,
         type: filteredJob.name,
         data: filteredJob.data,
-        schedule_type: filteredJob.data?.meta?.now ? 'NOW' : (filteredJob.opts.repeat ? 'RECCUR' : 'ONCE'),
+        schedule_type: filteredJob.opts.timeout === 1 ? 'NOW' : (filteredJob.opts.repeat ? 'RECCUR' : 'ONCE'),
       }).catch((error) => {
         delete this.jobCbs[filteredJob.id];
         that.logger.error(`Error while processing job ${filteredJob.id} in queue: ${error}`);
@@ -392,7 +392,6 @@ export class SchedulingService implements JobService {
 
       if (bullOptions.timeout === 1) {
         delete bullOptions['timeout'];
-        job.data.meta.now = true;
       }
 
       result.push(await this.queue.add(job.type, job.data, bullOptions));
