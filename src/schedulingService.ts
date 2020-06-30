@@ -446,6 +446,38 @@ export class SchedulingService implements JobService {
     };
   }
 
+  private filterByOwnerShip(readRequest, result) {
+    // applying filter based on custom arguments (filterByOwnerShip)
+    let customArgs = (readRequest as any).custom_arguments;
+    if (customArgs && customArgs.value) {
+      const customArgsFilter = JSON.parse(customArgs.value.toString());
+      const ownerIndicatorEntity = customArgsFilter.entity;
+      const ownerValues = customArgsFilter.instance;
+      const ownerIndictaorEntURN = this.cfg.get('authorization:urns:ownerIndicatoryEntity');
+      const ownerInstanceURN = this.cfg.get('authorization:urns:ownerInstance');
+      let ownerInst;
+      let jobOwner = [];
+      result = result.filter(job => {
+        if (job && job.data && job.data.meta && job.data.meta.owner) {
+          jobOwner = job.data.meta.owner;
+          let match = false;
+          for (let idVal of jobOwner) {
+            if (idVal.id === ownerIndictaorEntURN && idVal.value === ownerIndicatorEntity) {
+              match = true;
+            }
+            if (idVal.id === ownerInstanceURN) {
+              ownerInst = idVal.value;
+            }
+          }
+          if (match && ownerInst && ownerValues.includes(ownerInst)) {
+            return job;
+          }
+        }
+      });
+    }
+    return result;
+  }
+
   /**
    * Retrieve jobs.
    * @param {any} call RPC call argument
@@ -465,7 +497,6 @@ export class SchedulingService implements JobService {
     if (acsResponse.decision != Decision.PERMIT) {
       throw new PermissionDenied(acsResponse.response.status.message, acsResponse.response.status.code);
     }
-    // TODO need to apply filters based on Org scoping for the meta owner stored in redis
 
     let result: Job[] = [];
     if (_.isEmpty(call) || _.isEmpty(call.request) || _.isEmpty(call.request.filter)
@@ -474,9 +505,13 @@ export class SchedulingService implements JobService {
       && (!call.request.filter || !call.request.filter.type ||
         _.isEmpty(call.request.filter.type))) {
       result = await this._getJobList();
+      result = this.filterByOwnerShip(readRequest, result);
     } else {
       const that = this;
-      const jobIDs = call.request.filter.job_ids || [];
+      let jobIDs = call.request.filter.job_ids || [];
+      if (!_.isArray(jobIDs)) {
+        jobIDs = [jobIDs];
+      }
       const typeFilterName = call.request.filter.type;
 
       if (jobIDs.length > 0) {
@@ -501,6 +536,7 @@ export class SchedulingService implements JobService {
       if (typeFilterName) {
         result = result.filter(job => job.name === typeFilterName);
       }
+      result = this.filterByOwnerShip(readRequest, result);
     }
 
     result = result.filter(valid => !!valid);
@@ -943,22 +979,20 @@ export class SchedulingService implements JobService {
         if (action === AuthZAction.MODIFY || action === AuthZAction.DELETE) {
           let result = await this.read({
             request: {
-              filter: toStruct({
-                job_ids: {
-                  $in: resource.id
-                }
-              }),
+              filter: {
+                job_ids: resource.id
+              },
               subject
             }
           });
           // update owner info
           if (result.items.length === 1) {
             let item = result.items[0];
-            resource.data.meta.owner = item.meta.owner;
+            resource.data.meta.owner = item.data.meta.owner;
             // adding meta to resource root (needed by access-contorl-srv for owner information check)
             // meta is inside data of resource since the data is persisted in redis using bull
-            resource.meta = { owner: item.meta.owner };
-          } else if (result.items.length === 0 && !resource.meta.owner) {
+            resource.meta = { owner: item.data.meta.owner };
+          } else if (result.items.length === 0 && action === AuthZAction.MODIFY) {
             let ownerAttributes = _.cloneDeep(orgOwnerAttributes);
             // add user as default owner
             ownerAttributes.push(
