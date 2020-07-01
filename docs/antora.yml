@@ -1,0 +1,5 @@
+name: scheduling-srv
+title: Scheduling Service
+version: master
+nav:
+  - modules/ROOT/nav.adoc
