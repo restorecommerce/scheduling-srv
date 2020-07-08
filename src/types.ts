@@ -14,16 +14,59 @@ export enum Backoffs {
   EXPONENTIAL = 'EXPONENTIAL'
 }
 
+export interface FilterOpts {
+  id: number | string;
+  type?: string;
+  data?: Data;
+  opts?: JobOptions;
+  name?: string;
+}
+
+export interface KafkaOpts {
+  id: number | string;
+  type?: string;
+  data?: Data;
+  options?: JobOptions;
+  when?: string;
+}
+
+
+export interface Data {
+  payload?: any;
+  meta?: any;
+  timezone?: string;
+  subject_id?: string;
+}
+
+export interface JobFailedType {
+  id: number | string;
+  error?: string;
+  schedule_type?: string;
+  type?: string;
+}
+
+export interface JobDoneType {
+  id: number | string;
+  delete_scheduled?: boolean;
+  schedule_type?: string;
+  type?: string;
+}
+
+export interface JobType {
+  id: number | string;
+  type?: string;
+  name?: string;
+  data?: Data;
+  when?: string;
+  options?: JobOptions;
+  opts?: JobOptions;
+}
+
 export interface NewJob {
   type: string;
   options: JobOptions;
   when?: string;
-  volatile?: boolean;
-  data: {
-    payload: any;
-    meta?: any;
-    timezone?: string;
-  };
+  data: Data;
 }
 
 export interface CreateCall {

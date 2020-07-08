@@ -6,18 +6,12 @@ import { RedisClient } from 'redis';
 import { Job, JobId, JobOptions } from 'bull';
 import * as Queue from 'bull';
 import {
-  CreateCall,
-  DeleteCall,
-  NewJob,
-  JobService,
-  ReadCall,
-  UpdateCall,
-  SortOrder,
-  GRPCResult, Priority, Backoffs
+  CreateCall, DeleteCall, Data, NewJob, JobService, ReadCall, UpdateCall,
+  SortOrder, GRPCResult, Priority, Backoffs, JobType, JobFailedType, JobDoneType,
+  FilterOpts, KafkaOpts
 } from './types';
 import { parseExpression } from 'cron-parser';
 import { getSubjectFromRedis, AccessResponse, checkAccessRequest, ReadPolicyResponse } from './utilts';
-import { toStruct } from '@restorecommerce/grpc-client';
 
 const JOB_DONE_EVENT = 'jobDone';
 const JOB_FAILED_EVENT = 'jobFailed';
@@ -117,9 +111,9 @@ export class SchedulingService implements JobService {
 
         if (eventName === JOB_FAILED_EVENT) {
           logger.error(`job@${job.type}#${job.id} failed with error #${job.error}`,
-            that._filterQueuedJob(job));
+            that._filterQueuedJob<JobFailedType>(job));
         } else if (eventName === JOB_DONE_EVENT) {
-          logger.verbose(`job#${job.id} done`, that._filterQueuedJob(job));
+          logger.verbose(`job#${job.id} done`, that._filterQueuedJob<JobDoneType>(job));
         }
 
         const jobData = await that.queue.getJob(job.id).catch(error => {
@@ -135,7 +129,7 @@ export class SchedulingService implements JobService {
           delete that.jobCbs[job.id];
           cb();
           await that._deleteJobInstance(job.id);
-          logger.info(`job#${job.id} successfully deleted`, that._filterQueuedJob(job));
+          logger.info(`job#${job.id} successfully deleted`, that._filterQueuedJob<JobType>(job));
           deleted = true;
         }
 
@@ -156,10 +150,10 @@ export class SchedulingService implements JobService {
       logger.error('kue-scheduler', error);
     });
     this.queue.on('schedule success', (job) => {
-      logger.verbose(`job@${job.type}#${job.id} scheduled`, that._filterQueuedJob(job));
+      logger.verbose(`job@${job.type}#${job.id} scheduled`, that._filterQueuedJob<JobType>(job));
     });
     this.queue.on('already scheduled', (job) => {
-      logger.warn(`job@${job.type}#${job.id} already scheduled`, that._filterQueuedJob(job));
+      logger.warn(`job@${job.type}#${job.id} already scheduled`, that._filterQueuedJob<JobType>(job));
     });
     this.queue.on('scheduler unknown job expiry key', (message) => {
       logger.warn('scheduler unknown job expiry key', message);
@@ -171,7 +165,7 @@ export class SchedulingService implements JobService {
     this.queue.process('*', async (job, done) => {
       this.jobCbs[job.id] = done;
 
-      const filteredJob = that._filterQueuedJob(job);
+      const filteredJob = that._filterQueuedJob<JobType>(job);
       // For recurrning job add time so if service goes down we can fire jobs
       // for the missed schedules comparing the last run time
       let lastRunTime;
@@ -832,15 +826,14 @@ export class SchedulingService implements JobService {
     }
   }
 
-  _filterQueuedJob<T extends any>(job: T): Pick<T, 'id' | 'type' | 'data' | 'opts' | 'name'> {
-    job.type = job.name;
-
-    const picked = _.pick(job, [
+  _filterQueuedJob<T extends FilterOpts>(job: T): Pick<T, 'id' | 'type' | 'data' | 'opts' | 'name'> {
+    (job as any).type = (job as any).name;
+    const picked: any = _.pick(job, [
       'id', 'type', 'data', 'opts', 'name'
     ]);
 
     if (picked.data) {
-      (picked as any).data = this._filterJobData(picked.data, false);
+      picked.data = this._filterJobData(picked.data, false);
       if (picked.data.payload && picked.data.payload.value) {
         picked.data.payload.value = Buffer.from(picked.data.payload.value);
       }
@@ -849,8 +842,8 @@ export class SchedulingService implements JobService {
     return picked as any;
   }
 
-  _filterKafkaJob<T extends any>(job: T): Pick<T, 'id' | 'type' | 'data' | 'options' | 'when'> {
-    const picked = _.pick(job, [
+  _filterKafkaJob<T extends KafkaOpts>(job: T): Pick<T, 'id' | 'type' | 'data' | 'options' | 'when'> {
+    const picked: any = _.pick(job, [
       'id', 'type', 'data', 'options', 'when'
     ]);
 
@@ -862,7 +855,7 @@ export class SchedulingService implements JobService {
     return picked as any;
   }
 
-  _filterJobData<T extends any>(data: T, encode: boolean): Pick<T, 'meta' | 'payload' | 'timezone' | 'subject_id'> {
+  _filterJobData(data: Data, encode: boolean): Pick<Data, 'meta' | 'payload' | 'timezone' | 'subject_id'> {
     const picked = _.pick(data, [
       'meta', 'payload', 'timezone', 'subject_id'
     ]);
