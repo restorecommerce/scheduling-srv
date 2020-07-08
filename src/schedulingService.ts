@@ -185,6 +185,9 @@ export class SchedulingService implements JobService {
           if (filteredJob.data.payload) {
             if (filteredJob.data.payload.value) {
               let jobBufferObj = JSON.parse(filteredJob.data.payload.value.toString());
+              if (!jobBufferObj) {
+                jobBufferObj = {};
+              }
               const jobTimeObj = Object.assign(jobBufferObj, { time: dateTime });
               lastRunTime = JSON.stringify({ time: dateTime });
               // set last run time on DB index 7 with jobType identifier

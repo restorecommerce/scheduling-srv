@@ -1,0 +1,212 @@
+= Scheduling Service
+
+https://travis-ci.org/restorecommerce/scheduling-srv?branch=master[image:http://img.shields.io/travis/restorecommerce/scheduling-srv/master.svg?style=flat-square[Build Status]]
+https://david-dm.org/restorecommerce/scheduling-srv[image:https://img.shields.io/david/restorecommerce/scheduling-srv.svg?style=flat-square[Dependencies]]
+https://coveralls.io/github/restorecommerce/scheduling-srv?branch=master[image:http://img.shields.io/coveralls/restorecommerce/scheduling-srv/master.svg?style=flat-square[Coverage Status]]
+
+A microservice for scheduling jobs.
+
+[#features]
+== Features
+
+* Scheduling new jobs as well as manage the existing ones.
+* Currently, three kinds of jobs can be scheduled: `immediate jobs`, `one-time future jobs` and `recurring jobs`.
+* Job scheduling is implemented using https://github.com/OptimalBits/bull[bull] backed by https://redis.io/[Redis].
+
+[#configuration]
+== Configuration
+
+* This service will hook any modules that are placed in the link:src/external-jobs[external-jobs] directory.
+Use this to execute jobs on the scheduling-srv itself.
+
+[#API]
+== API
+
+This microservice exposes the following gRPC endpoints:
+
+[#api_scheduling_job]
+=== `Job`
+
+`io.restorecommerce.job.Job`.
+
+[width="100%",cols="20%,16%,20%,44%",options="header",]
+|======================================================================================================================================
+| Field | Type | Label | Description
+| id | string | required | Job resource ID.
+| type | string | required | Arbitrary job type (e.g: 'daily_email_dispatcher').
+| data | Data | optional | Job data to persist in Redis.
+| when | string | optional | Used to define the exact time at which a single job instance is processed. Ex: "Jan 15, 2018 10:30:00". This should only be used in one-time jobs.
+|======================================================================================================================================
+
+`io.restorecommerce.job.JobOptions`.
+
+[width="100%",cols="20%,16%,20%,44%",options="header",]
+|======================================================================================================================================
+| Field | Type | Label | Description
+| priority | `io.restorecommerce.job.Job.Priority` | optional | Job priority.
+| attempts | number | optional | Amount of possible failing runs until a job fails.
+| backoff | `io.restorecommerce.job.Backoff` | optional | Delay settings between failed job runs.
+| timeout | number | optional | If set, job will expire after `timeout` milliseconds. If set to 1, job will be treated as an "instant" job and won't get stored.
+|======================================================================================================================================
+
+`io.restorecommerce.job.Repeat`.
+
+[width="100%",cols="20%,16%,20%,44%",options="header",]
+|======================================================================================================================================
+| Field | Type | Label | Description
+| every | number | optional | Interval to run a job periodically in milliseconds.
+| cron | string | optional | Interval to run a job periodically in a cron format (e.g: "0 0 5 * * *"). This should only be used in recurring jobs.
+| startDate | string | optional | Used to define the exact time at which job should start repeating. Ex: "Jan 15, 2018 10:30:00".
+| endDate | string | optional | Used to define the exact time at which job should stop repeating. Ex: "Jan 15, 2018 10:30:00".
+| count | number | optional | How many times a job has repeated.
+|======================================================================================================================================
+
+`io.restorecommerce.job.Data`
+
+[width="100%",cols="20%,16%,20%,44%",options="header",]
+|======================================================================================================================================
+| Field | Type | Label | Description
+| timezone | string | optional | Timezone specification for job scheduling (ex: 'Europe/Amsterdam').
+| meta | https://github.com/restorecommerce/protos/blob/master/io/restorecommerce/meta.proto[`io.restorecommerce.meta.Meta`] | required | Job resource meta info; only contains creation and modification timestamps.
+| payload | [ ] https://github.com/restorecommerce/protos/blob/master/google/protobuf/any.proto[`google.protobuf.Any`] | optional | Generic data type for job-specific data.
+|======================================================================================================================================
+
+`io.restorecommerce.job.Job.Priority`
+
+[width="100%",cols="31%,33%,36%",options="header",]
+|======================================================================================================================================
+| Name | Number | Description
+| NORMAL | 0 | normal priority, default value
+| LOW | 10 | low priority
+| MEDIUM | -5 | medium priority
+| HIGH | -10 | high priority
+| CRITICAL | -15 | critical priority
+|======================================================================================================================================
+
+`io.restorecommerce.job.Backoff`
+
+[width="100%",cols="20%,16%,20%,44%",options="header",]
+|======================================================================================================================================
+| Field | Type | Label | Description
+| delay | number | required | Time until retry in milliseconds.
+| type | `io.restorecommerce.job.Backoff.Type` | optional | Calculation of the delay for retries.
+|======================================================================================================================================
+
+`io.restorecommerce.job.Backoff.Type`
+
+[width="100%",cols="31%,33%,36%",options="header",]
+|======================================================================================================================================
+| Name | Number | Description
+| FIXED | 0 | Retry with the same delay.
+| EXPONENTIAL | 1 | Exponential delay increase between retries.
+|======================================================================================================================================
+
+[#api_scheduling_crud]
+==== CRUD Operations
+
+The microservice exposes the below CRUD operations for creating or modifying Job resources.
+
+`io.restorecommerce.job.Service`
+
+[width="100%",cols="20%,16%,20%,44%",options="header",]
+|======================================================================================================================================
+| Method Name | Request Type | Response Type | Description
+| Create | `io.restorecommerce.job.JobList` | `io.restorecommerce.job.JobList` | Create a list of Job resources.
+| Read | `io.restorecommerce.job.JobReadRequest` | `io.restorecommerce.job.JobList` | Read a list of Job resources.
+| Update | `io.restorecommerce.job.JobList` | `io.restorecommerce.job.JobList` | Update a list of Job resources.
+| Delete | `io.restorecommerce.resourcebase.DeleteRequest` | https://github.com/restorecommerce/protos/blob/master/google/protobuf/empty.proto[`google.protobuf.Empty`] | Delete a list of Job resources.
+|======================================================================================================================================
+
+`io.restorecommerce.job.JobList`
+
+[width="100%",cols="20%,16%,20%,44%",options="header",]
+|======================================================================================================================================
+| Field | Type | Label | Description
+| items | [ ]`io.restorecommerce.job.Job` | required | List of Jobs.
+| total_count | number | optional | Number of Jobs.
+|======================================================================================================================================
+
+Please note that the `update` operation literally just deletes an existing job and reschedules it with new data.
+
+For the detailed protobuf message structure of `io.restorecommerce.job.ReadRequest` and
+`io.restorecommerce.job.DeleteRequest` refer https://github.com/restorecommerce/protos/blob/master/io/restorecommerce/job.proto[job.proto].
+
+[#events]
+== Events
+
+[#emitted-events]
+=== Emitted
+
+List of events emitted by this microservice for below topics:
+
+[width="100%",cols="31%,33%,36%",options="header",]
+|======================================================================================================================================
+| Topic Name | Event Name | Description
+| io.restorecommerce.jobs.resource | jobsCreated | emitted when a job is created.
+|  | jobsDeleted | emitted when a job is deleted.
+| io.restorecommerce.command | restoreResponse | system restore response.
+|  | resetResponse | system reset response.
+|  | healthCheckResponse | system health check response.
+|  | versionResponse | system version response.
+|======================================================================================================================================
+
+Jobs can be created, updated or deleted by issuing Kafka messages to topic `io.restorecommerce.jobs`.
+These operations are exposed with the same input as the gRPC endpoints
+(note that it is only possible to *read* a job through gRPC).
+
+`io.restorecommerce.job.ScheduledJob`
+
+[width="100%",cols="20%,16%,20%,44%",options="header",]
+|======================================================================================================================================
+| Field | Type | Label | Description
+| id | number | required | Job instance ID in Redis.
+| type | string | required | Arbitrary job type (e.g: 'daily_email_dispatcher').
+| data | `io.restorecommerce.job.Data` | required | Arbitrary job type (e.g: 'daily_email_dispatcher').
+| schedule_type | string | required | Job type ex: `ONCE`, `RECURR` etc.
+|======================================================================================================================================
+
+`io.restorecommerce.job.JobDone`
+
+[width="100%",cols="20%,16%,20%,44%",options="header",]
+|======================================================================================================================================
+| Field | Type | Label | Description
+| id | number | required | Job instance ID in Redis.
+| schedule_type | string | required | Job type ex: `ONCE`, `RECURR` etc.
+| delete_scheduled | boolean | optional | Whether to delete this repeating job.
+|======================================================================================================================================
+
+`io.restorecommerce.job.JobFailed`
+
+[width="100%",cols="20%,16%,20%,44%",options="header",]
+|======================================================================================================================================
+| Field | Type | Label | Description
+| id | number | required | Job instance ID in redis.
+| schedule_type | string | required | Job type ex: `ONCE`, `RECURR` etc.
+| error | string | required | Failure details.
+|======================================================================================================================================
+
+Events from the `io.restorecommerce.jobs.resource` topic are issued whenever a CRUD operation is performed.
+They are useful for job rescheduling in case of Redis failure.
+
+Jobs emitted by this service to Kafka can be consumed by other microservices by listening to the `queuedJob` event.
+After processing the job an event should be emitted by the respective microservice indicating job failure or completion.
+A job is always deleted upon being receiving failure or completion data, unless it is a recurring job.
+
+[#subscribed-events]
+=== Subscribed
+
+This microservice subscribes to the following events by topic:
+
+[width="100%",cols="31%,33%,36%",options="header",]
+|======================================================================================================================================
+| Topic Name | Event Name | Description
+| io.restorecommerce.jobs | createJobs | for creating jobs
+|  | modifyJobs | for modifying specific jobs
+|  | deleteJobs | for deleting jobs
+|  | jobDone | for when a job has finished
+|  | jobFailed | for when a job has failed
+| io.restorecommerce.command | restoreCommand | for triggering for system restore
+|  | resetCommand | for triggering system reset
+|  | healthCheckCommand | to get system health check
+|  | versionCommand | to get system version
+|======================================================================================================================================
