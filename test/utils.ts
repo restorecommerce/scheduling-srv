@@ -61,6 +61,24 @@ export const permitJobRule = {
   effect: 'PERMIT'
 };
 
+export const denyJobRule = {
+  id: 'permit_rule_id',
+  target: {
+    action: [],
+    resources: [{ id: 'urn:restorecommerce:acs:names:model:entity', value: 'urn:restorecommerce:acs:model:job.Job' }],
+    subject: [
+      {
+        id: 'urn:restorecommerce:acs:names:role',
+        value: 'admin-r-id'
+      },
+      {
+        id: 'urn:restorecommerce:acs:names:roleScopingEntity',
+        value: 'urn:restorecommerce:acs:model:organization.Organization'
+      }]
+  },
+  effect: 'DENY'
+};
+
 export const jobPolicySetRQ = {
   policy_sets:
     [{
@@ -77,8 +95,8 @@ export const jobPolicySetRQ = {
               value: 'urn:restorecommerce:acs:model:job.Job'
             }],
             subject: []
-          }, effect: 'PERMIT',
-          rules: [permitJobRule],
+          }, effect: '',
+          rules: [],
           has_rules: true
         }]
     }]

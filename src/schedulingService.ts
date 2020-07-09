@@ -594,7 +594,7 @@ export class SchedulingService implements JobService {
       await this.createMetadata(resources, AuthZAction.DELETE, subject);
     }
     if (call.request.collection) {
-      Object.assign(resources, { collection: call.request.collection });
+      resources = [{collection: call.request.collection}];
     }
     let acsResponse: AccessResponse;
     try {

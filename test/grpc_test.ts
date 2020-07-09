@@ -8,10 +8,11 @@ import { Client } from '@restorecommerce/grpc-client';
 import { Logger } from '@restorecommerce/logger';
 import {
   validateJobResource, shouldBeEmpty, validateScheduledJob, jobPolicySetRQ,
-  startGrpcMockServer, stopGrpcMockServer
+  startGrpcMockServer, stopGrpcMockServer, permitJobRule, denyJobRule
 } from './utils';
 import { Backoffs, Priority, SortOrder, NewJob } from "../lib/types";
-import { updateConfig, cfg } from '@restorecommerce/acs-client';
+import { updateConfig } from '@restorecommerce/acs-client';
+import * as _ from 'lodash';
 
 /**
  * NOTE: Running instances of Redis and Kafka are required to run the tests.
@@ -56,9 +57,17 @@ const acsSubject = {
     }
   ]
 };
+const acsEnv = process.env.ACS_ENABLED;
 let acsEnabled = false;
+let testSuffix = '';
+if (acsEnv && acsEnv.toLocaleLowerCase() === 'true') {
+  acsEnabled = true;
+  testSuffix = 'with ACS Enabled';
+} else {
+  testSuffix = 'with ACS Disabled';
+}
 
-describe('testing scheduling-srv: gRPC', () => {
+describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
   let worker: Worker;
   let jobEvents: Topic;
   let jobResourceEvents: Topic;
@@ -75,9 +84,7 @@ describe('testing scheduling-srv: gRPC', () => {
     jobEvents = worker.events.topic(QUEUED_JOBS_TOPIC);
     jobResourceEvents = worker.events.topic(JOB_RESOURCE_TOPIC);
 
-    const acsEnv = process.env.ACS_ENABLED;
     if (acsEnv && acsEnv.toLowerCase() === 'true') {
-      acsEnabled = true;
       subject = acsSubject;
       worker.schedulingService.enableAC();
     } else {
@@ -88,7 +95,9 @@ describe('testing scheduling-srv: gRPC', () => {
       subject = {};
     }
 
-    // strat acs mock service
+    // strat acs mock service with PERMIT rule
+    jobPolicySetRQ.policy_sets[0].policies[0].effect = 'PERMIT';
+    jobPolicySetRQ.policy_sets[0].policies[0].rules = [permitJobRule];
     mockServer = await startGrpcMockServer([{ method: 'WhatIsAllowed', input: '\{.*\:\{.*\:.*\}\}', output: jobPolicySetRQ },
     { method: 'IsAllowed', input: '\{.*\:\{.*\:.*\}\}', output: { decision: 'PERMIT' } }], logger);
     serviceClient = new Client(cfg.get('client:schedulingClient'), logger);
@@ -123,9 +132,9 @@ describe('testing scheduling-srv: gRPC', () => {
     await worker.stop();
     await serviceClient.end();
   });
-  describe('create a one-time job', function postJob(): void {
+  describe(`create a one-time job ${testSuffix}`, function postJob(): void {
     this.timeout(8000);
-    it('should create a new job and execute it immediately', async () => {
+    it(`should create a new job and execute it immediately ${testSuffix}`, async () => {
       await jobEvents.on('queuedJob', async (job, context, configRet, eventNameRet) => {
         validateScheduledJob(job, 'ONCE');
 
@@ -166,7 +175,7 @@ describe('testing scheduling-srv: gRPC', () => {
       shouldBeEmpty(result);
     });
 
-    it('should create a new job and execute it at a scheduled time', async () => {
+    it(`should create a new job and execute it at a scheduled time ${testSuffix}`, async () => {
       await jobEvents.on('queuedJob', async (job, context, configRet, eventNameRet) => {
         validateScheduledJob(job, 'ONCE');
 
@@ -213,9 +222,9 @@ describe('testing scheduling-srv: gRPC', () => {
       shouldBeEmpty(result);
     });
   });
-  describe('creating a recurring job', function (): void {
+  describe(`should create a recurring job ${testSuffix}`, function (): void {
     this.timeout(8000);
-    it('should create a recurring job and delete it after some executions', async () => {
+    it(`should create a recurring job and delete it after some executions ${testSuffix}`, async () => {
       let jobExecs = 0;
       await jobEvents.on('queuedJob', async (job, context, configRet, eventNameRet) => {
         validateScheduledJob(job, 'RECCUR');
@@ -280,7 +289,7 @@ describe('testing scheduling-srv: gRPC', () => {
       await new Promise(resolve => setTimeout(resolve, 100));
     });
   });
-  describe('managing jobs', function (): void {
+  describe(`managing jobs ${testSuffix}`, function (): void {
     this.timeout(5000);
     it('should schedule some jobs for tomorrow', async () => {
       const data = {
@@ -319,7 +328,7 @@ describe('testing scheduling-srv: gRPC', () => {
 
       await jobResourceEvents.$wait(jobResourceOffset + 3);
     });
-    it('should retrieve all job properties correctly with empty filter', async () => {
+    it(`should retrieve all job properties correctly with empty filter ${testSuffix}`, async () => {
       const result = await grpcSchedulingSrv.read({ sort: SortOrder.DESCENDING, subject }, {});
       should.exist(result);
       should.exist(result.data);
@@ -329,7 +338,7 @@ describe('testing scheduling-srv: gRPC', () => {
         validateJobResource(job);
       });
     });
-    it('should retrieve all job properties correctly with filter type or id', async () => {
+    it(`should retrieve all job properties correctly with filter type or id ${testSuffix}`, async () => {
       const result = await grpcSchedulingSrv.read({ filter: { type: 'test-job' }, sort: 'ASCENDING', subject }, {});
       should.exist(result);
       should.exist(result.data);
@@ -363,7 +372,7 @@ describe('testing scheduling-srv: gRPC', () => {
         validateJobResource(job);
       });
     });
-    it('should update / reschedule a job', async () => {
+    it(`should update / reschedule a job ${testSuffix}`, async () => {
       let result = await grpcSchedulingSrv.read({ subject }, {});
       const job = result.data.items[0];
 
@@ -386,7 +395,7 @@ describe('testing scheduling-srv: gRPC', () => {
       // waiting for event creation
       await jobResourceEvents.$wait(jobResourceOffset + 1);
     });
-    it('should upsert a job', async () => {
+    it(`should upsert a job ${testSuffix}`, async () => {
       let result = await grpcSchedulingSrv.read({ subject }, {});
       const job = result.data.items[0];
 
@@ -408,7 +417,80 @@ describe('testing scheduling-srv: gRPC', () => {
       // waiting for event creation
       await jobResourceEvents.$wait(jobResourceOffset + 1);
     });
-    it('should delete all remaining scheduled jobs upon request', async () => {
+    // -ve test cases to be run when ACS is enabled
+    // set subject target scope to invlaid scope not present in subject's HR scope
+    if (acsEnabled) {
+      const data = {
+        timezone: "Europe/Berlin",
+        payload: marshallProtobufAny({
+          testValue: 'test-value'
+        })
+      };
+
+      const job = {
+        type: 'test-invalid-job',
+        data,
+        options: {
+          timeout: 1,
+          priority: Priority.HIGH,
+          attempts: 1,
+          backoff: {
+            type: Backoffs.FIXED,
+            delay: 1000,
+          }
+        }
+      } as NewJob;
+      it(`should throw an error when creating a new job with invalid scope ${testSuffix}`, async () => {
+        // restart mock service with DENY rules 
+        jobPolicySetRQ.policy_sets[0].policies[0].effect = 'DENY';
+        jobPolicySetRQ.policy_sets[0].policies[0].rules = [denyJobRule];
+        await stopGrpcMockServer(mockServer, logger);
+        mockServer = await startGrpcMockServer([{ method: 'WhatIsAllowed', input: '\{.*\:\{.*\:.*\}\}', output: jobPolicySetRQ },
+        { method: 'IsAllowed', input: '\{.*\:\{.*\:.*\}\}', output: { decision: 'DENY' } }], logger);
+        subject.scope = 'orgD';
+        let result = await grpcSchedulingSrv.create({ items: [job], subject }, {});
+        should.exist(result.error);
+        result.error.details.should.equal('7 PERMISSION_DENIED: Access not allowed for request with subject:admin_user_id, resource:job, action:CREATE, target_scope:orgD; the response was DENY');
+      });
+      it(`should throw an error retreiving job properties with empty filter with invalid scope ${testSuffix}`, async () => {
+        const result = await grpcSchedulingSrv.read({ sort: SortOrder.DESCENDING, subject }, {});
+        should.exist(result.error);
+        result.error.details.should.equal('7 PERMISSION_DENIED: Access not allowed for request with subject:admin_user_id, resource:job, action:READ, target_scope:orgD; the response was DENY');
+      });
+      it(`should throw an error when updating / rescheduling a job with invalid scope ${testSuffix}`, async () => {
+        const scheduledTime = new Date();
+        scheduledTime.setDate(scheduledTime.getDate() + 2); // two days from now
+        job.when = scheduledTime.toISOString();
+        const result = await grpcSchedulingSrv.update({
+          items: [job], subject
+        });
+        should.exist(result.error);
+        // READ action error is thrown since the job needs to be read first before updating
+        result.error.details.should.equal('7 PERMISSION_DENIED: Access not allowed for request with subject:admin_user_id, resource:job, action:READ, target_scope:orgD; the response was DENY');
+      });
+      it(`should upsert a job ${testSuffix}`, async () => {
+        const result = await grpcSchedulingSrv.upsert({
+          items: [job], subject
+        });
+        should.exist(result.error);
+        // READ action error is thrown since the job needs to be read first before upserting
+        result.error.details.should.equal('7 PERMISSION_DENIED: Access not allowed for request with subject:admin_user_id, resource:job, action:READ, target_scope:orgD; the response was DENY');
+      });
+      it(`should throw an error deleting jobs ${testSuffix}`, async () => {
+        const result = await grpcSchedulingSrv.delete({
+          collection: true, subject
+        }, {});
+        result.error.details.should.equal('7 PERMISSION_DENIED: Access not allowed for request with subject:admin_user_id, resource:job, action:DELETE, target_scope:orgD; the response was DENY');
+      });
+    }
+    it(`should delete all remaining scheduled jobs upon request ${testSuffix}`, async () => {
+      // restart mock service with PERMIT rules
+      jobPolicySetRQ.policy_sets[0].policies[0].effect = 'PERMIT';
+      jobPolicySetRQ.policy_sets[0].policies[0].rules = [permitJobRule];
+      await stopGrpcMockServer(mockServer, logger);
+      mockServer = await startGrpcMockServer([{ method: 'WhatIsAllowed', input: '\{.*\:\{.*\:.*\}\}', output: jobPolicySetRQ },
+      { method: 'IsAllowed', input: '\{.*\:\{.*\:.*\}\}', output: { decision: 'PERMIT' } }], logger);
+      subject.scope = 'orgC';
       const jobResourceOffset = await jobResourceEvents.$offset(-1);
       await grpcSchedulingSrv.delete({
         collection: true, subject
