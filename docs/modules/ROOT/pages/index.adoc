@@ -11,12 +11,13 @@ A microservice for scheduling jobs.
 
 * Scheduling new jobs as well as manage the existing ones.
 * Currently, three kinds of jobs can be scheduled: `immediate jobs`, `one-time future jobs` and `recurring jobs`.
-* Job scheduling is implemented using https://github.com/OptimalBits/bull[bull] backed by https://redis.io/[Redis].
+* Job scheduling is implemented using link:https://github.com/OptimalBits/bull[bull] backed by link:https://redis.io/[Redis].
 
 [#configuration]
 == Configuration
 
-* This service will hook any modules that are placed in the link:src/external-jobs[external-jobs] directory.
+* This service will hook any modules that are placed in the
+link:https://github.com/restorecommerce/scheduling-srv/tree/master/src/external-jobs[external-jobs] directory.
 Use this to execute jobs on the scheduling-srv itself.
 
 [#API]
@@ -129,7 +130,7 @@ The microservice exposes the below CRUD operations for creating or modifying Job
 Please note that the `update` operation literally just deletes an existing job and reschedules it with new data.
 
 For the detailed protobuf message structure of `io.restorecommerce.job.ReadRequest` and
-`io.restorecommerce.job.DeleteRequest` refer https://github.com/restorecommerce/protos/blob/master/io/restorecommerce/job.proto[job.proto].
+`io.restorecommerce.job.DeleteRequest` refer link:https://github.com/restorecommerce/protos/blob/master/io/restorecommerce/job.proto[job.proto].
 
 [#events]
 == Events
