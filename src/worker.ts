@@ -285,7 +285,7 @@ export class Worker {
     externalJobFiles.forEach((externalFile) => {
       if (externalFile.endsWith('.js')) {
         (async () => require('./external-jobs/' + externalFile).default(cfg))().catch(err => {
-          this.logger.error(`Error executing external job ${externalFile}`, { err: err.message });
+          this.logger.error(`Error scheduling external job ${externalFile}`, { err: err.message });
         });
       }
     });
