@@ -1,1 +1,17 @@
-* xref:index.adoc[scheduling-srv]
+// INDEX
+* xref:index.adoc[Scheduling Service]
+
+// FEATURES
+* xref:index.adoc#features[Features]
+
+// CONFIGURATION
+* xref:index.adoc#configuration[Configuration]
+
+// API
+* xref:index.adoc#API[API]
+** xref:index.adoc#api_scheduling_job[`Job`]
+
+// EVENTS
+* xref:index.adoc#events[Events]
+** xref:index.adoc#emitted-events[Emitted]
+** xref:index.adoc#subscribed-events[Subscribed]
