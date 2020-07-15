@@ -28,7 +28,7 @@
     "cache-manager": "^3.2.1",
     "cache-manager-redis": "^0.6.0",
     "cron-parser": "^2.13.0",
-    "lodash": "^4.17.15"
+    "lodash": "^4.17.19"
   },
   "devDependencies": {
     "@restorecommerce/grpc-client": "0.0.5",
