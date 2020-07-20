@@ -121,7 +121,7 @@ export const getSubjectFromRedis = async (call: CreateCall | ReadCall | UpdateCa
       });
     });
   } else if (api_key) {
-    subject = api_key;
+    subject = { api_key };
   }
   return subject;
 };
