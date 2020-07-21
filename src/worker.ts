@@ -9,7 +9,7 @@ import * as redisStore from 'cache-manager-redis';
 import * as fs from 'fs';
 import { UI, setQueues } from 'bull-board';
 import * as express from 'express';
-import { initAuthZ, ACSAuthZ } from '@restorecommerce/acs-client';
+import { initAuthZ, ACSAuthZ, updateConfig } from '@restorecommerce/acs-client';
 
 const JOBS_CREATE_EVENT = 'createJobs';
 const JOBS_MODIFY_EVENT = 'modifyJobs';
@@ -46,6 +46,18 @@ class JobsCommandInterface extends chassis.CommandInterface {
     // Get a redis connection
     await this.schedulingService.clear();
     return {};
+  }
+
+  async setApiKey(payload: any): Promise<any> {
+    const commandResponse = await super.setApiKey(payload);
+    updateConfig(this.config);
+    return commandResponse;
+  }
+
+  async configUpdate(payload: any): Promise<any> {
+    const commandResponse = await super.configUpdate(payload);
+    updateConfig(this.config);
+    return commandResponse;
   }
 
   async restore(payload: any): Promise<any> {
@@ -219,7 +231,7 @@ export class Worker {
     const serviceNamesCfg = cfg.get('serviceNames');
     await server.bind(serviceNamesCfg.scheduling, schedulingService);
 
-    const cis: chassis.ICommandInterface = new JobsCommandInterface(server, cfg.get(),
+    const cis: chassis.ICommandInterface = new JobsCommandInterface(server, cfg,
       logger, events, schedulingService);
     await server.bind(serviceNamesCfg.cis, cis);
 
