@@ -18,7 +18,7 @@
   ],
   "dependencies": {
     "@restorecommerce/acs-client": "https://github.com/restorecommerce/acs-client#acs-client-ctx-removed",
-    "@restorecommerce/chassis-srv": "0.0.8",
+    "@restorecommerce/chassis-srv": "^0.0.9",
     "@restorecommerce/cluster-service": "^0.1.4",
     "@restorecommerce/kafka-client": "^0.1.10",
     "@restorecommerce/logger": "^0.1.16",
