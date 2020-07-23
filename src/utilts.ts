@@ -74,7 +74,7 @@ export async function checkAccessRequest(subject: Subject, resources: any, actio
         count: 0,
         status: {
           code: err.code || 500,
-          message: err.details,
+          message: err.details || err.message,
         }
       }
     };
