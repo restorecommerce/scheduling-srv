@@ -583,7 +583,9 @@ export class SchedulingService implements JobService {
     const subject = await getSubjectFromRedis(call, this.redisSubjectClient);
     const jobIDs = call.request.ids;
     let resources = [];
+    let action;
     if (jobIDs) {
+      action = AuthZAction.DELETE;
       if (_.isArray(jobIDs)) {
         for (let id of jobIDs) {
           resources.push({ id });
@@ -591,14 +593,15 @@ export class SchedulingService implements JobService {
       } else {
         resources = [{ id: jobIDs }];
       }
-      await this.createMetadata(resources, AuthZAction.DELETE, subject);
+      await this.createMetadata(resources, action, subject);
     }
     if (call.request.collection) {
+      action = AuthZAction.DROP;
       resources = [{collection: call.request.collection}];
     }
     let acsResponse: AccessResponse;
     try {
-      acsResponse = await checkAccessRequest(subject, resources, AuthZAction.DELETE,
+      acsResponse = await checkAccessRequest(subject, resources, action,
         'job', this);
     } catch (err) {
       this.logger.error('Error occurred requesting access-control-srv:', err);
