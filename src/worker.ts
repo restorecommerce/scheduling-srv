@@ -284,7 +284,9 @@ export class Worker {
     const externalJobFiles = fs.readdirSync('./lib/external-jobs');
     externalJobFiles.forEach((externalFile) => {
       if (externalFile.endsWith('.js')) {
-        (async () => require('./external-jobs/' + externalFile).default(cfg))();
+        (async () => require('./external-jobs/' + externalFile).default(cfg))().catch(err => {
+          this.logger.error(`Error scheduling external job ${externalFile}`, { err: err.message });
+        });
       }
     });
 

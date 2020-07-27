@@ -19,6 +19,7 @@
   "dependencies": {
     "@restorecommerce/chassis-srv": "0.0.3",
     "@restorecommerce/cluster-service": "^0.1.4",
+    "@restorecommerce/grpc-client": "0.0.5",
     "@restorecommerce/kafka-client": "^0.1.8",
     "@restorecommerce/logger": "^0.1.16",
     "@restorecommerce/protos": "^0.0.7",
@@ -28,10 +29,9 @@
     "cache-manager": "^3.2.1",
     "cache-manager-redis": "^0.6.0",
     "cron-parser": "^2.13.0",
-    "lodash": "^4.17.15"
+    "lodash": "^4.17.19"
   },
   "devDependencies": {
-    "@restorecommerce/grpc-client": "0.0.5",
     "@types/bull": "^3.12.2",
     "@types/lodash": "^4.14.144",
     "@types/mocha": "^7.0.2",
@@ -55,7 +55,7 @@
   },
   "scripts": {
     "start": "npm run createtopics && node lib/start.js",
-    "dev": "cross-env NODE_ENV=development npm run createtopics && nodemon --watch './src/*.ts' --exec 'ts-node' src/start.ts",
+    "dev": "cross-env NODE_ENV=development npm run createtopics && nodemon --watch './src/*.ts' --exec ts-node src/start.ts",
     "pretest": "tsc -d && npm run tsctests && npm run createtopics",
     "tsctests": "tsc -d -p tsconfig.test.json",
     "tsctests:watch": "tsc -d -p tsconfig.test.json --watch",
