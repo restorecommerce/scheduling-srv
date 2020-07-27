@@ -480,7 +480,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
         const result = await grpcSchedulingSrv.delete({
           collection: true, subject
         }, {});
-        result.error.details.should.equal('7 PERMISSION_DENIED: Access not allowed for request with subject:admin_user_id, resource:job, action:DELETE, target_scope:orgD; the response was DENY');
+        result.error.details.should.equal('7 PERMISSION_DENIED: Access not allowed for request with subject:admin_user_id, resource:job, action:DROP, target_scope:orgD; the response was DENY');
       });
     }
     it(`should delete all remaining scheduled jobs upon request ${testSuffix}`, async () => {
