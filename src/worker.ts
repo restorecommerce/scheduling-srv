@@ -225,8 +225,8 @@ export class Worker {
     subjectHRCfg.db = cfg.get('redis:db-indexes:db-subject');
     const redisSubjectHR = await chassis.cache.get([subjectHRCfg], logger);
 
-     // init ACS cache
-     initializeCache();
+    // init ACS cache
+    initializeCache();
 
     const schedulingService: SchedulingService = new SchedulingService(jobEvents,
       jobResourceEvents, redisConfig, logger, redis, bullOptions, cfg, redisSubjectHR, this.authZ);
