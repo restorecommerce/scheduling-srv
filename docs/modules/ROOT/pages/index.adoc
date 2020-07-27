@@ -193,10 +193,10 @@ Jobs emitted by this service to Kafka can be consumed by other microservices by 
 After processing the job an event should be emitted by the respective microservice indicating job failure or completion.
 A job is always deleted upon being receiving failure or completion data, unless it is a recurring job.
 
-[#subscribed-events]
-=== Subscribed
+[#consumed-events]
+=== Consumed
 
-This microservice subscribes to the following events by topic:
+This microservice consumes messages for the following events by topic:
 
 [width="100%",cols="31%,33%,36%",options="header",]
 |======================================================================================================================================
