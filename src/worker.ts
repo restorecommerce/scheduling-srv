@@ -9,7 +9,7 @@ import * as redisStore from 'cache-manager-redis';
 import * as fs from 'fs';
 import { UI, setQueues } from 'bull-board';
 import * as express from 'express';
-import { initAuthZ, ACSAuthZ, updateConfig } from '@restorecommerce/acs-client';
+import { initAuthZ, ACSAuthZ, updateConfig, initializeCache } from '@restorecommerce/acs-client';
 
 const JOBS_CREATE_EVENT = 'createJobs';
 const JOBS_MODIFY_EVENT = 'modifyJobs';
@@ -224,6 +224,10 @@ export class Worker {
     const subjectHRCfg = cfg.get('redis');
     subjectHRCfg.db = cfg.get('redis:db-indexes:db-subject');
     const redisSubjectHR = await chassis.cache.get([subjectHRCfg], logger);
+
+     // init ACS cache
+     initializeCache();
+
     const schedulingService: SchedulingService = new SchedulingService(jobEvents,
       jobResourceEvents, redisConfig, logger, redis, bullOptions, cfg, redisSubjectHR, this.authZ);
     await schedulingService.start();
