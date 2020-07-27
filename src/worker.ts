@@ -10,6 +10,7 @@ import * as fs from 'fs';
 import { UI, setQueues } from 'bull-board';
 import * as express from 'express';
 import { initAuthZ, ACSAuthZ, updateConfig, initializeCache } from '@restorecommerce/acs-client';
+import { RedisClient } from 'redis';
 
 const JOBS_CREATE_EVENT = 'createJobs';
 const JOBS_MODIFY_EVENT = 'modifyJobs';
@@ -32,8 +33,8 @@ chassis.cache.register('redis', (cacheConfig, logger) => {
 class JobsCommandInterface extends chassis.CommandInterface {
   schedulingService: SchedulingService;
   constructor(server: chassis.Server, cfg: any, logger: any, events: Events,
-    schedulingService: SchedulingService) {
-    super(server, cfg, logger, events);
+    schedulingService: SchedulingService, redisClient: RedisClient) {
+    super(server, cfg, logger, events, redisClient);
     this.schedulingService = schedulingService;
   }
 
@@ -225,6 +226,12 @@ export class Worker {
     subjectHRCfg.db = cfg.get('redis:db-indexes:db-subject');
     const redisSubjectHR = await chassis.cache.get([subjectHRCfg], logger);
 
+    let redisClient: RedisClient;
+    redisSubjectHR.store.getClient((err, redisConn) => {
+      // this redis client object is for retreiving HR scope data
+      redisClient = redisConn.client;
+    });
+
     // init ACS cache
     initializeCache();
 
@@ -236,7 +243,7 @@ export class Worker {
     await server.bind(serviceNamesCfg.scheduling, schedulingService);
 
     const cis: chassis.ICommandInterface = new JobsCommandInterface(server, cfg,
-      logger, events, schedulingService);
+      logger, events, schedulingService, redisClient);
     await server.bind(serviceNamesCfg.cis, cis);
 
     const schedulingServiceEventsListener = async (msg: any,

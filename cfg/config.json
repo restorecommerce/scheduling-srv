@@ -173,6 +173,20 @@
         "protoRoot": "node_modules/@restorecommerce/protos/",
         "messageObject": "io.restorecommerce.commandinterface.CommandResponse"
       },
+      "flushCacheCommand": {
+        "protos": [
+          "io/restorecommerce/commandinterface.proto"
+        ],
+        "protoRoot": "node_modules/@restorecommerce/protos/",
+        "messageObject": "io.restorecommerce.commandinterface.CommandRequest"
+      },
+      "flushCacheResponse": {
+        "protos": [
+          "io/restorecommerce/commandinterface.proto"
+        ],
+        "protoRoot": "node_modules/@restorecommerce/protos/",
+        "messageObject": "io.restorecommerce.commandinterface.CommandResponse"
+      },
       "topics": {
         "command": {
           "topic": "io.restorecommerce.command",
@@ -182,7 +196,8 @@
             "restoreCommand",
             "resetCommand",
             "configUpdateCommand",
-            "setApiKeyCommand"
+            "setApiKeyCommand",
+            "flushCacheCommand"
           ]
         },
         "jobs": {
