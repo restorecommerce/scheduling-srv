@@ -64,7 +64,7 @@ export class SchedulingService implements JobService {
 
   constructor(jobEvents: kafkaClient.Topic,
     jobResourceEvents: kafkaClient.Topic, redisConfig: any, logger: any,
-    redisCache: any, bullOptions: any, cfg: any, redisSubjectCache: any, authZ: ACSAuthZ) {
+    redisClient: any, bullOptions: any, cfg: any, redisSubjectClient: any, authZ: ACSAuthZ) {
     this.jobEvents = jobEvents;
     this.jobResourceEvents = jobResourceEvents;
     this.resourceEventsEnabled = true;
@@ -80,15 +80,8 @@ export class SchedulingService implements JobService {
         keyPrefix: prefix
       }
     });
-
-    redisCache.store.getClient((err, redisConn) => {
-      // this redis client object is for storing recurrTime to DB index 7
-      this.redisClient = redisConn.client;
-    });
-    redisSubjectCache.store.getClient((err, redisConn) => {
-      // this redis client object is for retreiving HR scope data
-      this.redisSubjectClient = redisConn.client;
-    });
+    this.redisClient = redisClient;
+    this.redisSubjectClient = redisSubjectClient;
     this.canceledJobs = new Set<string>();
     this.cfg = cfg;
     this.authZ = authZ;
@@ -597,7 +590,7 @@ export class SchedulingService implements JobService {
     }
     if (call.request.collection) {
       action = AuthZAction.DROP;
-      resources = [{collection: call.request.collection}];
+      resources = [{ collection: call.request.collection }];
     }
     let acsResponse: AccessResponse;
     try {

@@ -10,7 +10,7 @@ import * as fs from 'fs';
 import { UI, setQueues } from 'bull-board';
 import * as express from 'express';
 import { initAuthZ, ACSAuthZ, updateConfig, initializeCache } from '@restorecommerce/acs-client';
-import { RedisClient } from 'redis';
+import { RedisClient, createClient } from 'redis';
 
 const JOBS_CREATE_EVENT = 'createJobs';
 const JOBS_MODIFY_EVENT = 'modifyJobs';
@@ -204,7 +204,7 @@ export class Worker {
 
     const reccurTimeCfg = cfg.get('redis');
     reccurTimeCfg.db = cfg.get('redis:db-indexes:db-reccurTime');
-    const redis = await chassis.cache.get([reccurTimeCfg], logger);
+    const redisClient = createClient(reccurTimeCfg);
 
     // Create events
     const kafkaCfg = cfg.get('events:kafka');
@@ -221,29 +221,24 @@ export class Worker {
     const bullOptions = cfg.get('bull');
     // Create the business logic
     this.authZ = await initAuthZ(cfg) as ACSAuthZ;
-    // redis subject HR client
-    const subjectHRCfg = cfg.get('redis');
-    subjectHRCfg.db = cfg.get('redis:db-indexes:db-subject');
-    const redisSubjectHR = await chassis.cache.get([subjectHRCfg], logger);
 
-    let redisClient: RedisClient;
-    redisSubjectHR.store.getClient((err, redisConn) => {
-      // this redis client object is for retreiving HR scope data
-      redisClient = redisConn.client;
-    });
+    // init redis client for subject index
+    const redisConfigSubject = cfg.get('redis');
+    redisConfigSubject.db = cfg.get('redis:db-indexes:db-subject');
+    const redisSubjectClient = createClient(redisConfigSubject);
 
     // init ACS cache
     initializeCache();
 
     const schedulingService: SchedulingService = new SchedulingService(jobEvents,
-      jobResourceEvents, redisConfig, logger, redis, bullOptions, cfg, redisSubjectHR, this.authZ);
+      jobResourceEvents, redisConfig, logger, redisClient, bullOptions, cfg, redisSubjectClient, this.authZ);
     await schedulingService.start();
     // Bind business logic to server
     const serviceNamesCfg = cfg.get('serviceNames');
     await server.bind(serviceNamesCfg.scheduling, schedulingService);
 
     const cis: chassis.ICommandInterface = new JobsCommandInterface(server, cfg,
-      logger, events, schedulingService, redisClient);
+      logger, events, schedulingService, redisSubjectClient);
     await server.bind(serviceNamesCfg.cis, cis);
 
     const schedulingServiceEventsListener = async (msg: any,
