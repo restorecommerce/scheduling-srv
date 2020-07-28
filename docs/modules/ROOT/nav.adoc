@@ -14,4 +14,4 @@
 // EVENTS
 * xref:index.adoc#events[Events]
 ** xref:index.adoc#emitted-events[Emitted]
-** xref:index.adoc#subscribed-events[Subscribed]
+** xref:index.adoc#consumed-events[Consumed]
