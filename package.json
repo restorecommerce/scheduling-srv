@@ -17,7 +17,7 @@
     "scheduling"
   ],
   "dependencies": {
-    "@restorecommerce/acs-client": "https://github.com/restorecommerce/acs-client#acs-client-ctx-removed",
+    "@restorecommerce/acs-client": "^0.2.0",
     "@restorecommerce/chassis-srv": "^0.1.2",
     "@restorecommerce/cluster-service": "^0.1.4",
     "@restorecommerce/kafka-client": "^0.1.10",
