@@ -1,6 +1,6 @@
 {
   "name": "@restorecommerce/scheduling-srv",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Restore Commerce job scheduling microservice",
   "main": "lib/start.js",
   "author": "Invend GmbH",
