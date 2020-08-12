@@ -247,37 +247,31 @@ export class Worker {
       if (eventName === JOBS_CREATE_EVENT) {
         // protobuf.js appends unnecessary properties to object
         msg.items = _.map(msg.items, schedulingService._filterKafkaJob.bind(schedulingService));
-        const call = { request: { items: msg.items } };
+        const call = { request: { items: msg.items, subject: msg.subject, api_key: msg.api_key } };
         // to disableAC and enable scheduling jobs emitted via kafka event 'createJobs'
-        this.schedulingService.disableAC();
         await schedulingService.create(call, {}).catch(
           (err) => {
             logger.error('Error occured scheduling jobs:', { err });
           });
-        this.schedulingService.restoreAC();
       }
       else if (eventName === JOBS_MODIFY_EVENT) {
         msg.items = msg.items.map((job) => {
           return schedulingService._filterKafkaJob(job);
         });
-        const call = { request: { items: msg.items } };
-        this.schedulingService.disableAC();
+        const call = { request: { items: msg.items, subject: msg.subject, api_key: msg.api_key } };
         await schedulingService.update(call, {}).catch(
           (err) => {
             logger.error('Error occured updating jobs:', err.message);
           });
-        this.schedulingService.restoreAC();
       }
       else if (eventName === JOBS_DELETE_EVENT) {
         const ids = msg.ids;
         const collection = msg.collection;
-        const call = { request: { ids, collection } };
-        this.schedulingService.disableAC();
+        const call = { request: { ids, collection, subject: msg.subject, api_key: msg.api_key } };
         await schedulingService.delete(call, {}).catch(
           (err) => {
             logger.error('Error occured deleting jobs:', err.message);
           });
-        this.schedulingService.restoreAC();
       } else if (eventName === QUEUED_JOB) {
         if (msg && msg.type === FULSH_STALLED_JOBS_TYPE) {
           await schedulingService.flushStalledJobs(msg.id, msg.type).catch(

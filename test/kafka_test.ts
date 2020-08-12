@@ -10,7 +10,7 @@ import * as sconfig from '@restorecommerce/service-config';
 
 import {
   validateJobResource,
-  shouldBeEmpty, validateScheduledJob, jobPolicySetRQ, startGrpcMockServer, stopGrpcMockServer
+  shouldBeEmpty, validateScheduledJob, jobPolicySetRQ, startGrpcMockServer, stopGrpcMockServer, permitJobRule
 } from './utils';
 import { Backoffs, NewJob, Priority } from "../lib/types";
 import { Logger } from '@restorecommerce/chassis-srv';
@@ -27,8 +27,51 @@ const JOB_RESOURCE_TOPIC = 'io.restorecommerce.jobs.resource';
 let mockServer: any;
 let logger: Logger;
 let cfg;
+let subject;
+// mainOrg -> orgA -> orgB -> orgC
+const acsSubject = {
+  id: 'admin_user_id',
+  scope: 'orgC',
+  role_associations: [
+    {
+      role: 'admin-r-id',
+      attributes: [{
+        id: 'urn:restorecommerce:acs:names:roleScopingEntity',
+        value: 'urn:restorecommerce:acs:model:organization.Organization'
+      },
+      {
+        id: 'urn:restorecommerce:acs:names:roleScopingInstance',
+        value: 'mainOrg'
+      }]
+    }
+  ],
+  hierarchical_scopes: [
+    {
+      id: 'mainOrg',
+      role: 'admin-r-id',
+      children: [{
+        id: 'orgA',
+        children: [{
+          id: 'orgB',
+          children: [{
+            id: 'orgC'
+          }]
+        }]
+      }]
+    }
+  ]
+};
+const acsEnv = process.env.ACS_ENABLED;
+let acsEnabled = false;
+let testSuffix = '';
+if (acsEnv && acsEnv.toLocaleLowerCase() === 'true') {
+  acsEnabled = true;
+  testSuffix = 'with ACS Enabled';
+} else {
+  testSuffix = 'with ACS Disabled';
+}
 
-describe('testing scheduling-srv: Kafka', () => {
+describe(`testing scheduling-srv ${testSuffix}: Kafka`, () => {
   let worker: Worker;
   let jobTopic: Topic;
   let jobResourceTopic: Topic;
@@ -46,24 +89,33 @@ describe('testing scheduling-srv: Kafka', () => {
     jobTopic = worker.events.topic(QUEUED_JOBS_TOPIC);
     jobResourceTopic = worker.events.topic(JOB_RESOURCE_TOPIC);
 
-    cfg.set('authorization:enabled', false);
-    cfg.set('authorization:enforce', false);
-    updateConfig(cfg);
+    if (acsEnv && acsEnv.toLowerCase() === 'true') {
+      subject = acsSubject;
+      worker.schedulingService.enableAC();
+    } else {
+      // disable authorization
+      cfg.set('authorization:enabled', false);
+      cfg.set('authorization:enforce', false);
+      updateConfig(cfg);
+      subject = {};
+    }
 
     // strat acs mock service
+    jobPolicySetRQ.policy_sets[0].policies[0].effect = 'PERMIT';
+    jobPolicySetRQ.policy_sets[0].policies[0].rules = [permitJobRule];
     mockServer = await startGrpcMockServer([{ method: 'WhatIsAllowed', input: '\{.*\:\{.*\:.*\}\}', output: jobPolicySetRQ },
     { method: 'IsAllowed', input: '\{.*\:\{.*\:.*\}\}', output: { decision: 'PERMIT' } }], logger);
 
-    const toDelete = (await schedulingService.read({ request: {} }, {})).total_count;
+    const toDelete = (await schedulingService.read({ request: { subject } }, {})).total_count;
     const jobResourceOffset = await jobResourceTopic.$offset(-1);
 
-    await jobTopic.emit('deleteJobs', { collection: true });
+    await jobTopic.emit('deleteJobs', { collection: true, subject });
 
     if (toDelete > 0) {
       await jobResourceTopic.$wait(jobResourceOffset + toDelete - 1);
     }
 
-    shouldBeEmpty(await schedulingService.read({ request: {} }, {}));
+    shouldBeEmpty(await schedulingService.read({ request: { subject } }, {}));
   });
   beforeEach(async () => {
     for (let event of ['jobsCreated', 'jobsDeleted']) {
@@ -115,7 +167,7 @@ describe('testing scheduling-srv: Kafka', () => {
       } as NewJob;
 
       const offset = await jobTopic.$offset(-1);
-      await jobTopic.emit('createJobs', { items: [job] });
+      await jobTopic.emit('createJobs', { items: [job], subject });
 
       await jobTopic.$wait(offset + 2); // createJobs, queued, jobDone
 
@@ -126,7 +178,7 @@ describe('testing scheduling-srv: Kafka', () => {
       // be restored to original value using restoreAC in worker
       // so disable AC to read again
       schedulingService.disableAC();
-      const result = await schedulingService.read({ request: {} });
+      const result = await schedulingService.read({ request: { subject } });
       shouldBeEmpty(result);
     });
     it('should create a new job and execute it at a scheduled time', async () => {
@@ -166,13 +218,13 @@ describe('testing scheduling-srv: Kafka', () => {
       const offset = await jobTopic.$offset(-1);
       const jobResourceOffset = await jobResourceTopic.$offset(-1);
 
-      await jobTopic.emit('createJobs', { items: [job] });
+      await jobTopic.emit('createJobs', { items: [job], subject });
 
       await jobResourceTopic.$wait(jobResourceOffset);
 
       schedulingService.disableAC();
       let result = await schedulingService.read({
-        request: {}
+        request: { subject }
       });
       result.items.should.have.length(1);
 
@@ -181,7 +233,7 @@ describe('testing scheduling-srv: Kafka', () => {
 
       schedulingService.disableAC();
       result = await schedulingService.read({
-        request: {}
+        request: { subject }
       });
       shouldBeEmpty(result);
     });
@@ -201,7 +253,7 @@ describe('testing scheduling-srv: Kafka', () => {
         await new Promise(resolve => setTimeout(resolve, 100));
 
         schedulingService.disableAC();
-        let result = await schedulingService.read({ request: {} }, {});
+        let result = await schedulingService.read({ request: { subject } }, {});
         should.exist(result);
 
         if (jobExecs == 3) {
@@ -238,13 +290,13 @@ describe('testing scheduling-srv: Kafka', () => {
       const jobOffset = await jobTopic.$offset(-1);
       const jobResourceOffset = await jobResourceTopic.$offset(-1);
 
-      await jobTopic.emit('createJobs', { items: [job] });
+      await jobTopic.emit('createJobs', { items: [job], subject });
 
       // wait for 'jobsCreated'
       await jobResourceTopic.$wait(jobResourceOffset);
 
       schedulingService.disableAC();
-      const created = await schedulingService.read({ request: {} }, {});
+      const created = await schedulingService.read({ request: { subject } }, {});
       should.exist(created);
       should.exist(created.items);
 
@@ -293,17 +345,17 @@ describe('testing scheduling-srv: Kafka', () => {
       }
 
       const jobResourceOffset = await jobResourceTopic.$offset(-1);
-      await jobTopic.emit('createJobs', { items: jobs });
+      await jobTopic.emit('createJobs', { items: jobs, subject });
 
       await jobResourceTopic.$wait(jobResourceOffset + 3);
 
       schedulingService.disableAC();
-      let result = await schedulingService.read({ request: {} }, {});
+      let result = await schedulingService.read({ request: { subject } }, {});
       result.total_count.should.be.equal(4);
     });
     it('should update / reschedule a job', async () => {
       schedulingService.disableAC();
-      let result = await schedulingService.read({ request: {} }, {});
+      let result = await schedulingService.read({ request: { subject } }, {});
       const job = result.items[0];
 
       const scheduledTime = new Date();
@@ -312,12 +364,12 @@ describe('testing scheduling-srv: Kafka', () => {
 
       const jobResourceOffset = await jobResourceTopic.$offset(-1);
       await jobTopic.emit('modifyJobs', {
-        items: [job]
+        items: [job], subject
       });
       await jobResourceTopic.$wait(jobResourceOffset + 1);
 
       schedulingService.disableAC();
-      result = await schedulingService.read({ request: {} }, {});
+      result = await schedulingService.read({ request: { subject } }, {});
       should.exist(result);
       should.exist(result.items);
       result.items = _.sortBy(result.items, ['id']);
@@ -327,12 +379,12 @@ describe('testing scheduling-srv: Kafka', () => {
     });
     it('should delete all remaining scheduled jobs upon request', async () => {
 
-      await jobTopic.emit('deleteJobs', { collection: true });
+      await jobTopic.emit('deleteJobs', { collection: true, subject });
 
       const jobResourceOffset = await jobResourceTopic.$offset(-1);
       await jobResourceTopic.$wait(jobResourceOffset + 3);
       schedulingService.disableAC();
-      const result = await schedulingService.read({ request: {} }, {});
+      const result = await schedulingService.read({ request: { subject } }, {});
       shouldBeEmpty(result);
     });
   });
