@@ -20,7 +20,7 @@
     "@restorecommerce/acs-client": "^0.2.0",
     "@restorecommerce/chassis-srv": "^0.1.2",
     "@restorecommerce/cluster-service": "^0.1.4",
-    "@restorecommerce/kafka-client": "^0.1.10",
+    "@restorecommerce/kafka-client": "^0.1.11",
     "@restorecommerce/logger": "^0.1.16",
     "@restorecommerce/protos": "https://github.com/restorecommerce/protos#protos-acs",
     "@restorecommerce/service-config": "^0.1.6",
