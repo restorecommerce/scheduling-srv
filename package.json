@@ -1,6 +1,6 @@
 {
   "name": "@restorecommerce/scheduling-srv",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Restore Commerce job scheduling microservice",
   "main": "lib/start.js",
   "author": "Invend GmbH",
@@ -21,7 +21,7 @@
     "@restorecommerce/chassis-srv": "^0.1.2",
     "@restorecommerce/cluster-service": "^0.1.4",
     "@restorecommerce/kafka-client": "^0.1.11",
-    "@restorecommerce/logger": "^0.1.16",
+    "@restorecommerce/logger": "^0.2.1",
     "@restorecommerce/protos": "https://github.com/restorecommerce/protos#protos-acs",
     "@restorecommerce/service-config": "^0.1.6",
     "bull": "^3.15.0",
