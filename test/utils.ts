@@ -16,6 +16,14 @@ export function validateScheduledJob(job: any, expectedSchedule: string): void {
   job.schedule_type.should.equal(expectedSchedule);
 }
 
+export function validateJobDonePayload(job: any): void {
+  should.exist(job.message);
+  const payload = unmarshallProtobufAny(job.message);
+  should.exist(payload.testValue);
+  console.log('payload value is...', payload.testValue)
+  payload.testValue.should.equal('test-value');
+}
+
 export function validateJobResource(job: any): void {
   should.exist(job.data);
   should.exist(job.data.payload);
@@ -106,7 +114,7 @@ export interface serverRule {
   method: string,
   input: any,
   output: any
-};
+}
 
 export const startGrpcMockServer = async (rules: serverRule[], logger): Promise<any> => {
   // Create a mock ACS server to expose isAllowed and whatIsAllowed

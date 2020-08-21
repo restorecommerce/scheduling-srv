@@ -339,6 +339,23 @@
       }
     }
   ],
+  "queueJobProcFn": [
+    {
+      "name": "queue_1",
+      "concurrency": 1,
+      "default": true
+    },
+    {
+      "name": "queue_2",
+      "concurrency": 5,
+      "default": true
+    },
+    {
+      "name": "queue_3",
+      "concurrency": 10,
+      "default": false
+    }
+  ],
   "authorization": {
     "service": "scheduling-srv-acs",
     "enabled": true,

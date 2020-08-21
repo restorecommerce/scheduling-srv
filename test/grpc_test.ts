@@ -7,8 +7,15 @@ import * as sconfig from '@restorecommerce/service-config';
 import { Client } from '@restorecommerce/grpc-client';
 import { Logger } from '@restorecommerce/logger';
 import {
-  validateJobResource, shouldBeEmpty, validateScheduledJob, jobPolicySetRQ,
-  startGrpcMockServer, stopGrpcMockServer, permitJobRule, denyJobRule
+  validateJobResource,
+  shouldBeEmpty,
+  validateScheduledJob,
+  jobPolicySetRQ,
+  startGrpcMockServer,
+  stopGrpcMockServer,
+  permitJobRule,
+  denyJobRule,
+  validateJobDonePayload
 } from './utils';
 import { Backoffs, Priority, SortOrder, NewJob } from "../lib/types";
 import { updateConfig } from '@restorecommerce/acs-client';
@@ -95,7 +102,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
       subject = {};
     }
 
-    // strat acs mock service with PERMIT rule
+    // start acs mock service with PERMIT rule
     jobPolicySetRQ.policy_sets[0].policies[0].effect = 'PERMIT';
     jobPolicySetRQ.policy_sets[0].policies[0].rules = [permitJobRule];
     mockServer = await startGrpcMockServer([{ method: 'WhatIsAllowed', input: '\{.*\:\{.*\:.*\}\}', output: jobPolicySetRQ },
@@ -139,8 +146,16 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
         validateScheduledJob(job, 'ONCE');
 
         const { id, schedule_type } = job;
-        await jobEvents.emit('jobDone', { id, schedule_type });
+        await jobEvents.emit('jobDone', { id, schedule_type, message: marshallProtobufAny({
+            testValue: 'test-value'
+          }) });
       });
+
+      // validate message emitted on jobDone event.
+      await jobEvents.on('jobDone', async (job, context, configRet, eventNameRet) => {
+        validateJobDonePayload(job);
+      });
+
       const data = {
         timezone: "Europe/Berlin",
         payload: marshallProtobufAny({
@@ -441,7 +456,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
         }
       } as NewJob;
       it(`should throw an error when creating a new job with invalid scope ${testSuffix}`, async () => {
-        // restart mock service with DENY rules 
+        // restart mock service with DENY rules
         jobPolicySetRQ.policy_sets[0].policies[0].effect = 'DENY';
         jobPolicySetRQ.policy_sets[0].policies[0].rules = [denyJobRule];
         await stopGrpcMockServer(mockServer, logger);
