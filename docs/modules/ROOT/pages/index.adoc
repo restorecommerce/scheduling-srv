@@ -14,7 +14,7 @@ A microservice for scheduling jobs part of the link:https://github.com/restoreco
 * Job scheduling is implemented using link:https://github.com/OptimalBits/bull[bull] backed by link:https://redis.io/[Redis].
 * Concurrency and rate limiting for job processing. The job processing is made
 by matching the Job type with the Queue name.
-In the case when there is no match they are being added to the default Queue.
+In the case when there is no match the jobs are being added to the default Queue.
 
 [#configuration]
 == Configuration
