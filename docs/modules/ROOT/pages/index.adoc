@@ -12,6 +12,9 @@ A microservice for scheduling jobs part of the link:https://github.com/restoreco
 * Scheduling new jobs as well as manage the existing ones.
 * Currently, three kinds of jobs can be scheduled: `immediate jobs`, `one-time future jobs` and `recurring jobs`.
 * Job scheduling is implemented using link:https://github.com/OptimalBits/bull[bull] backed by link:https://redis.io/[Redis].
+* Concurrency and rate limiting for job processing. The job processing is made
+by matching the Job type with the Queue name.
+In the case when there is no match they are being added to the default Queue.
 
 [#configuration]
 == Configuration
@@ -19,6 +22,12 @@ A microservice for scheduling jobs part of the link:https://github.com/restoreco
 * This service will hook any modules that are placed in the
 link:https://github.com/restorecommerce/scheduling-srv/tree/master/src/external-jobs[external-jobs] directory.
 Use this to execute jobs on the scheduling-srv itself.
+* The rescheduling of missed recurring jobs on service start up can be disabled
+in the https://github.com/restorecommerce/scheduling-srv/blob/master/cfg/config.json#L349[configuration].
+* Queues can be configured to use
+https://github.com/restorecommerce/scheduling-srv/blob/master/cfg/config.json#L345[concurrency]
+and https://github.com/restorecommerce/scheduling-srv/blob/master/test/cfg/config_test.json#L336[rate limiting]
+for job processing, where `max` is the maximum number of jobs processed, per `duration` in milliseconds.
 
 [#API]
 == API
@@ -174,6 +183,8 @@ These operations are exposed with the same input as the gRPC endpoints
 | id | number | required | Job instance ID in Redis.
 | schedule_type | string | required | Job type ex: `ONCE`, `RECURR` etc.
 | delete_scheduled | boolean | optional | Whether to delete this repeating job.
+| type | string | optional | Job Type (required if emitting back a message).
+| message | https://github.com/restorecommerce/protos/blob/master/google/protobuf/any.proto[`google.protobuf.Any`] | optional | Generic data type for job-specific data.
 |======================================================================================================================================
 
 `io.restorecommerce.job.JobFailed`
