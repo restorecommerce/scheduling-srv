@@ -59,7 +59,7 @@
           "io/restorecommerce/job.proto"
         ],
         "protoRoot": "node_modules/@restorecommerce/protos/",
-        "messageObject": "io.restorecommerce.job.Job"
+        "messageObject": "io.restorecommerce.job.JobList"
       },
       "jobsModified": {
         "protos": [
@@ -320,24 +320,34 @@
     ],
     "board":  {
       "port": 3000,
-      "path": "/admin/queues"
+      "path": "/admin/queue s"
     }
   },
-  "queueJobProcFn": [
+  "queue": [
     {
-      "name": "queue_1",
-      "concurrency": 1,
-      "default": true
-    },
-    {
-      "name": "queue_2",
+      "name": "defaultQueue",
       "concurrency": 5,
       "default": true
     },
     {
-      "name": "queue_3",
+      "name": "test-job",
+      "concurrency": 50,
+      "default": false,
+      "rateLimiting": {
+        "enabled": false,
+        "max": 1,
+        "duration": 3000
+      }
+    },
+    {
+      "name": "testQueue",
       "concurrency": 10,
-      "default": false
+      "default": false,
+      "rateLimiting": {
+        "enabled": false,
+        "max": 1,
+        "duration": 50
+      }
     }
   ],
   "authorization": {

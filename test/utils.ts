@@ -20,7 +20,6 @@ export function validateJobDonePayload(job: any): void {
   should.exist(job.message);
   const payload = unmarshallProtobufAny(job.message);
   should.exist(payload.testValue);
-  console.log('payload value is...', payload.testValue)
   payload.testValue.should.equal('test-value');
 }
 
@@ -137,4 +136,3 @@ export const stopGrpcMockServer = async (mockServer, logger) => {
     logger.info('Server closed successfully');
   });
 };
-

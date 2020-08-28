@@ -16,7 +16,7 @@ const JOBS_CREATE_EVENT = 'createJobs';
 const JOBS_MODIFY_EVENT = 'modifyJobs';
 const JOBS_DELETE_EVENT = 'deleteJobs';
 const QUEUED_JOB = 'queuedJob';
-const FULSH_STALLED_JOBS_TYPE = 'flushStalledJobs';
+const FLUSH_STALLED_JOBS_TYPE = 'flushStalledJobs';
 
 chassis.cache.register('redis', (cacheConfig, logger) => {
   const options = {
@@ -206,6 +206,9 @@ export class Worker {
     reccurTimeCfg.db = cfg.get('redis:db-indexes:db-reccurTime');
     const redisClient = createClient(reccurTimeCfg);
 
+    // Get Rate Limiter config
+    const rateLimiterConfig = cfg.get('rateLimiter');
+
     // Create events
     const kafkaCfg = cfg.get('events:kafka');
     const events: Events = new Events(kafkaCfg, logger);
@@ -251,7 +254,7 @@ export class Worker {
         // to disableAC and enable scheduling jobs emitted via kafka event 'createJobs'
         await schedulingService.create(call, {}).catch(
           (err) => {
-            logger.error('Error occured scheduling jobs:', { err });
+            logger.error(`Error occurred scheduling job, ${err}`);
           });
       }
       else if (eventName === JOBS_MODIFY_EVENT) {
@@ -261,7 +264,7 @@ export class Worker {
         const call = { request: { items: msg.items, subject: msg.subject, api_key: msg.api_key } };
         await schedulingService.update(call, {}).catch(
           (err) => {
-            logger.error('Error occured updating jobs:', err.message);
+            logger.error('Error occurred updating jobs:', err.message);
           });
       }
       else if (eventName === JOBS_DELETE_EVENT) {
@@ -270,10 +273,10 @@ export class Worker {
         const call = { request: { ids, collection, subject: msg.subject, api_key: msg.api_key } };
         await schedulingService.delete(call, {}).catch(
           (err) => {
-            logger.error('Error occured deleting jobs:', err.message);
+            logger.error('Error occurred deleting jobs:', err.message);
           });
       } else if (eventName === QUEUED_JOB) {
-        if (msg && msg.type === FULSH_STALLED_JOBS_TYPE) {
+        if (msg && msg.type === FLUSH_STALLED_JOBS_TYPE) {
           await schedulingService.flushStalledJobs(msg.id, msg.type).catch(
             (err) => {
               logger.error('Error occured flushing jobs:', err.message);
@@ -323,7 +326,7 @@ export class Worker {
     this.events = events;
     this.server = server;
 
-    setQueues(this.schedulingService.queue);
+    setQueues(this.schedulingService.queuesList);
 
     this.app = express();
     this.app.use(cfg.get('bull:board:path'), UI);

@@ -145,8 +145,8 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
       await jobEvents.on('queuedJob', async (job, context, configRet, eventNameRet) => {
         validateScheduledJob(job, 'ONCE');
 
-        const { id, schedule_type } = job;
-        await jobEvents.emit('jobDone', { id, schedule_type, message: marshallProtobufAny({
+        const { id, type, schedule_type } = job;
+        await jobEvents.emit('jobDone', { id, type, schedule_type, message: marshallProtobufAny({
             testValue: 'test-value'
           }) });
       });
@@ -194,8 +194,8 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
       await jobEvents.on('queuedJob', async (job, context, configRet, eventNameRet) => {
         validateScheduledJob(job, 'ONCE');
 
-        const { id, schedule_type } = job;
-        await jobEvents.emit('jobDone', { id, schedule_type });
+        const { id, type, schedule_type } = job;
+        await jobEvents.emit('jobDone', { id, type, schedule_type });
       });
 
       const data = {
@@ -244,8 +244,8 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
       await jobEvents.on('queuedJob', async (job, context, configRet, eventNameRet) => {
         validateScheduledJob(job, 'RECCUR');
 
-        const { id, schedule_type } = job;
-        await jobEvents.emit('jobDone', { id, schedule_type, delete_scheduled: ++jobExecs === 3 });
+        const { id, type, schedule_type } = job;
+        await jobEvents.emit('jobDone', { id, type, schedule_type, delete_scheduled: ++jobExecs === 3 });
 
         // Sleep for jobDone to get processed
         await new Promise(resolve => setTimeout(resolve, 100));

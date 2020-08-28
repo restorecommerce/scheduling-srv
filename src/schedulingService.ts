@@ -16,9 +16,7 @@ import { getSubjectFromRedis, AccessResponse, checkAccessRequest, ReadPolicyResp
 const JOB_DONE_EVENT = 'jobDone';
 const JOB_FAILED_EVENT = 'jobFailed';
 
-/**
- * Marshall any job payload to google.protobuf.Any
- */
+// Marshall any job payload to google.protobuf.Any
 export const marshallProtobufAny = (data: any): any => {
   const stringified = JSON.stringify(data);
   return {
@@ -27,10 +25,7 @@ export const marshallProtobufAny = (data: any): any => {
   };
 };
 
-
-/**
- * Unmarshall a job payload.
- */
+// Unmarshall a job payload.
 export const unmarshallProtobufAny = (data: any): any => {
   let unmarshalled = {};
 
@@ -50,7 +45,11 @@ export class SchedulingService implements JobService {
   jobEvents: kafkaClient.Topic;
   jobResourceEvents: kafkaClient.Topic;
   logger: any;
-  queue: Queue.Queue;
+
+  queuesConfigList: any;
+  queuesList: Queue.Queue[];
+  defaultQueueName: string;
+
   jobCbs: any;
   redisClient: RedisClient;
   resourceEventsEnabled: boolean;
@@ -62,30 +61,84 @@ export class SchedulingService implements JobService {
   authZCheck: boolean;
 
 
-  constructor(jobEvents: kafkaClient.Topic,
-    jobResourceEvents: kafkaClient.Topic, redisConfig: any, logger: any,
-    redisClient: any, bullOptions: any, cfg: any, redisSubjectClient: any, authZ: ACSAuthZ) {
+  constructor(jobEvents: kafkaClient.Topic, jobResourceEvents: kafkaClient.Topic,
+    redisConfig: any, logger: any, redisClient: any,
+    bullOptions: any, cfg: any, redisSubjectClient: any, authZ: ACSAuthZ) {
     this.jobEvents = jobEvents;
     this.jobResourceEvents = jobResourceEvents;
     this.resourceEventsEnabled = true;
     this.bullOptions = bullOptions;
-
     this.logger = logger;
-
-    const prefix = bullOptions['prefix'] || 'scheduling-srv';
-
-    this.queue = new Queue(prefix, {
-      redis: {
-        ...redisConfig,
-        keyPrefix: prefix
-      }
-    });
+    this.queuesList = [];
+    this.queuesConfigList = [];
     this.redisClient = redisClient;
     this.redisSubjectClient = redisSubjectClient;
     this.canceledJobs = new Set<string>();
     this.cfg = cfg;
     this.authZ = authZ;
     this.authZCheck = this.cfg.get('authorization:enabled');
+
+    // Read Queue Configuration file and find first queue which has "default": true,
+    // then save it to defaultQueueName
+    const queuesCfg = this.cfg.get('queue');
+    if (_.isEmpty(queuesCfg)) {
+      this.logger.error('Queue configuration not found!');
+      throw new Error('Queue configuration not found!');
+    }
+    let defaultTrueExists = false;
+    for (let queueCfg of queuesCfg) {
+      // Find configuration which has default=true
+      if (queueCfg.default == true) {
+        defaultTrueExists = true;
+        this.defaultQueueName = queueCfg.name;
+        break;
+      }
+    }
+    if (!defaultTrueExists) {
+      this.logger.error('Queue default configuration not found!');
+      throw new Error('Queue default configuration not found!');
+    }
+
+    // Create Queues
+    for (let queueCfg of queuesCfg) {
+      let queueOptions: Queue.QueueOptions;
+      const prefix = queueCfg.name;
+      const rateLimiting = queueCfg.rateLimiting;
+
+      // Create Queue Configuration - Add Rate Limiting if enabled
+      if (!_.isEmpty(rateLimiting) && rateLimiting.enabled == true) {
+        this.logger.info(`Queue: ${queueCfg.name} - Rate limiting is ENABLED.`);
+        queueOptions = {
+          redis: {
+            ...redisConfig,
+            keyPrefix: prefix
+          },
+          limiter: {
+            max: rateLimiting.max,
+            duration: rateLimiting.duration
+          }
+        };
+      } else {
+        queueOptions = {
+          redis: {
+            ...redisConfig,
+            keyPrefix: prefix
+          }
+        };
+      }
+
+      // Add Queue Objects
+      let queue = new Queue(prefix, queueOptions);
+      this.queuesList.push(queue);
+
+      // Add Queue Configurations
+      let queueCfgObj = {
+        name: queueCfg.name,
+        concurrency: queueCfg.concurrency,
+        default: queueCfg.default
+      };
+      this.queuesConfigList.push(queueCfgObj);
+    }
   }
 
   /**
@@ -96,11 +149,20 @@ export class SchedulingService implements JobService {
     const logger = this.logger;
     this.jobCbs = {};
     const that = this;
+
     const events = [JOB_DONE_EVENT, JOB_FAILED_EVENT];
     for (let eventName of events) {
+      // A Scheduling Service Event Listener
       await this.jobEvents.on(eventName, async (msg: any, ctx: any,
         config: any, eventName: string): Promise<any> => {
         let job = msg;
+
+        // Match Job Type to Queue Name, else use Default Queue
+        let queue = _.find(this.queuesList, {name: job.type});
+        let defaultQueue = _.find(this.queuesList, {name: this.defaultQueueName});
+        if (_.isEmpty(queue)) {
+          queue = defaultQueue;
+        }
 
         if (eventName === JOB_FAILED_EVENT) {
           logger.error(`job@${job.type}#${job.id} failed with error #${job.error}`,
@@ -109,7 +171,7 @@ export class SchedulingService implements JobService {
           logger.verbose(`job#${job.id} done`, that._filterQueuedJob<JobDoneType>(job));
         }
 
-        const jobData = await that.queue.getJob(job.id).catch(error => {
+        const jobData = await queue.getJob(job.id).catch(error => {
           that._handleError(error);
         });
 
@@ -121,111 +183,140 @@ export class SchedulingService implements JobService {
         } else {
           delete that.jobCbs[job.id];
           cb();
-          await that._deleteJobInstance(job.id);
+          const ret = await that._deleteJobInstance(job.id, queue);
           logger.info(`job#${job.id} successfully deleted`, that._filterQueuedJob<JobType>(job));
           deleted = true;
         }
 
         if (jobData && job.delete_scheduled) {
-          await that.queue.removeRepeatable(jobData.name, jobData.opts.repeat);
+          await queue.removeRepeatable(jobData.name, jobData.opts.repeat);
           deleted = true;
         }
 
         if (deleted && that.resourceEventsEnabled) {
           await that.jobResourceEvents.emit('jobsDeleted', { id: job.id });
         }
-
-        await that.queue.clean(0);
+        await queue.clean(0);
       });
     }
 
-    this.queue.on('schedule error', (error) => {
-      logger.error('kue-scheduler', error);
-    });
-    this.queue.on('schedule success', (job) => {
-      logger.verbose(`job@${job.type}#${job.id} scheduled`, that._filterQueuedJob<JobType>(job));
-    });
-    this.queue.on('already scheduled', (job) => {
-      logger.warn(`job@${job.type}#${job.id} already scheduled`, that._filterQueuedJob<JobType>(job));
-    });
-    this.queue.on('scheduler unknown job expiry key', (message) => {
-      logger.warn('scheduler unknown job expiry key', message);
-    });
-    this.queue.on('waiting', (jobId) => {
-      logger.verbose(`job#${jobId} scheduled`, jobId);
-    });
+    // Initialize Event Listeners for each Queue
+    for (let queue of this.queuesList) {
+      queue.on('schedule error', (error) => {
+        logger.error('kue-scheduler', error);
+      });
+      queue.on('schedule success', (job) => {
+        logger.verbose(`job@${job.type}#${job.id} scheduled`, that._filterQueuedJob<JobType>(job));
+      });
+      queue.on('already scheduled', (job) => {
+        logger.warn(`job@${job.type}#${job.id} already scheduled`, that._filterQueuedJob<JobType>(job));
+      });
+      queue.on('scheduler unknown job expiry key', (message) => {
+        logger.warn('scheduler unknown job expiry key', message);
+      });
+      queue.on('waiting', (jobId) => {
+        logger.verbose(`job#${jobId} scheduled`, jobId);
+      });
+    }
 
-    this.queue.process('*', async (job, done) => {
-      this.jobCbs[job.id] = done;
+    // Initialize Job Processing Function for each Queue
+    // For the Default Queue the process name is defined as "*"
+    // For the other Queues the process name is defined as the name of the Queue
+    for (let queueCfg of this.queuesConfigList) {
+      let queue = _.find(this.queuesList, {name: queueCfg.name});
+      let queueName = queueCfg.name;
+      let concurrency = queueCfg.concurrency;
 
-      const filteredJob = that._filterQueuedJob<JobType>(job);
-      // For recurrning job add time so if service goes down we can fire jobs
-      // for the missed schedules comparing the last run time
-      let lastRunTime;
-      if (filteredJob.opts && filteredJob.opts.repeat &&
-        ((filteredJob.opts.repeat as Queue.EveryRepeatOptions).every ||
-          (filteredJob.opts.repeat as Queue.CronRepeatOptions).cron)) {
-        if (filteredJob.data) {
-          // adding time to payload data for recurring jobs
-          const dateTime = new Date();
-          const bufObj = Buffer.from(JSON.stringify({ time: dateTime }));
-          if (filteredJob.data.payload) {
-            if (filteredJob.data.payload.value) {
-              let jobBufferObj = JSON.parse(filteredJob.data.payload.value.toString());
-              if (!jobBufferObj) {
-                jobBufferObj = {};
-              }
-              const jobTimeObj = Object.assign(jobBufferObj, { time: dateTime });
-              lastRunTime = JSON.stringify({ time: dateTime });
-              // set last run time on DB index 7 with jobType identifier
-              this.redisClient.set(filteredJob.name, lastRunTime);
-              filteredJob.data.payload.value = Buffer.from(JSON.stringify(jobTimeObj));
-            } else {
-              this.redisClient.set(filteredJob.name, lastRunTime);
-              filteredJob.data.payload = { value: bufObj };
-            }
-          } else {
-            this.redisClient.set(filteredJob.name, lastRunTime);
-            filteredJob.data = {
-              payload: { value: bufObj }
-            };
-          }
-        }
+      let processName: string;
+      if (queueName == this.defaultQueueName) {
+        processName = '*';
+      } else {
+        processName = queueCfg.name;
       }
 
-      await that.jobEvents.emit('queuedJob', {
-        id: filteredJob.id,
-        type: filteredJob.name,
-        data: filteredJob.data,
-        schedule_type: filteredJob.opts.timeout === 1 ? 'NOW' : (filteredJob.opts.repeat ? 'RECCUR' : 'ONCE'),
-      }).catch((error) => {
-        delete this.jobCbs[filteredJob.id];
-        that.logger.error(`Error while processing job ${filteredJob.id} in queue: ${error}`);
-        done(error);
-      }).then(() => done());
+      queue.process(processName, concurrency, async (job, done) => {
+        this.jobCbs[job.id] = done;
 
-      that.logger.verbose(`job@${filteredJob.name}#${filteredJob.id} queued`, filteredJob);
-    });
-    // if the scheduling service goes down and if there were recurring jobs which have missed
-    // schedules then we will need to reschedule it for those missing intervals
-    await this._rescheduleMissedJobs();
+        const filteredJob = that._filterQueuedJob<JobType>(job);
+        // For recurring job add time so if service goes down we can fire jobs
+        // for the missed schedules comparing the last run time
+        let lastRunTime;
+        if (filteredJob.opts && filteredJob.opts.repeat &&
+          ((filteredJob.opts.repeat as Queue.EveryRepeatOptions).every ||
+            (filteredJob.opts.repeat as Queue.CronRepeatOptions).cron)) {
+          if (filteredJob.data) {
+            // adding time to payload data for recurring jobs
+            const dateTime = new Date();
+            const bufObj = Buffer.from(JSON.stringify({ time: dateTime }));
+            if (filteredJob.data.payload) {
+              if (filteredJob.data.payload.value) {
+                let jobBufferObj = JSON.parse(filteredJob.data.payload.value.toString());
+                if (!jobBufferObj) {
+                  jobBufferObj = {};
+                }
+                const jobTimeObj = Object.assign(jobBufferObj, { time: dateTime });
+                lastRunTime = JSON.stringify({ time: dateTime });
+                // set last run time on DB index 7 with jobType identifier
+                this.redisClient.set(filteredJob.name, lastRunTime);
+                filteredJob.data.payload.value = Buffer.from(JSON.stringify(jobTimeObj));
+              } else {
+                this.redisClient.set(filteredJob.name, lastRunTime);
+                filteredJob.data.payload = { value: bufObj };
+              }
+            } else {
+              this.redisClient.set(filteredJob.name, lastRunTime);
+              filteredJob.data = {
+                payload: { value: bufObj }
+              };
+            }
+          }
+        }
+
+        await that.jobEvents.emit('queuedJob', {
+          id: filteredJob.id,
+          type: filteredJob.name,
+          data: filteredJob.data,
+          schedule_type: filteredJob.opts.timeout === 1 ? 'NOW' : (filteredJob.opts.repeat ? 'RECCUR' : 'ONCE'),
+        }).catch((error) => {
+          delete this.jobCbs[filteredJob.id];
+          that.logger.error(`Error while processing job ${filteredJob.id} in queue: ${error}`);
+          done(error);
+        }).then(() => done());
+
+        that.logger.verbose(`job@${filteredJob.name}#${filteredJob.id} queued`, filteredJob);
+      });
+    }
+
+    // If the scheduling service goes down and if there were
+    // recurring jobs which have missed schedules then
+    // we will need to reschedule it for those missing intervals.
+    // If disabled in the config, skip rescheduling.
+    const rescheduleMissedJobs = this.cfg.get('rescheduleMissedJobs');
+    if (!_.isNil(rescheduleMissedJobs) && rescheduleMissedJobs == true ) {
+      this.logger.info('Rescheduling of missed jobs: ENABLED.');
+      this._rescheduleMissedJobs();
+    } else {
+      this.logger.info('Rescheduling of missed jobs: DISABLED.');
+    }
   }
 
   /**
    * To reschedule the missed recurring jobs upon service restart
    */
-  async  _rescheduleMissedJobs(): Promise<void> {
+  async _rescheduleMissedJobs(): Promise<void> {
     // for jobs created via Kafka currently there are no acs checks
     this.disableAC();
     const createDispatch = [];
     let result: any[] = [];
     let thiz = this;
     // get all the jobs
-    await this.queue.getJobs(this.bullOptions['allJobTypes']).then(jobs => {
-      result = jobs;
-    }).catch(error => {
-      thiz._handleError(`Error reading jobs: ${error}`);
-    });
+    for (let queue of this.queuesList) {
+      await queue.getJobs(this.bullOptions['allJobTypes']).then(jobs => {
+        result = result.concat(jobs);
+      }).catch(error => {
+        thiz._handleError(`Error reading jobs: ${error}`);
+      });
+    }
     let lastRunTime;
     for (let job of result) {
       // get the last run time for the job, we store the last run time only
@@ -240,7 +331,9 @@ export class SchedulingService implements JobService {
         });
       }).catch(
         (err) => {
-          this.logger.error('Error occured reading the last run time for job type:', { name: job.name, err });
+          this.logger.error(
+            'Error occurred reading the last run time for job type:',
+            { name: job.name, err });
         }
       );
       // we store lastRunTime only for recurring jobs and if it exists check
@@ -256,7 +349,8 @@ export class SchedulingService implements JobService {
             endDate: new Date(),
             iterator: true
           };
-          const intervalTime = parseExpression((job.opts.repeat as Queue.CronRepeatOptions).cron, options);
+          const intervalTime =
+            parseExpression((job.opts.repeat as Queue.CronRepeatOptions).cron, options);
           while (intervalTime.hasNext()) {
             let nextInterval: any = intervalTime.next();
             const nextIntervalTime = nextInterval.value.toString();
@@ -282,7 +376,6 @@ export class SchedulingService implements JobService {
             }));
           }
         }
-
       }
     }
     this.restoreAC();
@@ -314,14 +407,18 @@ export class SchedulingService implements JobService {
 
     if (job.when) {
       if (job.options.delay) {
-        this._handleError(new errors.InvalidArgument('Job can either be delayed or dated (when), not both.'));
+        this._handleError(new errors.InvalidArgument(
+          'Job can either be delayed or dated (when), not both.'
+        ));
       }
 
       // If the jobSchedule time has already lapsed then do not schedule the job
       const jobScheduleTime = new Date(job.when).getTime();
       const currentTime = new Date().getTime();
       if (jobScheduleTime < currentTime) {
-        this._handleError(new errors.InvalidArgument('Cannot schedule a job for an elapsed time'));
+        this._handleError(new errors.InvalidArgument(
+          'Cannot schedule a job for an elapsed time'
+        ));
       }
 
       job.options.delay = jobScheduleTime - currentTime;
@@ -355,6 +452,7 @@ export class SchedulingService implements JobService {
       throw err;
     }
   }
+
   /**
    * Create and queue jobs.
    * @param {any} call RPC call argument
@@ -369,8 +467,9 @@ export class SchedulingService implements JobService {
     await this.createMetadata(call.request.items, AuthZAction.CREATE, subject);
     let acsResponse: AccessResponse;
     try {
-      acsResponse = await checkAccessRequest(subject, call.request.items, AuthZAction.CREATE,
-        'job', this);
+      acsResponse = await checkAccessRequest(
+        subject, call.request.items, AuthZAction.CREATE, 'job', this
+      );
     } catch (err) {
       this.logger.error('Error occurred requesting access-control-srv:', err);
       throw err;
@@ -380,10 +479,9 @@ export class SchedulingService implements JobService {
     }
 
     const jobs = call.request.items.map(x => this._validateJob(x));
-
     const result: Job[] = [];
 
-    // scheduling jobs
+    // Scheduling jobs
     for (let i = 0; i < jobs.length; i += 1) {
       let job = jobs[i];
       job.data.timezone = job.data.timezone || 'Europe/London'; // fallback to GMT
@@ -416,11 +514,19 @@ export class SchedulingService implements JobService {
         delete bullOptions['timeout'];
       }
 
-      result.push(await this.queue.add(job.type, job.data, bullOptions));
+      // Match the Job Type with the Queue Name and add the Job to this Queue.
+      // If there is no match, add the Job to the Default Queue
+      let queue = _.find(this.queuesList, {name: job.type});
+      let defaultQueue = _.find(this.queuesList, {name: this.defaultQueueName});
+      if (_.isEmpty(queue)) {
+        queue = defaultQueue;
+      }
+      result.push(await queue.add(job.type, job.data, bullOptions));
 
       this.logger.verbose(`job@${job.type} created`, job);
 
-      if (this.resourceEventsEnabled && (!('timeout' in job.options) || job.options.timeout !== 1)) {
+      if (this.resourceEventsEnabled &&
+        (!('timeout' in job.options) || job.options.timeout !== 1)) {
         await this.jobResourceEvents.emit('jobsCreated', job);
       }
     }
@@ -504,23 +610,46 @@ export class SchedulingService implements JobService {
       }
       const typeFilterName = call.request.filter.type;
 
+      // Search in all the queues and retrieve jobs after JobID
+      // and add them to the jobIDsCopy list.
+      // If the job is not found in any of the queues, continue looking
+      // Finally compare the two lists and throw an error for which
+      // job could not be found in any of the queues.
       if (jobIDs.length > 0) {
+        // jobIDsCopy should contain the jobIDs duplicate values
+        // after the for loop ends
+        let jobIDsCopy: JobId[] = [];
         for (let jobID of jobIDs) {
-          await new Promise((resolve, reject) => {
-            this.queue.getJob(jobID).then(job => {
-              resolve(job);
-              result.push(job);
-            }).catch(error => {
-              that._handleError(`Error reading job ${jobID}: ${error}`);
+          for (let queue of this.queuesList) {
+            await new Promise((resolve, reject) => {
+              // getJob returns job or null
+              queue.getJob(jobID).then(job => {
+                resolve(job);
+                if (!_.isEmpty(job)) {
+                  result.push(job);
+                  jobIDsCopy.push(jobID);
+                }
+              }).catch(err => {
+                that._handleError(`Error reading jobs ${jobID}: ${err}`);
+              });
             });
-          });
+          }
+        }
+        if (!_.isEqual(jobIDs.sort(), jobIDsCopy.sort())) {
+          const jobIDsDiff = _.difference(jobIDs, jobIDsCopy);
+          that._handleError(`Error! Jobs not found in any of the queues, jobIDs: ${jobIDsDiff}`);
         }
       } else {
-        await this.queue.getJobs(this.bullOptions['allJobTypes']).then(jobs => {
-          result = jobs;
-        }).catch(error => {
-          that._handleError(`Error reading jobs: ${error}`);
-        });
+        try {
+          let jobsList: any[] = [];
+          for (let queue of this.queuesList) {
+            const getJobsResult = await queue.getJobs(this.bullOptions['allJobTypes']);
+            jobsList = jobsList.concat(getJobsResult);
+          }
+          result = jobsList;
+        } catch (err) {
+          that._handleError(`Error reading jobs: ${err}`);
+        }
       }
 
       if (typeFilterName) {
@@ -558,12 +687,17 @@ export class SchedulingService implements JobService {
   }
 
   async _getJobList(): Promise<Job[]> {
-    return this.queue.getJobs(this.bullOptions['allJobTypes']);
+    let jobsList: any[] = [];
+    for (let queue of this.queuesList) {
+      const getJobsResult = await queue.getJobs(this.bullOptions['allJobTypes']);
+      jobsList = jobsList.concat(getJobsResult);
+    }
+    return jobsList;
   }
 
   // delete a job by its job instance after processing 'jobDone' / 'jobFailed'
-  async _deleteJobInstance(jobId: JobId): Promise<void> {
-    return this._removeBullJob(jobId);
+  async _deleteJobInstance(jobId: JobId, queue: Queue.Queue): Promise<void> {
+    return this._removeBullJob(jobId, queue);
   }
 
   /**
@@ -571,7 +705,9 @@ export class SchedulingService implements JobService {
    */
   async delete(call: DeleteCall, context?: any): Promise<object> {
     if (_.isEmpty(call)) {
-      this._handleError(new errors.InvalidArgument('No arguments provided for delete operation'));
+      this._handleError(new errors.InvalidArgument(
+        'No arguments provided for delete operation'
+      ));
     }
     const subject = await getSubjectFromRedis(call, this.redisSubjectClient);
     const jobIDs = call.request.ids;
@@ -619,27 +755,31 @@ export class SchedulingService implements JobService {
     } else if ('ids' in call.request) {
       this.logger.verbose('Deleting jobs by their IDs', call.request.ids);
 
-      call.request.ids.forEach((jobDataKey) => {
-        let callback: Promise<void>;
+      for (let queue of this.queuesList) {
+        call.request.ids.forEach((jobDataKey) => {
+          let callback: Promise<void>;
 
-        if (typeof jobDataKey === 'string' && jobDataKey.startsWith('repeat:')) {
-          callback = this.queue.removeRepeatableByKey(jobDataKey);
-        } else {
-          callback = this.queue.getJob(jobDataKey).then(async (jobData) => {
-            if (jobData) {
-              this._removeBullJob(jobData.id);
-            }
-          });
-        }
-
-        callback.then(() => {
-          if (this.resourceEventsEnabled) {
-            dispatch.push(this.jobResourceEvents.emit('jobsDeleted', { id: jobDataKey }));
+          if (typeof jobDataKey === 'string' && jobDataKey.startsWith('repeat:')) {
+            callback = queue.removeRepeatableByKey(jobDataKey);
+          } else {
+            callback = queue.getJob(jobDataKey).then(async (jobData) => {
+              if (jobData) {
+                this._removeBullJob(jobData.id, queue);
+              }
+            });
           }
-        }).catch(err => {
-          this._handleError(err);
+
+          callback.then(() => {
+            if (this.resourceEventsEnabled) {
+              dispatch.push(this.jobResourceEvents.emit(
+                'jobsDeleted', { id: jobDataKey })
+              );
+            }
+          }).catch(err => {
+            this._handleError(err);
+          });
         });
-      });
+      }
     }
 
     await Promise.all(dispatch);
@@ -656,14 +796,17 @@ export class SchedulingService implements JobService {
     await this.createMetadata(call.request.items, AuthZAction.MODIFY, subject);
     let acsResponse: AccessResponse;
     try {
-      acsResponse = await checkAccessRequest(subject, call.request.items, AuthZAction.MODIFY,
-        'job', this);
+      acsResponse = await checkAccessRequest(
+        subject, call.request.items, AuthZAction.MODIFY, 'job', this
+      );
     } catch (err) {
       this.logger.error('Error occurred requesting access-control-srv:', err);
       throw err;
     }
     if (acsResponse.decision != Decision.PERMIT) {
-      throw new PermissionDenied(acsResponse.response.status.message, acsResponse.response.status.code);
+      throw new PermissionDenied(
+        acsResponse.response.status.message, acsResponse.response.status.code
+      );
     }
     if (_.isNil(call) || _.isNil(call.request) || _.isNil(call.request.items)) {
       this._handleError(new errors.InvalidArgument('Missing items in update request.'));
@@ -780,32 +923,36 @@ export class SchedulingService implements JobService {
    * Clear all job data.
    */
   async clear(): Promise<any> {
-    return this.queue.getJobs(this.bullOptions['allJobTypes']).then((jobs) => {
-      return Promise.all(jobs.map(async (job) => job.remove()));
-    }).catch(err => {
+    let allJobs: any[] = [];
+    for (let queue of this.queuesList) {
+      allJobs = allJobs.concat(await queue.getJobs(this.bullOptions['allJobTypes']));
+    }
+    return Promise.all(allJobs.map(async (job) => job.remove())).catch(err => {
       this._handleError(err);
       throw err;
     });
   }
 
   /**
-  * retreives and deletes the stalled (failed and completed) Jobs
-  */
+   * retrieves and deletes the stalled (failed and completed) Jobs
+   */
   async flushStalledJobs(stalledJobID: string, jobType: string): Promise<void> {
-    let result;
-    let jobIdsToDelete = [];
     try {
-      await this.queue.getJobs(['completed', 'failed']).then(jobs => {
-        result = jobs;
-      }).catch(error => {
-        this._handleError(`Error getting stalled jobs: ${error}`);
-      });
-      for (let job of result) {
-        jobIdsToDelete.push(job.id);
+      let result;
+      let jobIdsToDelete = [];
+      for (let queue of this.queuesList) {
+        await queue.getJobs(['completed', 'failed']).then(jobs => {
+          result = jobs;
+        }).catch(error => {
+          this._handleError(`Error getting stalled jobs: ${error}`);
+        });
+        for (let job of result) {
+          jobIdsToDelete.push(job.id);
+        }
       }
-      this.logger.debug('Following stalled job instaces will be deleted:', { jobIDs: jobIdsToDelete });
+      this.logger.debug('Following stalled job instances will be deleted:', { jobIDs: jobIdsToDelete });
       await this.delete({ request: { ids: jobIdsToDelete } }).catch(error => {
-        this._handleError(`Error occured deleting jobs ${jobIdsToDelete} : ${error}`);
+        this._handleError(`Error occurred deleting jobs ${jobIdsToDelete} : ${error}`);
       });
       await this.jobEvents.emit('jobDone', {
         id: stalledJobID,
@@ -885,8 +1032,8 @@ export class SchedulingService implements JobService {
     return picked;
   }
 
-  _removeBullJob(jobInstID: JobId): Promise<void> {
-    return this.queue.getJob(jobInstID).then(job => {
+  async _removeBullJob(jobInstID: JobId, queue: Queue.Queue): Promise<void> {
+    return queue.getJob(jobInstID).then(job => {
       if (job) {
         return job.remove();
       }
@@ -938,9 +1085,9 @@ export class SchedulingService implements JobService {
 
   /**
    * reads meta data from DB and updates owner information in resource if action is UPDATE / DELETE
-   * @param reaources list of resources
-   * @param entity entity name
+   * @param resources list of resources
    * @param action resource action
+   * @param subject subject name
    */
   async createMetadata(resources: any, action: string, subject?: Subject): Promise<any> {
     let orgOwnerAttributes = [];

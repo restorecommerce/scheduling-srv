@@ -339,23 +339,24 @@
       }
     }
   ],
-  "queueJobProcFn": [
+  "queue": [
     {
-      "name": "*",
+      "name": "defaultQueue",
       "concurrency": 5,
       "default": true
     },
     {
-      "name": "queue_2",
+      "name": "queue_1",
       "concurrency": 1,
-      "default": false
-    },
-    {
-      "name": "queue_3",
-      "concurrency": 150,
-      "default": false
+      "default": false,
+      "rateLimiting": {
+        "enabled": true,
+        "max": 100,
+        "duration": 5000
+      }
     }
   ],
+  "rescheduleMissedJobs" : true,
   "authorization": {
     "service": "scheduling-srv-acs",
     "enabled": true,
