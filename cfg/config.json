@@ -343,14 +343,9 @@
     {
       "name": "defaultQueue",
       "concurrency": 5,
-      "default": true
-    },
-    {
-      "name": "queue_1",
-      "concurrency": 1,
-      "default": false,
+      "default": true,
       "rateLimiting": {
-        "enabled": true,
+        "enabled": false,
         "max": 100,
         "duration": 5000
       }
