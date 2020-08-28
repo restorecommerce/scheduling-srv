@@ -343,12 +343,7 @@
     {
       "name": "defaultQueue",
       "concurrency": 5,
-      "default": true,
-      "rateLimiting": {
-        "enabled": false,
-        "max": 100,
-        "duration": 5000
-      }
+      "default": true
     }
   ],
   "rescheduleMissedJobs" : true,
