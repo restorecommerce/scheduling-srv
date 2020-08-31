@@ -64,10 +64,10 @@ This microservice exposes the following gRPC endpoints:
 [width="100%",cols="20%,16%,20%,44%",options="header",]
 |======================================================================================================================================
 | Field | Type | Label | Description
-| every | number | optional | Interval to run a job periodically in milliseconds.
+| every | number | optional | Interval to run a job periodically in milliseconds (cron setting cannot be used together with this setting).
 | cron | string | optional | Interval to run a job periodically in a cron format (e.g: "0 0 5 * * *"). This should only be used in recurring jobs.
-| startDate | string | optional | Used to define the exact time at which job should start repeating. Ex: "Jan 15, 2018 10:30:00".
-| endDate | string | optional | Used to define the exact time at which job should stop repeating. Ex: "Jan 15, 2018 10:30:00".
+| startDate | string | optional | Used to define the exact time at which job should start repeating (only with cron). Ex: "Jan 15, 2018 10:30:00".
+| endDate | string | optional | Used to define the exact time at which job should stop repeating Ex: "Jan 15, 2018 10:30:00".
 | count | number | optional | How many times a job has repeated.
 |======================================================================================================================================
 
