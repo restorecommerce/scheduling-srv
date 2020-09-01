@@ -135,7 +135,8 @@ export class SchedulingService implements JobService {
       let queueCfgObj = {
         name: queueCfg.name,
         concurrency: queueCfg.concurrency,
-        default: queueCfg.default
+        default: queueCfg.default,
+        runMissedScheduled: queueCfg.runMissedScheduled
       };
       this.queuesConfigList.push(queueCfgObj);
     }
@@ -290,14 +291,7 @@ export class SchedulingService implements JobService {
     // If the scheduling service goes down and if there were
     // recurring jobs which have missed schedules then
     // we will need to reschedule it for those missing intervals.
-    // If disabled in the config, skip rescheduling.
-    const rescheduleMissedJobs = this.cfg.get('rescheduleMissedJobs');
-    if (!_.isNil(rescheduleMissedJobs) && rescheduleMissedJobs == true ) {
-      this.logger.info('Rescheduling of missed jobs: ENABLED.');
-      this._rescheduleMissedJobs();
-    } else {
-      this.logger.info('Rescheduling of missed jobs: DISABLED.');
-    }
+    this._rescheduleMissedJobs();
   }
 
   /**
@@ -309,13 +303,21 @@ export class SchedulingService implements JobService {
     const createDispatch = [];
     let result: any[] = [];
     let thiz = this;
-    // get all the jobs
-    for (let queue of this.queuesList) {
-      await queue.getJobs(this.bullOptions['allJobTypes']).then(jobs => {
-        result = result.concat(jobs);
-      }).catch(error => {
-        thiz._handleError(`Error reading jobs: ${error}`);
-      });
+
+    // Get the jobs
+    for (let queueCfg of this.queuesConfigList) {
+      // If enabled in the config, or the config is missing,
+      // Reschedule the missed jobs, else skip.
+      let queue = _.find(this.queuesList, {name: queueCfg.name});
+      let runMissedScheduled = queueCfg.runMissedScheduled;
+      if (_.isNil(runMissedScheduled) ||
+        (!_.isNil(runMissedScheduled) && runMissedScheduled == true)) {
+        await queue.getJobs(this.bullOptions['allJobTypes']).then(jobs => {
+          result = result.concat(jobs);
+        }).catch(error => {
+          thiz._handleError(`Error reading jobs: ${error}`);
+        });
+      }
     }
     let lastRunTime;
     for (let job of result) {

@@ -343,10 +343,10 @@
     {
       "name": "defaultQueue",
       "concurrency": 5,
-      "default": true
+      "default": true,
+      "runMissedScheduled": false
     }
   ],
-  "rescheduleMissedJobs" : true,
   "authorization": {
     "service": "scheduling-srv-acs",
     "enabled": true,
