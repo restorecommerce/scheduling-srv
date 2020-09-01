@@ -328,13 +328,13 @@
       "name": "defaultQueue",
       "concurrency": 5,
       "default": true,
-      "runMissedScheduled": false
+      "runMissedScheduled": true
     },
     {
       "name": "test-job",
       "concurrency": 50,
       "default": false,
-      "runMissedScheduled": false,
+      "runMissedScheduled": true,
       "rateLimiting": {
         "enabled": false,
         "max": 1,

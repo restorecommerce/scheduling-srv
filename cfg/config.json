@@ -344,7 +344,7 @@
       "name": "defaultQueue",
       "concurrency": 5,
       "default": true,
-      "runMissedScheduled": false
+      "runMissedScheduled": true
     }
   ],
   "authorization": {
