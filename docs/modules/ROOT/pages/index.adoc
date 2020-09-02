@@ -184,7 +184,7 @@ These operations are exposed with the same input as the gRPC endpoints
 | schedule_type | string | required | Job type ex: `ONCE`, `RECURR` etc.
 | delete_scheduled | boolean | optional | Whether to delete this repeating job.
 | type | string | optional | Job Type (required if emitting back a message).
-| message | https://github.com/restorecommerce/protos/blob/master/google/protobuf/any.proto[`google.protobuf.Any`] | optional | Generic data type for job-specific data.
+| result | https://github.com/restorecommerce/protos/blob/master/google/protobuf/any.proto[`google.protobuf.Any`] | optional | Generic data type for job-specific data.
 |======================================================================================================================================
 
 `io.restorecommerce.job.JobFailed`
