@@ -61,7 +61,7 @@
     "pretest": "tsc -d && npm run tsctests && npm run createtopics",
     "tsctests": "tsc -d -p tsconfig.test.json",
     "tsctests:watch": "tsc -d -p tsconfig.test.json --watch",
-    "createtopics": "node setupTopics.js io.restorecommerce.jobs io.restorecommerce.jobs.resource io.restorecommerce.command",
+    "createtopics": "node setupTopics.js io.restorecommerce.jobs io.restorecommerce.command",
     "test": "npm run lint && nyc npm run mocha:kafka && nyc npm run mocha:kafka_acs && nyc npm run mocha:grpc && nyc npm run mocha:grpc_acs",
     "test-debug": "npm run mochadebug",
     "lint": "eslint src --ext .ts",

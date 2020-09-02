@@ -162,9 +162,6 @@
             "modifyJobs",
             "deleteJobs"
           ]
-        },
-        "jobs.resource": {
-          "topic": "io.restorecommerce.jobs.resource"
         }
       }
     }

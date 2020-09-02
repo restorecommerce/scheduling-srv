@@ -152,7 +152,7 @@ List of events emitted by this microservice for below topics:
 [width="100%",cols="31%,33%,36%",options="header",]
 |======================================================================================================================================
 | Topic Name | Event Name | Description
-| io.restorecommerce.jobs.resource | jobsCreated | emitted when a job is created.
+| io.restorecommerce.jobs | jobsCreated | emitted when a job is created.
 |  | jobsDeleted | emitted when a job is deleted.
 | io.restorecommerce.command | restoreResponse | system restore response.
 |  | resetResponse | system reset response.
@@ -197,7 +197,7 @@ These operations are exposed with the same input as the gRPC endpoints
 | error | string | required | Failure details.
 |======================================================================================================================================
 
-Events from the `io.restorecommerce.jobs.resource` topic are issued whenever a CRUD operation is performed.
+Events from the `io.restorecommerce.jobs` topic are issued whenever a CRUD operation is performed.
 They are useful for job rescheduling in case of Redis failure.
 
 Jobs emitted by this service to Kafka can be consumed by other microservices by listening to the `queuedJob` event.

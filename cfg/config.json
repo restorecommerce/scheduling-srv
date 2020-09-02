@@ -208,9 +208,6 @@
             "deleteJobs",
             "queuedJob"
           ]
-        },
-        "jobs.resource": {
-          "topic": "io.restorecommerce.jobs.resource"
         }
       }
     }

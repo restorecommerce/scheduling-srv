@@ -68,7 +68,7 @@ class JobsCommandInterface extends chassis.CommandInterface {
 
     this.schedulingService.disableEvents();
     const kafkaCfg = this.config.events.kafka;
-    const topicName = kafkaCfg.topics['jobs.resource'].topic;
+    const topicName = kafkaCfg.topics['jobs'].topic;
     const restoreSetup = {};
     if (!_.isEmpty(payload.jobs)) {
       restoreSetup[topicName] = {
@@ -215,10 +215,8 @@ export class Worker {
     await events.start();
     this.offsetStore = new chassis.OffsetStore(events, cfg, logger);
 
-    const JOBS_RESOURCE_TOPIC_NAME = kafkaCfg.topics['jobs.resource'].topic;
     const JOBS_TOPIC_NAME = kafkaCfg.topics.jobs.topic;
     // Subscribe to events which the business logic requires
-    const jobResourceEvents: Topic = events.topic(JOBS_RESOURCE_TOPIC_NAME);
     const jobEvents: Topic = events.topic(JOBS_TOPIC_NAME);
 
     const bullOptions = cfg.get('bull');
@@ -234,7 +232,7 @@ export class Worker {
     initializeCache();
 
     const schedulingService: SchedulingService = new SchedulingService(jobEvents,
-      jobResourceEvents, redisConfig, logger, redisClient, bullOptions, cfg, redisSubjectClient, this.authZ);
+      redisConfig, logger, redisClient, bullOptions, cfg, redisSubjectClient, this.authZ);
     await schedulingService.start();
     // Bind business logic to server
     const serviceNamesCfg = cfg.get('serviceNames');

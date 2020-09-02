@@ -43,7 +43,6 @@ export const unmarshallProtobufAny = (data: any): any => {
 export class SchedulingService implements JobService {
 
   jobEvents: kafkaClient.Topic;
-  jobResourceEvents: kafkaClient.Topic;
   logger: any;
 
   queuesConfigList: any;
@@ -61,11 +60,10 @@ export class SchedulingService implements JobService {
   authZCheck: boolean;
 
 
-  constructor(jobEvents: kafkaClient.Topic, jobResourceEvents: kafkaClient.Topic,
+  constructor(jobEvents: kafkaClient.Topic,
     redisConfig: any, logger: any, redisClient: any,
     bullOptions: any, cfg: any, redisSubjectClient: any, authZ: ACSAuthZ) {
     this.jobEvents = jobEvents;
-    this.jobResourceEvents = jobResourceEvents;
     this.resourceEventsEnabled = true;
     this.bullOptions = bullOptions;
     this.logger = logger;
@@ -195,7 +193,7 @@ export class SchedulingService implements JobService {
         }
 
         if (deleted && that.resourceEventsEnabled) {
-          await that.jobResourceEvents.emit('jobsDeleted', { id: job.id });
+          await that.jobEvents.emit('jobsDeleted', { id: job.id });
         }
         await queue.clean(0);
       });
@@ -529,7 +527,7 @@ export class SchedulingService implements JobService {
 
       if (this.resourceEventsEnabled &&
         (!('timeout' in job.options) || job.options.timeout !== 1)) {
-        await this.jobResourceEvents.emit('jobsCreated', job);
+        await this.jobEvents.emit('jobsCreated', job);
       }
     }
 
@@ -750,7 +748,7 @@ export class SchedulingService implements JobService {
         for (let job of jobs) {
           await job.remove();
           if (this.resourceEventsEnabled) {
-            dispatch.push(this.jobResourceEvents.emit('jobsDeleted', { id: job.id }));
+            dispatch.push(this.jobEvents.emit('jobsDeleted', { id: job.id }));
           }
         }
       });
@@ -773,7 +771,7 @@ export class SchedulingService implements JobService {
 
           callback.then(() => {
             if (this.resourceEventsEnabled) {
-              dispatch.push(this.jobResourceEvents.emit(
+              dispatch.push(this.jobEvents.emit(
                 'jobsDeleted', { id: jobDataKey })
               );
             }

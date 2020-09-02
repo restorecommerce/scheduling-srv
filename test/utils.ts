@@ -23,7 +23,7 @@ export function validateJobDonePayload(job: any): void {
   payload.testValue.should.equal('test-value');
 }
 
-export function validateJobResource(job: any): void {
+export function validateJob(job: any): void {
   should.exist(job.data);
   should.exist(job.data.payload);
   const payload = unmarshallProtobufAny(job.data.payload);
