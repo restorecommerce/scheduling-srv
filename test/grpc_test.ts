@@ -146,7 +146,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
         validateScheduledJob(job, 'ONCE');
 
         const { id, type, schedule_type } = job;
-        await jobEvents.emit('jobDone', { id, type, schedule_type, message: marshallProtobufAny({
+        await jobEvents.emit('jobDone', { id, type, schedule_type, result: marshallProtobufAny({
             testValue: 'test-value'
           }) });
       });

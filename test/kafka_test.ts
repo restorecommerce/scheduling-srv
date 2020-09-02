@@ -148,7 +148,7 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, () => {
         validateScheduledJob(job, 'ONCE');
 
         const { id, type, schedule_type } = job;
-        await jobTopic.emit('jobDone', { id, type, schedule_type, message: marshallProtobufAny({
+        await jobTopic.emit('jobDone', { id, type, schedule_type, result: marshallProtobufAny({
             testValue: 'test-value'
           }) });
       });
