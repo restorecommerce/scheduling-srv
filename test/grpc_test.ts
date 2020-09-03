@@ -327,12 +327,10 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
         } as NewJob;
       }
 
-      const offset = await jobEvents.$offset(-1);
-      const newVar = await grpcSchedulingSrv.create({
+      await grpcSchedulingSrv.create({
         items: jobs, subject
       }, {});
 
-      await jobEvents.$wait(offset + 3);
     });
     it(`should retrieve all job properties correctly with empty filter ${testSuffix}`, async () => {
       const result = await grpcSchedulingSrv.read({ sort: SortOrder.DESCENDING, subject }, {});

@@ -179,7 +179,8 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, () => {
       const offset = await jobTopic.$offset(-1);
       await jobTopic.emit('createJobs', { items: [job], subject });
 
-      await jobTopic.$wait(offset + 3); // createJobs, queuedJob, jobDone
+      // createJobs, jobsCreated, queuedJob, jobDone
+      await jobTopic.$wait(offset + 4);
       // Simulate timeout
       await new Promise((resolve) => setTimeout(resolve, 100));
 
@@ -234,6 +235,7 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, () => {
       });
       result.items.should.have.length(1);
 
+      // createJobs, jobsCreated, queuedJob, jobDone
       await jobTopic.$wait(offset + 4);
 
       schedulingService.disableAC();
@@ -346,7 +348,8 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, () => {
       const offset = await jobTopic.$offset(-1);
       await jobTopic.emit('createJobs', { items: jobs, subject });
 
-      await jobTopic.$wait(offset + 3);
+      // jobsCreated
+      await jobTopic.$wait(offset + 1);
 
       schedulingService.disableAC();
       let result = await schedulingService.read({ request: { subject } }, {});

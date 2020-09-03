@@ -479,7 +479,7 @@ export class SchedulingService implements JobService {
     }
 
     const jobs = call.request.items.map(x => this._validateJob(x));
-    const result: Job[] = [];
+    let result: Job[] = [];
 
     // Scheduling jobs
     for (let i = 0; i < jobs.length; i += 1) {
@@ -524,14 +524,9 @@ export class SchedulingService implements JobService {
       result.push(await queue.add(job.type, job.data, bullOptions));
 
       this.logger.verbose(`job@${job.type} created`, job);
-
-      if (this.resourceEventsEnabled &&
-        (!('timeout' in job.options) || job.options.timeout !== 1)) {
-        await this.jobEvents.emit('jobsCreated', job);
-      }
     }
 
-    return {
+    const jobList = {
       items: result.map(job => ({
         id: job.id,
         type: job.name,
@@ -540,6 +535,12 @@ export class SchedulingService implements JobService {
       })),
       total_count: result.length
     };
+
+    if (this.resourceEventsEnabled) {
+      await this.jobEvents.emit('jobsCreated', jobList);
+    }
+
+    return jobList;
   }
 
   private filterByOwnerShip(readRequest, result) {
