@@ -23,10 +23,10 @@ In the case when there is no match the jobs are being added to the default Queue
 link:https://github.com/restorecommerce/scheduling-srv/tree/master/src/external-jobs[external-jobs] directory.
 Use this to execute jobs on the scheduling-srv itself.
 * The rescheduling of missed recurring jobs on service start up can be disabled
-in the https://github.com/restorecommerce/scheduling-srv/blob/master/cfg/config.json#L349[configuration].
+in the https://github.com/restorecommerce/scheduling-srv/blob/master/cfg/config.json#L344[configuration].
 * Queues can be configured to use
-https://github.com/restorecommerce/scheduling-srv/blob/master/cfg/config.json#L345[concurrency]
-and https://github.com/restorecommerce/scheduling-srv/blob/master/test/cfg/config_test.json#L336[rate limiting]
+https://github.com/restorecommerce/scheduling-srv/blob/master/cfg/config.json#L342[concurrency]
+and https://github.com/restorecommerce/scheduling-srv/blob/master/test/cfg/config_test.json#L335[rate limiting]
 for job processing, where `max` is the maximum number of jobs processed, per `duration` in milliseconds.
 
 [#API]
