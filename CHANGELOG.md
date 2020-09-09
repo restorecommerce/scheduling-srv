@@ -1,3 +1,8 @@
+### 0.1.4 (September 9th, 2020)
+
+- updated acs-client and protos
+- fix not to read subject from redis
+
 ### 0.1.3 (September 8th, 2020)
 
 - added a default queue with default configuration.
