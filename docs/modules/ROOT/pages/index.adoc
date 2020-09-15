@@ -37,6 +37,16 @@ This microservice exposes the following gRPC endpoints:
 [#api_scheduling_job]
 === `Job`
 
+`io.restorecommerce.job.JobList`
+
+[width="100%",cols="20%,16%,20%,44%",options="header",]
+|======================================================================================================================================
+| Field | Type | Label | Description
+| items | [ ]`io.restorecommerce.job.Job` | required | List of Jobs.
+| total_count | number | optional | Number of Jobs
+|authorization_mode |`io.restorecommerce.user.Subject` or `io.restorecommerce.user.ApiKey` |optional |authorization details
+|======================================================================================================================================
+
 `io.restorecommerce.job.Job`.
 
 [width="100%",cols="20%,16%,20%,44%",options="header",]
@@ -119,22 +129,44 @@ The microservice exposes the below CRUD operations for creating or modifying Job
 `io.restorecommerce.job.Service`
 
 [width="100%",cols="20%,16%,20%,44%",options="header",]
-|======================================================================================================================================
+|========================================================================================================================================================================================================
 | Method Name | Request Type | Response Type | Description
 | Create | `io.restorecommerce.job.JobList` | `io.restorecommerce.job.JobList` | Create a list of Job resources.
 | Read | `io.restorecommerce.job.JobReadRequest` | `io.restorecommerce.job.JobList` | Read a list of Job resources.
 | Update | `io.restorecommerce.job.JobList` | `io.restorecommerce.job.JobList` | Update a list of Job resources.
-| Delete | `io.restorecommerce.resourcebase.DeleteRequest` | https://github.com/restorecommerce/protos/blob/master/google/protobuf/empty.proto[`google.protobuf.Empty`] | Delete a list of Job resources.
-|======================================================================================================================================
+| Delete | `io.restorecommerce.resourcebase.DeleteRequest` | https://github.com/restorecommerce/protos/blob/master/google/protobuf/empty.proto [`google.protobuf.Empty`] | Delete a list of Job resources.
+|==========================================================================================================================================================================================================
 
-`io.restorecommerce.job.JobList`
+`io.restorecommerce.job.JobReadRequest`
 
 [width="100%",cols="20%,16%,20%,44%",options="header",]
-|======================================================================================================================================
+|======================================================================================================================================================================
 | Field | Type | Label | Description
-| items | [ ]`io.restorecommerce.job.Job` | required | List of Jobs.
-| total_count | number | optional | Number of Jobs.
-|======================================================================================================================================
+| limit | number | optional | maximum number of jobs to be returned
+| sort  | `io.restorecommerce.job.SortOrder` | optional | sort order
+| filter| `io.restorecommerce.job.JobFilter` | optional | job filter
+| field | https://github.com/restorecommerce/protos/blob/master/io/restorecommerce/resource_base.proto [`io.restorecommerce.resourcebase.FieldFilter`] | field filter
+|authorization_mode |`io.restorecommerce.user.Subject` or `io.restorecommerce.user.ApiKey` |optional |authorization details
+|======================================================================================================================================================================
+
+`io.restorecommerce.job.SortOrder`
+
+[width="100%",cols="20%,16%,20%,44%",options="header",]
+|=======================================================
+| Field | Type | Label | Description
+| UNSORTED | ENUM | optional | unsorted order
+| ASCENDING  | ENUM | optional | ascending order
+| DESCENDING| ENUM | optional | descending order
+|=======================================================
+
+`io.restorecommerce.job.JobFilter`
+
+[width="100%",cols="20%,16%,20%,44%",options="header",]
+|=======================================================
+| Field | Type | Label | Description
+| job_ids | string [] | optional | list of job identifiers
+| type  | string | optional | job type
+|=======================================================
 
 Please note that the `update` operation literally just deletes an existing job and reschedules it with new data.
 
