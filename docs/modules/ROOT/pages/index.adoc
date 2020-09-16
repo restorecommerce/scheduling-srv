@@ -186,12 +186,14 @@ List of events emitted by this microservice for below topics:
 [width="100%",cols="31%,33%,36%",options="header",]
 |===============================================================================
 | Topic Name | Event Name | Description
-| io.restorecommerce.jobs | jobsCreated | emitted when a job is created.
-|  | jobsDeleted | emitted when a job is deleted.
+| io.restorecommerce.jobs    | jobsCreated | emitted when a job is created.
+|                            | jobsDeleted | emitted when a job is deleted.
 | io.restorecommerce.command | restoreResponse | system restore response.
-|  | resetResponse | system reset response.
-|  | healthCheckResponse | system health check response.
-|  | versionResponse | system version response.
+|                            | resetResponse | system reset response.
+|                            | healthCheckResponse | system health check response.
+|                            | versionResponse | system version response.
+|                            |`flushCacheResponse` | flush ACS Cache response
+|                            |`setApiKeyResponse` | set API Key response
 |===============================================================================
 
 Jobs can be created, updated or deleted by issuing Kafka messages to topic `io.restorecommerce.jobs`.
@@ -246,13 +248,15 @@ This microservice consumes messages for the following events by topic:
 [width="100%",cols="31%,33%,36%",options="header",]
 |===============================================================================
 | Topic Name | Event Name | Description
-| io.restorecommerce.jobs | createJobs | for creating jobs
-|  | modifyJobs | for modifying specific jobs
-|  | deleteJobs | for deleting jobs
-|  | jobDone | for when a job has finished
-|  | jobFailed | for when a job has failed
+| io.restorecommerce.jobs    | createJobs | for creating jobs
+|                            | modifyJobs | for modifying specific jobs
+|                            | deleteJobs | for deleting jobs
+|                            | jobDone | for when a job has finished
+|                            | jobFailed | for when a job has failed
 | io.restorecommerce.command | restoreCommand | for triggering for system restore
-|  | resetCommand | for triggering system reset
-|  | healthCheckCommand | to get system health check
-|  | versionCommand | to get system version
+|                            | resetCommand | for triggering system reset
+|                            | healthCheckCommand | to get system health check
+|                            | versionCommand | to get system version
+|                            |`flushCacheCommand` | used to flush ACS Cache
+|                            |`configUpdateCommand` | used to update configurations
 |===============================================================================
