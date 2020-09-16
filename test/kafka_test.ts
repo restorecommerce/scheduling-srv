@@ -179,7 +179,7 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, () => {
       const offset = await jobTopic.$offset(-1);
       await jobTopic.emit('createJobs', { items: [job], subject });
 
-      // createJobs, jobsCreated, queuedJob, jobDone
+      // createJobs, jobsCreated, queuedJob, jobDone, jobDeleted
       await jobTopic.$wait(offset + 4);
       // Simulate timeout
       await new Promise((resolve) => setTimeout(resolve, 100));

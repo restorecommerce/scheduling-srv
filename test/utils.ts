@@ -17,10 +17,11 @@ export function validateScheduledJob(job: any, expectedSchedule: string): void {
 }
 
 export function validateJobDonePayload(job: any): void {
-  should.exist(job.result);
-  const payload = unmarshallProtobufAny(job.result);
-  should.exist(payload.testValue);
-  payload.testValue.should.equal('test-value');
+  if (job && job.result) {
+    should.exist(job.result);
+    const payload = unmarshallProtobufAny(job.result);
+    payload.testValue.should.equal('test-value');
+  }
 }
 
 export function validateJob(job: any): void {
