@@ -129,25 +129,25 @@ The microservice exposes the below CRUD operations for creating or modifying Job
 `io.restorecommerce.job.Service`
 
 [width="100%",cols="20%,16%,20%,44%",options="header",]
-|========================================================================================================================================================================================================
+|=============================================================================================================================================
 | Method Name | Request Type | Response Type | Description
 | Create | `io.restorecommerce.job.JobList` | `io.restorecommerce.job.JobList` | Create a list of Job resources.
 | Read | `io.restorecommerce.job.JobReadRequest` | `io.restorecommerce.job.JobList` | Read a list of Job resources.
 | Update | `io.restorecommerce.job.JobList` | `io.restorecommerce.job.JobList` | Update a list of Job resources.
 | Delete | `io.restorecommerce.resourcebase.DeleteRequest` | https://github.com/restorecommerce/protos/blob/master/google/protobuf/empty.proto [`google.protobuf.Empty`] | Delete a list of Job resources.
-|==========================================================================================================================================================================================================
+|==============================================================================================================================================
 
 `io.restorecommerce.job.JobReadRequest`
 
 [width="100%",cols="20%,16%,20%,44%",options="header",]
-|======================================================================================================================================================================
+|==============================================================================================================================================================
 | Field | Type | Label | Description
 | limit | number | optional | maximum number of jobs to be returned
 | sort  | `io.restorecommerce.job.SortOrder` | optional | sort order
 | filter| `io.restorecommerce.job.JobFilter` | optional | job filter
 | field | https://github.com/restorecommerce/protos/blob/master/io/restorecommerce/resource_base.proto [`io.restorecommerce.resourcebase.FieldFilter`] | field filter
 |authorization_mode |`io.restorecommerce.user.Subject` or `io.restorecommerce.user.ApiKey` |optional |authorization details
-|======================================================================================================================================================================
+|===============================================================================================================================================================
 
 `io.restorecommerce.job.SortOrder`
 
@@ -162,11 +162,11 @@ The microservice exposes the below CRUD operations for creating or modifying Job
 `io.restorecommerce.job.JobFilter`
 
 [width="100%",cols="20%,16%,20%,44%",options="header",]
-|=======================================================
+|==========================================================
 | Field | Type | Label | Description
 | job_ids | string [] | optional | list of job identifiers
 | type  | string | optional | job type
-|=======================================================
+|==========================================================
 
 Please note that the `update` operation literally just deletes an existing job and reschedules it with new data.
 
@@ -182,7 +182,7 @@ For the detailed protobuf message structure of `io.restorecommerce.job.ReadReque
 List of events emitted by this microservice for below topics:
 
 [width="100%",cols="31%,33%,36%",options="header",]
-|======================================================================================================================================
+|========================================================================
 | Topic Name | Event Name | Description
 | io.restorecommerce.jobs | jobsCreated | emitted when a job is created.
 |  | jobsDeleted | emitted when a job is deleted.
@@ -190,7 +190,7 @@ List of events emitted by this microservice for below topics:
 |  | resetResponse | system reset response.
 |  | healthCheckResponse | system health check response.
 |  | versionResponse | system version response.
-|======================================================================================================================================
+|=========================================================================
 
 Jobs can be created, updated or deleted by issuing Kafka messages to topic `io.restorecommerce.jobs`.
 These operations are exposed with the same input as the gRPC endpoints
@@ -199,13 +199,13 @@ These operations are exposed with the same input as the gRPC endpoints
 `io.restorecommerce.job.ScheduledJob`
 
 [width="100%",cols="20%,16%,20%,44%",options="header",]
-|======================================================================================================================================
+|======================================================================================================
 | Field | Type | Label | Description
 | id | number | required | Job instance ID in Redis.
 | type | string | required | Arbitrary job type (e.g: 'daily_email_dispatcher').
 | data | `io.restorecommerce.job.Data` | required | Arbitrary job type (e.g: 'daily_email_dispatcher').
 | schedule_type | string | required | Job type ex: `ONCE`, `RECURR` etc.
-|======================================================================================================================================
+|======================================================================================================
 
 `io.restorecommerce.job.JobDone`
 
@@ -222,12 +222,12 @@ These operations are exposed with the same input as the gRPC endpoints
 `io.restorecommerce.job.JobFailed`
 
 [width="100%",cols="20%,16%,20%,44%",options="header",]
-|======================================================================================================================================
+|========================================================================
 | Field | Type | Label | Description
 | id | number | required | Job instance ID in redis.
 | schedule_type | string | required | Job type ex: `ONCE`, `RECURR` etc.
 | error | string | required | Failure details.
-|======================================================================================================================================
+|========================================================================
 
 Events from the `io.restorecommerce.jobs` topic are issued whenever a CRUD operation is performed.
 They are useful for job rescheduling in case of Redis failure.
@@ -242,7 +242,7 @@ A job is always deleted upon being receiving failure or completion data, unless 
 This microservice consumes messages for the following events by topic:
 
 [width="100%",cols="31%,33%,36%",options="header",]
-|======================================================================================================================================
+|=================================================================================
 | Topic Name | Event Name | Description
 | io.restorecommerce.jobs | createJobs | for creating jobs
 |  | modifyJobs | for modifying specific jobs
@@ -253,4 +253,4 @@ This microservice consumes messages for the following events by topic:
 |  | resetCommand | for triggering system reset
 |  | healthCheckCommand | to get system health check
 |  | versionCommand | to get system version
-|======================================================================================================================================
+|==================================================================================
