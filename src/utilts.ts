@@ -94,7 +94,7 @@ export async function checkAccessRequest(subject: Subject, resources: any, actio
   };
 }
 
-export const getSubjectFromRedis = async (call: CreateCall | ReadCall | UpdateCall | DeleteCall,
+export const getSubject = async (call: CreateCall | ReadCall | UpdateCall | DeleteCall,
   redisClient: RedisClient) => {
   let subject: any = call.request.subject;
   if (!subject) {

@@ -11,7 +11,7 @@ import {
   FilterOpts, KafkaOpts
 } from './types';
 import { parseExpression } from 'cron-parser';
-import { getSubjectFromRedis, AccessResponse, checkAccessRequest, ReadPolicyResponse } from './utilts';
+import { getSubject, AccessResponse, checkAccessRequest, ReadPolicyResponse } from './utilts';
 
 const JOB_DONE_EVENT = 'jobDone';
 const JOB_FAILED_EVENT = 'jobFailed';
@@ -459,7 +459,7 @@ export class SchedulingService implements JobService {
    * @param {any} context RPC context
    */
   async create(call: CreateCall, context?: any): Promise<GRPCResult> {
-    let subject = await getSubjectFromRedis(call, this.redisSubjectClient);
+    let subject = await getSubject(call, this.redisSubjectClient);
     if (_.isNil(call) || _.isNil(call.request) || _.isNil(call.request.items)) {
       this._handleError(new errors.InvalidArgument('Missing items in create request.'));
     }
@@ -582,7 +582,7 @@ export class SchedulingService implements JobService {
    */
   async read(call: ReadCall, context?: any): Promise<GRPCResult> {
     const readRequest = _.cloneDeep(call.request);
-    let subject = await getSubjectFromRedis(call, this.redisSubjectClient);
+    let subject = await getSubject(call, this.redisSubjectClient);
     let acsResponse: ReadPolicyResponse;
     try {
       acsResponse = await checkAccessRequest(subject, readRequest, AuthZAction.READ,
@@ -710,7 +710,7 @@ export class SchedulingService implements JobService {
         'No arguments provided for delete operation'
       ));
     }
-    const subject = await getSubjectFromRedis(call, this.redisSubjectClient);
+    const subject = await getSubject(call, this.redisSubjectClient);
     const jobIDs = call.request.ids;
     let resources = [];
     let action;
@@ -792,7 +792,7 @@ export class SchedulingService implements JobService {
    * Reschedules a job - deletes it and recreates it with a new generated ID.
    */
   async update(call: UpdateCall, context?: any): Promise<GRPCResult> {
-    let subject = await getSubjectFromRedis(call, this.redisSubjectClient);
+    let subject = await getSubject(call, this.redisSubjectClient);
     // update meta data for owner information
     await this.createMetadata(call.request.items, AuthZAction.MODIFY, subject);
     let acsResponse: AccessResponse;
@@ -868,7 +868,7 @@ export class SchedulingService implements JobService {
    * existing one if it already exists.
    */
   async upsert(call: any, context?: any): Promise<GRPCResult> {
-    let subject = await getSubjectFromRedis(call, this.redisSubjectClient);
+    let subject = await getSubject(call, this.redisSubjectClient);
     await this.createMetadata(call.request.items, AuthZAction.MODIFY, subject);
     let acsResponse;
     try {
