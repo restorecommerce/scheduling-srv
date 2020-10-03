@@ -1,3 +1,7 @@
+### 0.1.5 (October 3rd, 2020)
+
+- updated acs-client and restructured protos
+
 ### 0.1.4 (September 9th, 2020)
 
 - updated acs-client and protos
