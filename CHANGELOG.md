@@ -1,3 +1,7 @@
+### 0.1.6 (October 3rd, 2020)
+
+- updated acs-client includes the fix for validation of subject id and token
+
 ### 0.1.5 (October 3rd, 2020)
 
 - updated acs-client and restructured protos
