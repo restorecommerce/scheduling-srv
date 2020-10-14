@@ -238,7 +238,7 @@ export class Worker {
     const serviceNamesCfg = cfg.get('serviceNames');
     await server.bind(serviceNamesCfg.scheduling, schedulingService);
 
-    const cis: chassis.ICommandInterface = new JobsCommandInterface(server, cfg,
+    const cis = new JobsCommandInterface(server, cfg,
       logger, events, schedulingService, redisSubjectClient);
     await server.bind(serviceNamesCfg.cis, cis);
 
@@ -306,6 +306,10 @@ export class Worker {
     const transport = server.transport[transportName];
     const reflectionService = new chassis.grpc.ServerReflection(transport.$builder, server.config);
     await server.bind(reflectionServiceName, reflectionService);
+
+    await server.bind(serviceNamesCfg.health, new chassis.Health(cis, async () => {
+      return redisClient.ping();
+    }));
 
     // Hook any external jobs
     const externalJobFiles = fs.readdirSync('./lib/external-jobs');

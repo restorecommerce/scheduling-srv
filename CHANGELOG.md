@@ -1,3 +1,8 @@
+### UNRELEASED
+
+- add new grpc healthcheck with readiness probe
+- listen on 0.0.0.0 for grpc port
+
 ### 0.1.6 (October 3rd, 2020)
 
 - updated acs-client includes the fix for validation of subject id and token
