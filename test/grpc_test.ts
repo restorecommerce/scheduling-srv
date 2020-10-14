@@ -3,7 +3,7 @@ import * as should from 'should';
 import { marshallProtobufAny } from '../lib/schedulingService';
 import { Worker } from '../lib/worker';
 import { Topic } from '@restorecommerce/kafka-client';
-import * as sconfig from '@restorecommerce/service-config';
+import { createServiceConfig } from '@restorecommerce/service-config';
 import { Client } from '@restorecommerce/grpc-client';
 import { Logger } from '@restorecommerce/logger';
 import {
@@ -82,7 +82,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
   before(async function (): Promise<any> {
     this.timeout(4000);
     worker = new Worker();
-    const cfg = sconfig(process.cwd() + '/test');
+    const cfg = createServiceConfig(process.cwd() + '/test');
     await worker.start(cfg);
     logger = worker.logger;
 
@@ -143,9 +143,11 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
         validateScheduledJob(job, 'ONCE');
 
         const { id, type, schedule_type } = job;
-        await jobEvents.emit('jobDone', { id, type, schedule_type, result: marshallProtobufAny({
+        await jobEvents.emit('jobDone', {
+          id, type, schedule_type, result: marshallProtobufAny({
             testValue: 'test-value'
-          }) });
+          })
+        });
       });
 
       // validate message emitted on jobDone event.

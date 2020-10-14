@@ -1,5 +1,5 @@
-import * as sconfig from '@restorecommerce/service-config';
-import { Logger } from '@restorecommerce/logger';
+import { createServiceConfig } from '@restorecommerce/service-config';
+import { createLogger, Logger } from '@restorecommerce/logger';
 import { Events } from '@restorecommerce/kafka-client';
 import { marshallProtobufAny } from '../schedulingService';
 import * as _ from 'lodash';
@@ -9,9 +9,9 @@ let logger: Logger;
 
 export default async (cfg?: any) => {
   if (!cfg) {
-    cfg = sconfig(__dirname + '/../../');
+    cfg = createServiceConfig(__dirname + '/../../');
   }
-  logger = new Logger(cfg.get('logger'));
+  logger = createLogger(cfg.get('logger'));
 
   const kafkaCfg = cfg.get('events:kafka');
   const events: Events = new Events(kafkaCfg, logger);

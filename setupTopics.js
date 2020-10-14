@@ -1,10 +1,10 @@
 const { Events } = require('@restorecommerce/kafka-client');
-const RestoreLogger = require('@restorecommerce/logger');
-const sconfig = require('@restorecommerce/service-config');
+const { createLogger } = require('@restorecommerce/logger');
+const { createServiceConfig } = require('@restorecommerce/service-config');
 
 async function createTopics() {
-  const cfg = sconfig(process.cwd());
-  const logger = new RestoreLogger.Logger(cfg.get('logger'));
+  const cfg = createServiceConfig(process.cwd());
+  const logger = createLogger(cfg.get('logger'));
   const events = new Events(cfg.get('events:kafka'), logger);
   await events.start();
 

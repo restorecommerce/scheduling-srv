@@ -1,9 +1,9 @@
 import * as _ from 'lodash';
 import * as chassis from '@restorecommerce/chassis-srv';
 import { Events, Topic } from '@restorecommerce/kafka-client';
-import { Logger } from '@restorecommerce/logger';
+import { createLogger, Logger } from '@restorecommerce/logger';
 import { SchedulingService } from './schedulingService';
-import * as sconfig from '@restorecommerce/service-config';
+import { createServiceConfig } from '@restorecommerce/service-config';
 import * as cacheManager from 'cache-manager';
 import * as redisStore from 'cache-manager-redis';
 import * as fs from 'fs';
@@ -191,10 +191,10 @@ export class Worker {
   async start(cfg: any): Promise<any> {
     // Load config
     if (!cfg) {
-      cfg = sconfig(process.cwd());
+      cfg = createServiceConfig(process.cwd());
     }
     // Create a new microservice Server
-    const logger = new Logger(cfg.get('logger'));
+    const logger = createLogger(cfg.get('logger'));
     this.logger = logger;
     const server = new chassis.Server(cfg.get('server'), logger);
 
@@ -347,7 +347,7 @@ export class Worker {
 
 if (require.main === module) {
   const worker = new Worker();
-  const cfg = sconfig(process.cwd());
+  const cfg = createServiceConfig(process.cwd());
   worker.start(cfg).then().catch((err) => {
     worker.logger.error('startup error:', err);
     process.exit(1);

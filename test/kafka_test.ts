@@ -2,11 +2,11 @@ import * as _ from 'lodash';
 import * as mocha from 'mocha';
 import * as should from 'should';
 
-import { SchedulingService, marshallProtobufAny, unmarshallProtobufAny } from '../lib/schedulingService';
+import { SchedulingService, marshallProtobufAny } from '../lib/schedulingService';
 import { Worker } from '../lib/worker';
 
 import { Topic } from '@restorecommerce/kafka-client';
-import * as sconfig from '@restorecommerce/service-config';
+import { createServiceConfig } from '@restorecommerce/service-config';
 
 import {
   validateJob,
@@ -84,7 +84,7 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, () => {
     this.timeout(4000);
     worker = new Worker();
 
-    cfg = sconfig(process.cwd() + '/test');
+    cfg = createServiceConfig(process.cwd() + '/test');
     await worker.start(cfg);
 
     schedulingService = worker.schedulingService;
@@ -145,9 +145,11 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, () => {
         validateScheduledJob(job, 'ONCE');
 
         const { id, type, schedule_type } = job;
-        await jobTopic.emit('jobDone', { id, type, schedule_type, result: marshallProtobufAny({
+        await jobTopic.emit('jobDone', {
+          id, type, schedule_type, result: marshallProtobufAny({
             testValue: 'test-value'
-          }) });
+          })
+        });
       });
 
       // validate message emitted on jobDone event.

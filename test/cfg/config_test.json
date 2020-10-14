@@ -223,6 +223,18 @@
             "schedulingGRPC"
           ]
         }
+      },
+      "grpc-health-v1": {
+        "check": {
+          "transport": [
+            "schedulingGRPC"
+          ]
+        },
+        "watch": {
+          "transport": [
+            "schedulingGRPC"
+          ]
+        }
       }
     },
     "transports": [
@@ -232,12 +244,14 @@
         "services": {
           "io-restorecommerce-scheduling-srv": "io.restorecommerce.job.Service",
           "io-restorecommerce-scheduling-cis": "io.restorecommerce.commandinterface.Service",
-          "io-restorecommerce-scheduling-reflection": "grpc.reflection.v1alpha.ServerReflection"
+          "io-restorecommerce-scheduling-reflection": "grpc.reflection.v1alpha.ServerReflection",
+          "grpc-health-v1": "grpc.health.v1.Health"
         },
         "protos": [
           "io/restorecommerce/job.proto",
           "io/restorecommerce/commandinterface.proto",
           "grpc/reflection/v1alpha/reflection.proto",
+          "grpc/health/v1/health.proto",
           "google/protobuf/descriptor.proto"
         ],
         "protoRoot": "node_modules/@restorecommerce/protos/",
@@ -248,7 +262,8 @@
   "serviceNames": {
     "scheduling": "io-restorecommerce-scheduling-srv",
     "cis": "io-restorecommerce-scheduling-cis",
-    "reflection": "io-restorecommerce-scheduling-reflection"
+    "reflection": "io-restorecommerce-scheduling-reflection",
+    "health": "grpc-health-v1"
   },
   "client": {
     "schedulingClient": {
