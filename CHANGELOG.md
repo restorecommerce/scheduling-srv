@@ -1,5 +1,7 @@
-### UNRELEASED
+### 0.1.7 (October 15th, 2020)
 
+- updated chassis-srv
+- add acs-srv readiness check
 - add new grpc healthcheck with readiness probe
 - listen on 0.0.0.0 for grpc port
 - up acs-client, protos and deps
