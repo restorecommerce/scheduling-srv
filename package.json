@@ -3,7 +3,7 @@
   "version": "0.1.6",
   "description": "Restore Commerce job scheduling microservice",
   "main": "lib/start.js",
-  "author": "Invend GmbH",
+  "author": "n-fuse GmbH",
   "repository": {
     "type": "git",
     "url": "https://github.com/restorecommerce/scheduling-srv.git"
