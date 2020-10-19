@@ -1,7 +1,7 @@
 {
   "name": "@restorecommerce/scheduling-srv",
-  "version": "0.1.7",
-  "description": "Restore Commerce job scheduling microservice",
+  "version": "0.1.8",
+  "description": "Restorecommerce job scheduling microservice",
   "main": "lib/start.js",
   "author": "n-fuse GmbH",
   "repository": {
@@ -17,7 +17,7 @@
     "scheduling"
   ],
   "dependencies": {
-    "@restorecommerce/acs-client": "^0.2.13",
+    "@restorecommerce/acs-client": "^0.2.14",
     "@restorecommerce/chassis-srv": "^0.1.6",
     "@restorecommerce/cluster-service": "^0.1.4",
     "@restorecommerce/kafka-client": "^0.1.12",
