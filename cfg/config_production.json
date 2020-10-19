@@ -21,7 +21,7 @@
       "publisher": {
         "name": "static",
         "instances": [
-          "grpc://access-control-srv:50061"
+          "grpc://access-control-srv:50051"
         ]
       }
     }
