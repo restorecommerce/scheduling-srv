@@ -232,7 +232,7 @@ export class Worker {
     initializeCache();
 
     const schedulingService: SchedulingService = new SchedulingService(jobEvents,
-      redisConfig, logger, redisClient, bullOptions, cfg, redisSubjectClient, this.authZ);
+      redisConfig, logger, redisClient, bullOptions, cfg, this.authZ);
     await schedulingService.start();
     // Bind business logic to server
     const serviceNamesCfg = cfg.get('serviceNames');
