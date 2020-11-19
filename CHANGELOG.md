@@ -1,3 +1,8 @@
+### 0.1.9 (November 19th, 2020)
+
+- changes to remove subject-id and pass only token
+- updated dependencies
+
 ### 0.1.8 (October 19th, 2020)
 
 - updated chassis-srv

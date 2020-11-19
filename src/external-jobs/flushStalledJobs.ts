@@ -1,5 +1,6 @@
 import { createServiceConfig } from '@restorecommerce/service-config';
-import { createLogger, Logger } from '@restorecommerce/logger';
+import { createLogger } from '@restorecommerce/logger';
+import { Logger } from 'winston';
 import { Events } from '@restorecommerce/kafka-client';
 import { marshallProtobufAny } from '../schedulingService';
 import * as _ from 'lodash';
