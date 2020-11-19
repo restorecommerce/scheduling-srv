@@ -5,7 +5,7 @@ import { Worker } from '../lib/worker';
 import { Topic } from '@restorecommerce/kafka-client';
 import { createServiceConfig } from '@restorecommerce/service-config';
 import { Client } from '@restorecommerce/grpc-client';
-import { Logger } from '@restorecommerce/logger';
+import { Logger } from 'winston';
 import {
   validateJob,
   shouldBeEmpty,

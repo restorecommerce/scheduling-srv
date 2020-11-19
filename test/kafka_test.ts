@@ -19,7 +19,7 @@ import {
   validateJobDonePayload
 } from './utils';
 import { Backoffs, NewJob, Priority } from "../lib/types";
-import { Logger } from '@restorecommerce/chassis-srv';
+import { Logger } from 'winston';
 import { updateConfig } from '@restorecommerce/acs-client';
 
 /**
