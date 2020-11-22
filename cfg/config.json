@@ -237,6 +237,34 @@
         "isAllowed": {},
         "whatIsAllowed": {}
       }
+    },
+    "user": {
+      "transports": {
+        "grpc": {
+          "service": "io.restorecommerce.user.Service",
+          "protos": [
+            "io/restorecommerce/user.proto"
+          ],
+          "protoRoot": "node_modules/@restorecommerce/protos/",
+          "timeout": 3000
+        }
+      },
+      "loadbalancer": {
+        "name": "roundRobin"
+      },
+      "publisher": {
+        "name": "static",
+        "instances": [
+          "grpc://localhost:50051"
+        ]
+      },
+      "endpoints": {
+        "find": {},
+        "findByToken": {}
+      },
+      "bufferFields": {
+        "ReadRequest": "custom_arguments"
+      }
     }
   },
   "server": {
