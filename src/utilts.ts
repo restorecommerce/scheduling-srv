@@ -78,7 +78,7 @@ export async function checkAccessRequest(subject: Subject, resources: any, actio
   if (subject && subject.token) {
     const idsClient = await getUserServiceClient();
     if (idsClient) {
-      dbSubject = await idsClient.findByToken({ request: { token: subject.token } });
+      dbSubject = await idsClient.findByToken({ token: subject.token });
       if (dbSubject && dbSubject.data && dbSubject.data.id) {
         subject.id = dbSubject.data.id;
       }
