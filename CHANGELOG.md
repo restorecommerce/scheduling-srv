@@ -1,3 +1,7 @@
+## 0.1.10 (December 2nd, 2020)
+
+- fix docker image permissions
+
 ### 0.1.9 (November 19th, 2020)
 
 - changes to remove subject-id and pass only token
