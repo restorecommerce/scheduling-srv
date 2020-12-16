@@ -244,6 +244,7 @@ export class SchedulingService implements JobService {
           if (filteredJob.data) {
             // adding time to payload data for recurring jobs
             const dateTime = new Date();
+            lastRunTime = JSON.stringify({ time: dateTime });
             const bufObj = Buffer.from(JSON.stringify({ time: dateTime }));
             if (filteredJob.data.payload) {
               if (filteredJob.data.payload.value) {
@@ -252,7 +253,6 @@ export class SchedulingService implements JobService {
                   jobBufferObj = {};
                 }
                 const jobTimeObj = Object.assign(jobBufferObj, { time: dateTime });
-                lastRunTime = JSON.stringify({ time: dateTime });
                 // set last run time on DB index 7 with jobType identifier
                 this.redisClient.set(filteredJob.name, lastRunTime);
                 filteredJob.data.payload.value = Buffer.from(JSON.stringify(jobTimeObj));

@@ -52,7 +52,7 @@ Object.keys(grpcConfig['services']).forEach((service) => {
             reject();
           } else {
             logger.silly(service + ' is serving');
-            resolve();
+            resolve(undefined);
           }
         } else {
           logger.error('Unexpected health_check response:', realValue);
