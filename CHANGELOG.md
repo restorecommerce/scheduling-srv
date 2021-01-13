@@ -1,3 +1,7 @@
+## 0.1.12 (January 14th, 2021)
+
+- up dependencies (bull board mainly)
+
 ## 0.1.11 (December 4th, 2020)
 
 - up acs-client (unauthenticated fix), protos (last_login updated on token)

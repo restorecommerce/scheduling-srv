@@ -8,7 +8,7 @@ import { createServiceConfig } from '@restorecommerce/service-config';
 import * as cacheManager from 'cache-manager';
 import * as redisStore from 'cache-manager-redis';
 import * as fs from 'fs';
-import { UI, setQueues } from 'bull-board';
+import { router as bullRouter, setQueues, BullAdapter } from 'bull-board';
 import * as express from 'express';
 import { initAuthZ, ACSAuthZ, updateConfig, initializeCache } from '@restorecommerce/acs-client';
 import { RedisClient, createClient } from 'redis';
@@ -255,8 +255,7 @@ export class Worker {
           (err) => {
             logger.error(`Error occurred scheduling job, ${err}`);
           });
-      }
-      else if (eventName === JOBS_MODIFY_EVENT) {
+      } else if (eventName === JOBS_MODIFY_EVENT) {
         msg.items = msg.items.map((job) => {
           return schedulingService._filterKafkaJob(job);
         });
@@ -265,8 +264,7 @@ export class Worker {
           (err) => {
             logger.error('Error occurred updating jobs:', err.message);
           });
-      }
-      else if (eventName === JOBS_DELETE_EVENT) {
+      } else if (eventName === JOBS_DELETE_EVENT) {
         const ids = msg.ids;
         const collection = msg.collection;
         const call = { request: { ids, collection, subject: msg.subject, api_key: msg.api_key } };
@@ -331,10 +329,12 @@ export class Worker {
     this.events = events;
     this.server = server;
 
-    setQueues(this.schedulingService.queuesList);
+    let queues: BullAdapter[] = this.schedulingService.queuesList.map(q => new BullAdapter(q));
+
+    setQueues(queues);
 
     this.app = express();
-    this.app.use(cfg.get('bull:board:path'), UI);
+    this.app.use(cfg.get('bull:board:path'), bullRouter);
     this.app.listen(cfg.get('bull:board:port'), () => {
       logger.info(`Bull board listening on port ${cfg.get('bull:board:port')} at ${cfg.get('bull:board:path')}`);
     });
