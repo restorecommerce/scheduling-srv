@@ -9,8 +9,8 @@ A microservice for scheduling jobs part of the link:https://github.com/restoreco
 [#features]
 == Features
 
-* Scheduling new jobs as well as manage the existing ones.
-* Currently, three kinds of jobs can be scheduled: `immediate jobs`, `one-time future jobs` and `recurring jobs`.
+* Scheduling of jobs in a cron like manner.
+* Three kinds of jobs can be scheduled: `immediate jobs`, `one-time future jobs` and `recurring jobs`.
 * Job scheduling is implemented using link:https://github.com/OptimalBits/bull[bull] backed by link:https://redis.io/[Redis].
 * Concurrency and rate limiting for job processing. The job processing is made
 by matching the Job type with the Queue name.
@@ -68,7 +68,6 @@ This microservice exposes the following gRPC endpoints:
 | priority | `io.restorecommerce.job.Job.Priority` | optional | Job priority.
 | attempts | number | optional | Amount of possible failing runs until a job fails.
 | backoff | `io.restorecommerce.job.Backoff` | optional | Delay settings between failed job runs.
-| timeout | number | optional | If set, job will expire after `timeout` milliseconds. If set to 1, job will be treated as an "instant" job and won't get stored.
 |===============================================================================
 
 `io.restorecommerce.job.Repeat`
