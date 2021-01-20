@@ -46,7 +46,7 @@ This microservice exposes the following gRPC endpoints:
 | Field | Type | Label | Description
 | items | [ ]`io.restorecommerce.job.Job` | required | List of Jobs.
 | total_count | number | optional | Number of Jobs
-|authorization_mode |`io.restorecommerce.user.Subject` or `io.restorecommerce.user.ApiKey` |optional |authorization details
+|subject |`io.restorecommerce.auth.Subject` |required |Subject details
 |===============================================================================
 
 `io.restorecommerce.job.Job`
@@ -147,7 +147,7 @@ The microservice exposes the below CRUD operations for creating or modifying Job
 | sort  | `io.restorecommerce.job.SortOrder` | optional | sort order
 | filter| `io.restorecommerce.job.JobFilter` | optional | job filter
 | field | https://github.com/restorecommerce/protos/blob/master/io/restorecommerce/resource_base.proto[`io.restorecommerce.resourcebase.FieldFilter`] | field filter
-|authorization_mode |`io.restorecommerce.user.Subject` or `io.restorecommerce.user.ApiKey` |optional |authorization details
+|subject |`io.restorecommerce.auth.Subject` |required |Subject details
 |===============================================================================
 
 `io.restorecommerce.job.SortOrder`
