@@ -1,4 +1,4 @@
-FROM node:14.15.5-stretch
+FROM node:12.18.3-stretch
 ENV HOME=/home/node
 ENV APP_HOME=/home/node/scheduling-srv
 ENV NO_UPDATE_NOTIFIER=true
