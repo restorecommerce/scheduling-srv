@@ -1,3 +1,8 @@
+## 0.1.13 (February 23rd, 2021)
+
+- fix lastRuntime error (on redis)
+- updgaed deps, node and npm
+
 ## 0.1.12 (January 14th, 2021)
 
 - up dependencies (bull board mainly)
