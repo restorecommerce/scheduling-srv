@@ -1,3 +1,7 @@
+## 0.1.15 (February 24th, 2021)
+
+- upgraded logger and service-config
+
 ## 0.1.14 (February 23rd, 2021)
 
 - downgraded node version
