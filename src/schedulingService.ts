@@ -761,9 +761,9 @@ export class SchedulingService implements JobService {
           if (jobIdData && jobIdData.repeatKey) {
             const repeatKey = jobIdData.repeatKey;
             const nextMillis = this.getNextMillis(Date.now(), jobIdData.options.repeat);
+            this.logger.debug('Repeatable job identifier', { id: jobID, repeatId: `repeat:${repeatKey}:${nextMillis}` });
             // map the repeatKey with nextmilis for bull repeatable jobID
             jobID = `repeat:${repeatKey}:${nextMillis}`;
-            console.log('JOB ID found is...', jobID);
           }
           for (let queue of this.queuesList) {
             await new Promise((resolve, reject) => {
@@ -918,16 +918,15 @@ export class SchedulingService implements JobService {
           let callback: Promise<void>;
 
           const jobIdData = await this.getRedisValue(jobDataKey as string);
-          if (jobIdData && jobIdData.repeateKey) {
-            const repeatKey = jobIdData.repeatKey;
-            const nextMillis = this.getNextMillis(Date.now(), jobIdData.options.repeat);
-            // map the repeatKey with nextmilis for bull repeatable jobID
-            jobDataKey = `repeat:${repeatKey}:${nextMillis}`;
-            console.log('JOB ID found is...', jobDataKey);
-          }
-          const jobInst = await queue.getJob(jobDataKey);
-          if (jobInst?.opts?.repeat) {
-            callback = queue.removeRepeatableByKey(jobDataKey as string);
+          if (jobIdData && jobIdData.repeatKey) {
+            const jobs = await queue.getRepeatableJobs();
+            for (let job of jobs) {
+              if (job.id === jobDataKey) {
+                this.logger.debug('Removing Repeatable job by key for jobId', { id: job.id });
+                callback = queue.removeRepeatableByKey(job.key);
+                break;
+              }
+            }
           } else {
             callback = queue.getJob(jobDataKey).then(async (jobData) => {
               if (jobData) {
@@ -1062,12 +1061,12 @@ export class SchedulingService implements JobService {
       let jobExists = false;
       for (let queue of this.queuesList) {
         const jobIdData = await this.getRedisValue(eachJob.id as string);
-        if (jobIdData && jobIdData.repeateKey) {
+        if (jobIdData && jobIdData.repeatKey) {
           const repeatKey = jobIdData.repeatKey;
           const nextMillis = this.getNextMillis(Date.now(), jobIdData.options.repeat);
+          this.logger.debug('Repeatable job identifier', { id: eachJob.id, repeatId: `repeat:${repeatKey}:${nextMillis}` });
           // map the repeatKey with nextmilis for bull repeatable jobID
           eachJob.id = `repeat:${repeatKey}:${nextMillis}`;
-          console.log('JOB ID found is...', eachJob.id);
         }
         const jobInst = await queue.getJob(eachJob.id);
         if (jobInst) {
