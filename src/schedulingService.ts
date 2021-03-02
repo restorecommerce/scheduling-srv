@@ -12,6 +12,7 @@ import {
 } from './types';
 import { parseExpression } from 'cron-parser';
 import * as uuid from 'uuid';
+import * as crypto from 'crypto';
 import { AccessResponse, checkAccessRequest, ReadPolicyResponse } from './utilts';
 
 const JOB_DONE_EVENT = 'jobDone';
@@ -489,6 +490,13 @@ export class SchedulingService implements JobService {
     }
   }
 
+  private md5(str) {
+    return crypto
+      .createHash('md5')
+      .update(str)
+      .digest('hex');
+  }
+
   /**
    * Bull generates the repeatKey for repeatable jobs based on jobID, namd and
    * cron settings - so below api to generate the same repeat key and store in redis
@@ -504,7 +512,10 @@ export class SchedulingService implements JobService {
       : ':';
     const tz = repeat.tz ? repeat.tz + ':' : ':';
     const suffix = repeat.cron ? tz + repeat.cron : String(repeat.every);
-    const repeatKey = name + ':' + jobId + endDate + suffix;
+    const overrRiddentJobId = repeat.jobId ? repeat.jobId + ':' : ':';
+    const md5Key = this.md5(name + ':' + overrRiddentJobId + endDate + suffix);
+    const repeatKey = this.md5(name + jobId + ':' + md5Key);
+    this.logger.info('Repeat key generated for JobId is', { repeatKey, jobId });
     const jobIdData = { repeatKey, options };
     this.redisClient.set(jobId, JSON.stringify(jobIdData));
     return repeatKey;
