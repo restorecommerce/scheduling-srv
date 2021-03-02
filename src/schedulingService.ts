@@ -687,6 +687,25 @@ export class SchedulingService implements JobService {
     return result;
   }
 
+  async deleteRedisKey(key: string): Promise<any> {
+    await new Promise<string>((resolve: any, reject) => {
+      this.repeatJobIdRedisClient.del(key, (err, response) => {
+        if (err) {
+          reject(err);
+        } else {
+          this.logger.debug('Redis Key deleted successfully used for mapping repeatable jobID', { key });
+          resolve(response);
+        }
+      });
+    }).catch(
+      (err) => {
+        this.logger.error(
+          'Error occurred deleting redis key',
+          { key, msg: err.message });
+      }
+    );
+  }
+
   async getRedisValue(key: string): Promise<any> {
     const redisValue = await new Promise<string>((resolve, reject) => {
       this.repeatJobIdRedisClient.get(key, (err, response) => {
@@ -910,6 +929,7 @@ export class SchedulingService implements JobService {
           }
         }
       });
+      // TODO FLUSH redis DB index 8
     } else if ('ids' in call.request) {
       this.logger.verbose('Deleting jobs by their IDs', call.request.ids);
 
@@ -924,6 +944,8 @@ export class SchedulingService implements JobService {
               if (job.id === jobDataKey) {
                 this.logger.debug('Removing Repeatable job by key for jobId', { id: job.id });
                 callback = queue.removeRepeatableByKey(job.key);
+                await this.deleteRedisKey(jobDataKey);
+                await this.deleteRedisKey(jobIdData.repeatKey);
                 break;
               }
             }
@@ -1008,6 +1030,7 @@ export class SchedulingService implements JobService {
         this.storeRepeatKey(job.type, job.options, job.id);
       }
       let endJob = {
+        id: mappedJob.id,
         type: mappedJob.type || job.name,
         options: {
           ...job.opts,
