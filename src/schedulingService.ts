@@ -547,6 +547,9 @@ export class SchedulingService implements JobService {
       job.data.timezone = job.data.timezone || 'Europe/London'; // fallback to GMT
 
       // if not jobID is specified generate a UUID
+      if (!job.id) {
+        job.id = this.idGen();
+      }
 
       // map the id to jobId as needed in JobOpts for bull
       if (job.id) {
