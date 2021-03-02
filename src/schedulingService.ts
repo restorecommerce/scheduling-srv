@@ -758,9 +758,9 @@ export class SchedulingService implements JobService {
         let jobIDsCopy: JobId[] = [];
         for (let jobID of jobIDs) {
           const jobIdData = await this.getRedisValue(jobID as string);
-          if (jobIdData && jobIdData.repeateKey) {
+          if (jobIdData && jobIdData.repeatKey) {
             const repeatKey = jobIdData.repeatKey;
-            const nextMillis = this.getNextMillis(Date.now(), jobIdData.options);
+            const nextMillis = this.getNextMillis(Date.now(), jobIdData.options.repeat);
             // map the repeatKey with nextmilis for bull repeatable jobID
             jobID = `repeat:${repeatKey}:${nextMillis}`;
             console.log('JOB ID found is...', jobID);
@@ -772,7 +772,11 @@ export class SchedulingService implements JobService {
                 resolve(job);
                 if (!_.isEmpty(job)) {
                   result.push(job);
-                  jobIDsCopy.push(jobID);
+                  if ((job as any)?.opts?.repeat?.jobId) {
+                    jobIDsCopy.push((job as any).opts.repeat.jobId);
+                  } else {
+                    jobIDsCopy.push(jobID);
+                  }
                 }
               }).catch(err => {
                 that._handleError(`Error reading jobs ${jobID}: ${err}`);
@@ -916,7 +920,7 @@ export class SchedulingService implements JobService {
           const jobIdData = await this.getRedisValue(jobDataKey as string);
           if (jobIdData && jobIdData.repeateKey) {
             const repeatKey = jobIdData.repeatKey;
-            const nextMillis = this.getNextMillis(Date.now(), jobIdData.options);
+            const nextMillis = this.getNextMillis(Date.now(), jobIdData.options.repeat);
             // map the repeatKey with nextmilis for bull repeatable jobID
             jobDataKey = `repeat:${repeatKey}:${nextMillis}`;
             console.log('JOB ID found is...', jobDataKey);
@@ -1060,7 +1064,7 @@ export class SchedulingService implements JobService {
         const jobIdData = await this.getRedisValue(eachJob.id as string);
         if (jobIdData && jobIdData.repeateKey) {
           const repeatKey = jobIdData.repeatKey;
-          const nextMillis = this.getNextMillis(Date.now(), jobIdData.options);
+          const nextMillis = this.getNextMillis(Date.now(), jobIdData.options.repeat);
           // map the repeatKey with nextmilis for bull repeatable jobID
           eachJob.id = `repeat:${repeatKey}:${nextMillis}`;
           console.log('JOB ID found is...', eachJob.id);
