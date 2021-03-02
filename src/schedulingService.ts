@@ -11,6 +11,7 @@ import {
   FilterOpts, KafkaOpts
 } from './types';
 import { parseExpression } from 'cron-parser';
+import * as uuid from 'uuid';
 import { AccessResponse, checkAccessRequest, ReadPolicyResponse } from './utilts';
 
 const JOB_DONE_EVENT = 'jobDone';
@@ -155,8 +156,8 @@ export class SchedulingService implements JobService {
         let job = msg;
 
         // Match Job Type to Queue Name, else use Default Queue
-        let queue = _.find(this.queuesList, {name: job.type});
-        let defaultQueue = _.find(this.queuesList, {name: this.defaultQueueName});
+        let queue = _.find(this.queuesList, { name: job.type });
+        let defaultQueue = _.find(this.queuesList, { name: this.defaultQueueName });
         if (_.isEmpty(queue)) {
           queue = defaultQueue;
         }
@@ -220,7 +221,7 @@ export class SchedulingService implements JobService {
     // For the Default Queue the process name is defined as "*"
     // For the other Queues the process name is defined as the name of the Queue
     for (let queueCfg of this.queuesConfigList) {
-      let queue = _.find(this.queuesList, {name: queueCfg.name});
+      let queue = _.find(this.queuesList, { name: queueCfg.name });
       let queueName = queueCfg.name;
       let concurrency = queueCfg.concurrency;
 
@@ -273,7 +274,6 @@ export class SchedulingService implements JobService {
           id: filteredJob.id,
           type: filteredJob.name,
           data: filteredJob.data,
-          schedule_type: filteredJob.opts.timeout === 1 ? 'NOW' : (filteredJob.opts.repeat ? 'RECCUR' : 'ONCE'),
         }).catch((error) => {
           delete this.jobCbs[filteredJob.id];
           that.logger.error(`Error while processing job ${filteredJob.id} in queue: ${error}`);
@@ -304,7 +304,7 @@ export class SchedulingService implements JobService {
     for (let queueCfg of this.queuesConfigList) {
       // If enabled in the config, or the config is missing,
       // Reschedule the missed jobs, else skip.
-      let queue = _.find(this.queuesList, {name: queueCfg.name});
+      let queue = _.find(this.queuesList, { name: queueCfg.name });
       let runMissedScheduled = queueCfg.runMissedScheduled;
       if (_.isNil(runMissedScheduled) ||
         (!_.isNil(runMissedScheduled) && runMissedScheduled == true)) {
@@ -452,6 +452,68 @@ export class SchedulingService implements JobService {
   }
 
   /**
+   * get next job execution time in mili seconds
+   * @param millis
+   * @param opts
+   */
+  getNextMillis(millis, opts) {
+    if (opts.cron && opts.every) {
+      throw new Error(
+        'Both .cron and .every options are defined for this repeatable job'
+      );
+    }
+
+    if (opts.every) {
+      return Math.floor(millis / opts.every) * opts.every + opts.every;
+    }
+
+    const currentDate =
+      opts.startDate && new Date(opts.startDate) > new Date(millis)
+        ? new Date(opts.startDate)
+        : new Date(millis);
+    const interval = parseExpression(
+      opts.cron,
+      _.defaults(
+        {
+          currentDate
+        },
+        opts
+      )
+    );
+
+    try {
+      return interval.next().getTime();
+    } catch (e) {
+      this.logger.error('Error getting next job execution time');
+    }
+  }
+
+  /**
+   * Bull generates the repeatKey for repeatable jobs based on jobID, namd and
+   * cron settings - so below api to generate the same repeat key and store in redis
+   * DB index and map it before making request to bull
+   * @param name - job name
+   * @param repeat - job repeate options
+   * @param jobId - job id
+   */
+  storeRepeatKey(name, options, jobId) {
+    const repeat = options.repeat;
+    const endDate = repeat.endDate
+      ? new Date(repeat.endDate).getTime() + ':'
+      : ':';
+    const tz = repeat.tz ? repeat.tz + ':' : ':';
+    const suffix = repeat.cron ? tz + repeat.cron : String(repeat.every);
+    const repeatKey = name + ':' + jobId + endDate + suffix;
+    const jobIdData = { repeatKey, options };
+    this.redisClient.set(jobId, JSON.stringify(jobIdData));
+    return repeatKey;
+  }
+
+  private idGen(): string {
+    return uuid.v4().replace(/-/g, '');
+  }
+
+  /**
    * Create and queue jobs.
    * @param {any} call RPC call argument
    * @param {any} context RPC context
@@ -484,6 +546,26 @@ export class SchedulingService implements JobService {
       let job = jobs[i];
       job.data.timezone = job.data.timezone || 'Europe/London'; // fallback to GMT
 
+      // if not jobID is specified generate a UUID
+
+      // map the id to jobId as needed in JobOpts for bull
+      if (job.id) {
+        // check if jobID already exists, if so throw error
+        const existingJobId = await this.getRedisValue(job.id);
+        if (existingJobId) {
+          throw new errors.AlreadyExists(`Job with ID already exists`);
+        }
+        if (!job.options) {
+          job.options = { jobId: job.id };
+        } else {
+          job.options.jobId = job.id;
+        }
+        if (job?.options?.repeat) {
+          (job as any).options.repeat.jobId = job.id;
+          this.storeRepeatKey(job.type, job.options, job.id);
+        }
+      }
+
       if (!job.data.meta) {
         const now = Date.now();
         const metaObj = {
@@ -514,8 +596,8 @@ export class SchedulingService implements JobService {
 
       // Match the Job Type with the Queue Name and add the Job to this Queue.
       // If there is no match, add the Job to the Default Queue
-      let queue = _.find(this.queuesList, {name: job.type});
-      let defaultQueue = _.find(this.queuesList, {name: this.defaultQueueName});
+      let queue = _.find(this.queuesList, { name: job.type });
+      let defaultQueue = _.find(this.queuesList, { name: this.defaultQueueName });
       if (_.isEmpty(queue)) {
         queue = defaultQueue;
       }
@@ -573,6 +655,26 @@ export class SchedulingService implements JobService {
     return result;
   }
 
+  async getRedisValue(key: string): Promise<any> {
+    const redisValue = await new Promise<string>((resolve, reject) => {
+      this.redisClient.get(key, (err, response) => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve(JSON.parse(response));
+        }
+      });
+    }).catch(
+      (err) => {
+        this.logger.error(
+          'Error occurred reading redis key',
+          { key, msg: err.message });
+      }
+    );
+    return redisValue;
+  }
+
+
   /**
    * Retrieve jobs.
    * @param {any} call RPC call argument
@@ -619,6 +721,17 @@ export class SchedulingService implements JobService {
         // after the for loop ends
         let jobIDsCopy: JobId[] = [];
         for (let jobID of jobIDs) {
+          // TODO: 1) check if jobID does exist in redis DB
+          // 2) If so get all repeatable jobs and check for matching repeatKey for the givenJOB ID
+          // 3) Update the repeate jobID internally for searching in the Queue
+          const jobIdData = await this.getRedisValue(jobID as string);
+          if (jobIdData && jobIdData.repeateKey) {
+            const repeatKey = jobIdData.repeatKey;
+            const nextMillis = this.getNextMillis(Date.now(), jobIdData.options);
+            // map the repeatKey with nextmilis for bull repeatable jobID
+            jobID = `repeat:${repeatKey}:${nextMillis}`;
+            console.log('JOB ID found is...', jobID);
+          }
           for (let queue of this.queuesList) {
             await new Promise((resolve, reject) => {
               // getJob returns job or null
@@ -755,11 +868,12 @@ export class SchedulingService implements JobService {
       this.logger.verbose('Deleting jobs by their IDs', call.request.ids);
 
       for (let queue of this.queuesList) {
-        call.request.ids.forEach((jobDataKey) => {
+        call.request.ids.forEach(async (jobDataKey) => {
           let callback: Promise<void>;
 
-          if (typeof jobDataKey === 'string' && jobDataKey.startsWith('repeat:')) {
-            callback = queue.removeRepeatableByKey(jobDataKey);
+          const jobInst = await queue.getJob(jobDataKey);
+          if (jobInst?.opts?.repeat) {
+            callback = queue.removeRepeatable(jobInst.name, jobInst.opts.repeat);
           } else {
             callback = queue.getJob(jobDataKey).then(async (jobData) => {
               if (jobData) {
@@ -836,6 +950,10 @@ export class SchedulingService implements JobService {
 
     jobData.items.forEach(job => {
       const mappedJob = mappedJobs[job.id];
+      // update job repeate key based on updated job repeat options
+      if (job.options?.repeat) {
+        this.storeRepeatKey(job.type, job.options, job.id);
+      }
       let endJob = {
         type: mappedJob.type || job.name,
         options: {
@@ -885,31 +1003,28 @@ export class SchedulingService implements JobService {
     }
 
     let result = [];
-    let createJobsList = [];
-    let updateJobsList = [];
 
     for (let eachJob of call.request.items) {
-      if (eachJob.id) {
-        // existing job update it
-        updateJobsList.push(eachJob);
-      } else {
-        // new job create it.
-        createJobsList.push(eachJob);
+      let jobExists = false;
+      for (let queue of this.queuesList) {
+        const jobInst = await queue.getJob(eachJob.id);
+        if (jobInst) {
+          // existing job update it
+          result = [
+            ...result,
+            ...(await this.update({ request: { items: eachJob, subject } })).items
+          ];
+          jobExists = true;
+          break;
+        }
       }
-    }
-
-    if (updateJobsList.length > 0) {
-      result = [
-        ...result,
-        ...(await this.update({ request: { items: updateJobsList, subject } })).items
-      ];
-    }
-
-    if (createJobsList.length > 0) {
-      result = [
-        ...result,
-        ...(await this.create({ request: { items: createJobsList, subject } })).items
-      ];
+      if (!jobExists) {
+        // new job create it
+        result = [
+          ...result,
+          ...(await this.create({ request: { items: eachJob, subject } })).items
+        ];
+      }
     }
 
     return {
@@ -955,14 +1070,12 @@ export class SchedulingService implements JobService {
       });
       await this.jobEvents.emit('jobDone', {
         id: stalledJobID,
-        type: jobType,
-        schedule_type: 'RECCUR'
+        type: jobType
       });
     } catch (err) {
       await this.jobEvents.emit('jobFailed', {
         id: stalledJobID,
         error: err.message,
-        schedule_type: 'RECCUR',
         type: jobType
       });
     }

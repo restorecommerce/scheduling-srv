@@ -67,6 +67,7 @@ export interface NewJob {
   options: JobOptions;
   when?: string;
   data: Data;
+  id?: string; // mapped to jobId of bull
 }
 
 export interface CreateCall {
