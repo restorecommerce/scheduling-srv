@@ -2,7 +2,7 @@ import * as _ from 'lodash';
 import { errors } from '@restorecommerce/chassis-srv';
 import * as kafkaClient from '@restorecommerce/kafka-client';
 import { Subject, AuthZAction, ACSAuthZ, Decision, PermissionDenied, updateConfig } from '@restorecommerce/acs-client';
-import { RedisClient } from 'redis';
+import { RedisClient, createClient } from 'redis';
 import { Job, JobId, JobOptions } from 'bull';
 import * as Queue from 'bull';
 import {
@@ -59,6 +59,7 @@ export class SchedulingService implements JobService {
   cfg: any;
   authZ: ACSAuthZ;
   authZCheck: boolean;
+  repeatJobIdRedisClient: RedisClient;
 
 
   constructor(jobEvents: kafkaClient.Topic,
@@ -71,6 +72,11 @@ export class SchedulingService implements JobService {
     this.queuesList = [];
     this.queuesConfigList = [];
     this.redisClient = redisClient;
+
+    const repeatJobIdCfg = cfg.get('redis');
+    repeatJobIdCfg.db = cfg.get('redis:db-indexes:db-repeatJobId');
+    this.repeatJobIdRedisClient = createClient(repeatJobIdCfg);
+
     this.canceledJobs = new Set<string>();
     this.cfg = cfg;
     this.authZ = authZ;
@@ -517,7 +523,10 @@ export class SchedulingService implements JobService {
     const repeatKey = this.md5(name + jobId + ':' + md5Key);
     this.logger.info('Repeat key generated for JobId is', { repeatKey, jobId });
     const jobIdData = { repeatKey, options };
-    this.redisClient.set(jobId, JSON.stringify(jobIdData));
+    // map jobID with jobIdData - containing repeatKey and options
+    this.repeatJobIdRedisClient.set(jobId, JSON.stringify(jobIdData));
+    // to resolve the jobId based on repeatkey
+    this.repeatJobIdRedisClient.set(repeatKey, jobId);
     return repeatKey;
   }
 
@@ -621,6 +630,14 @@ export class SchedulingService implements JobService {
       this.logger.verbose(`job@${job.type} created`, job);
     }
 
+    for (let job of result) {
+      let jobId = job.id as string;
+      if (jobId.startsWith('repeat:')) {
+        const repeatKey = jobId.split(':')[1];
+        job.id = await this.getRedisValue(repeatKey);
+      }
+    }
+
     const jobList = {
       items: result.map(job => ({
         id: job.id,
@@ -672,11 +689,15 @@ export class SchedulingService implements JobService {
 
   async getRedisValue(key: string): Promise<any> {
     const redisValue = await new Promise<string>((resolve, reject) => {
-      this.redisClient.get(key, (err, response) => {
+      this.repeatJobIdRedisClient.get(key, (err, response) => {
         if (err) {
           reject(err);
         } else {
-          resolve(JSON.parse(response));
+          try {
+            resolve(JSON.parse(response));
+          } catch (err) {
+            resolve(response);
+          }
         }
       });
     }).catch(
@@ -736,9 +757,6 @@ export class SchedulingService implements JobService {
         // after the for loop ends
         let jobIDsCopy: JobId[] = [];
         for (let jobID of jobIDs) {
-          // TODO: 1) check if jobID does exist in redis DB
-          // 2) If so get all repeatable jobs and check for matching repeatKey for the givenJOB ID
-          // 3) Update the repeate jobID internally for searching in the Queue
           const jobIdData = await this.getRedisValue(jobID as string);
           if (jobIdData && jobIdData.repeateKey) {
             const repeatKey = jobIdData.repeatKey;
@@ -802,6 +820,15 @@ export class SchedulingService implements JobService {
       }
       result = _.orderBy(result, ['id'], [sort]);
     }
+
+    for (let job of result) {
+      let jobId = job.id as string;
+      if (jobId.startsWith('repeat:')) {
+        const repeatKey = jobId.split(':')[1];
+        job.id = await this.getRedisValue(repeatKey);
+      }
+    }
+
     return {
       items: result.map(job => ({
         id: job.id,

@@ -8,7 +8,8 @@
       "db-offsetStore": 0,
       "db-jobStore": 1,
       "db-subject": 4,
-      "db-reccurTime": 7
+      "db-reccurTime": 7,
+      "db-repeatJobId": 8
     }
   },
   "logger": {
