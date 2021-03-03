@@ -934,7 +934,17 @@ export class SchedulingService implements JobService {
           }
         }
       });
-      // TODO FLUSH redis DB index 8
+      // FLUSH redis DB index 8 used for mapping of repeat jobIds
+      await new Promise((resolve, reject) => {
+        this.repeatJobIdRedisClient.flushdb((delResp) => {
+          if (delResp) {
+            this.logger.debug('Mapped keys for repeatable jobs deleted successfully');
+          } else {
+            this.logger.debug('Could not delete map keys', delResp);
+          }
+          resolve(delResp);
+        });
+      });
     } else if ('ids' in call.request) {
       this.logger.verbose('Deleting jobs by their IDs', call.request.ids);
 
@@ -1334,7 +1344,7 @@ export class SchedulingService implements JobService {
               }
             });
           } catch (err) {
-            if (err.message.startsWith('Error! Jobs not found in any of the queues')) {
+            if (err.message.startsWith('Error! Jobs not found in any of the queues') && action != AuthZAction.DELETE) {
               this.logger.debug('New job should be created', { jobId: resource.id });
               result = { items: [] };
             } else {
