@@ -848,7 +848,12 @@ export class SchedulingService implements JobService {
       let jobId = job.id as string;
       if (jobId.startsWith('repeat:')) {
         const repeatKey = jobId.split(':')[1];
-        job.id = await this.getRedisValue(repeatKey);
+        // it could be possible the redis repeat key is deleted on index 8 and old completed
+        // jobs exist in data_store if delete on complete was not set to true for repeatable jobs
+        const jobRedisId = await this.getRedisValue(repeatKey);
+        if (jobRedisId) {
+          job.id = jobRedisId;
+        }
       }
     }
 
