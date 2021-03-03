@@ -1087,6 +1087,7 @@ export class SchedulingService implements JobService {
 
     for (let eachJob of call.request.items) {
       let jobExists = false;
+      let origJobId = _.cloneDeep(eachJob.id);
       for (let queue of this.queuesList) {
         const jobIdData = await this.getRedisValue(eachJob.id as string);
         if (jobIdData && jobIdData.repeatKey) {
@@ -1098,10 +1099,13 @@ export class SchedulingService implements JobService {
         }
         const jobInst = await queue.getJob(eachJob.id);
         if (jobInst) {
-          // existing job update it
+          // existing job update it with the given job identifier
+          if (eachJob.id.startsWith('repeat:')) {
+            eachJob.id = origJobId;
+          }
           result = [
             ...result,
-            ...(await this.update({ request: { items: eachJob, subject } })).items
+            ...(await this.update({ request: { items: [eachJob], subject } })).items
           ];
           jobExists = true;
           break;
@@ -1111,7 +1115,7 @@ export class SchedulingService implements JobService {
         // new job create it
         result = [
           ...result,
-          ...(await this.create({ request: { items: eachJob, subject } })).items
+          ...(await this.create({ request: { items: [eachJob], subject } })).items
         ];
       }
     }
@@ -1319,14 +1323,25 @@ export class SchedulingService implements JobService {
           resource.data.meta = {};
         }
         if (action === AuthZAction.MODIFY || action === AuthZAction.DELETE) {
-          let result = await this.read({
-            request: {
-              filter: {
-                job_ids: resource.id
-              },
-              subject
+          let result;
+          try {
+            result = await this.read({
+              request: {
+                filter: {
+                  job_ids: resource.id
+                },
+                subject
+              }
+            });
+          } catch (err) {
+            if (err.message.startsWith('Error! Jobs not found in any of the queues')) {
+              this.logger.debug('New job should be created', { jobId: resource.id });
+              result = { items: [] };
+            } else {
+              this.logger.error('Error reading job with resource ID', { jobId: resource.id });
+              throw err;
             }
-          });
+          }
           // update owner info
           if (result.items.length === 1) {
             let item = result.items[0];
