@@ -1,3 +1,9 @@
+## 0.1.16 (March 4th, 2021)
+
+- fix for create, update, upsert and delete to expose job ID
+- map job id to repeatable key for recurring jobs
+- upgraded dependencies
+
 ## 0.1.15 (February 24th, 2021)
 
 - upgraded logger and service-config
