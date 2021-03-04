@@ -54,7 +54,7 @@ This microservice exposes the following gRPC endpoints:
 [width="100%",cols="20%,16%,20%,44%",options="header",]
 |===============================================================================
 | Field | Type | Label | Description
-| id | string | required | Job resource ID.
+| id | string | required | Job resource ID, if not specified a uuid is generated.
 | type | string | required | Arbitrary job type (e.g: 'daily_email_dispatcher').
 | data | Data | optional | Job data to persist in Redis.
 | when | string | optional | Used to define the exact time at which a single job instance is processed. Ex: "Jan 15, 2018 10:30:00". This should only be used in one-time jobs.
@@ -68,6 +68,9 @@ This microservice exposes the following gRPC endpoints:
 | priority | `io.restorecommerce.job.Job.Priority` | optional | Job priority.
 | attempts | number | optional | Amount of possible failing runs until a job fails.
 | backoff | `io.restorecommerce.job.Backoff` | optional | Delay settings between failed job runs.
+| timeout | number | optional | The number of milliseconds after which the job should be fail with a timeout error.
+| repeat  | `io.restorecommerce.job.Repeat` | optional | Job repeat options
+| removeOnComplete | boolean | If true, removes the job when it successfully completes (for recurring jobs since a new job is generated each time)
 |===============================================================================
 
 `io.restorecommerce.job.Repeat`
@@ -138,12 +141,27 @@ The microservice exposes the below CRUD operations for creating or modifying Job
 | Delete | `io.restorecommerce.resourcebase.DeleteRequest` | https://github.com/restorecommerce/protos/blob/master/google/protobuf/empty.proto[`google.protobuf.Empty`] | Delete a list of Job resources.
 |===============================================================================
 
+[#api_job_create]
+=== `Create`
+
+Used to create list of Job resources. Requests are performed providing `io.restorecommerce.job.JobList` protobuf message as
+input and responses are a `io.restorecommerce.job.JobList` message. If job id is provided then it is used for job identiifer (should be unique), if not then a uuid is generated from this service.
+For repeatable Jobs `Bull` has an internal mechanism to generate job id, it generates the repeatable key based on the job id and cron settings. To map the repeatable key to job identiifer
+exposed from this service `Redis` is used with  https://github.com/restorecommerce/scheduling-srv/blob/master/cfg/config.json#L12[configurable DB index] to store the key value pair.
+
+[#api_job_Read]
+=== `Read`
+
+Used to read list of Job resources. Requests are performed providing `io.restorecommerce.job.JobReadRequest` protobuf message as
+input and responses are a `io.restorecommerce.job.JobList` message. This operation supports job filter using job ids or job types.
+If no job filter is provided then all jobs in redis with job state completed, failed, active, inactive jobs in redis are returned.
+For the detailed protobuf message structure of `io.restorecommerce.job.ReadRequest` refer link:https://github.com/restorecommerce/protos/blob/master/io/restorecommerce/job.proto[job.proto].
+
 `io.restorecommerce.job.JobReadRequest`
 
 [width="100%",cols="20%,16%,20%,44%",options="header",]
 |===============================================================================
 | Field | Type | Label | Description
-| limit | number | optional | maximum number of jobs to be returned
 | sort  | `io.restorecommerce.job.SortOrder` | optional | sort order
 | filter| `io.restorecommerce.job.JobFilter` | optional | job filter
 | field | https://github.com/restorecommerce/protos/blob/master/io/restorecommerce/resource_base.proto[`io.restorecommerce.resourcebase.FieldFilter`] | field filter
@@ -169,10 +187,29 @@ The microservice exposes the below CRUD operations for creating or modifying Job
 | type  | string | optional | job type
 |===============================================================================
 
-Please note that the `update` operation literally just deletes an existing job and reschedules it with new data.
+[#api_job_Update]
+=== `Update`
 
-For the detailed protobuf message structure of `io.restorecommerce.job.ReadRequest` and
-`io.restorecommerce.job.DeleteRequest` refer link:https://github.com/restorecommerce/protos/blob/master/io/restorecommerce/job.proto[job.proto].
+Used to update list of Job resources. Requests are performed providing `io.restorecommerce.job.JobList` protobuf message as
+input and responses are a `io.restorecommerce.job.JobList` message. Since `Bull` does not internally provide an update operation,
+this operation deletes an existing job and reschedules it with new data. It is possible to update the cron settings and other job
+options as well for recurring job based on the job-id. In this case although the repeatable key maintained by Bull is changed the
+job id exposed from this service remains the same (since this service maintains a mapping between job id and repeatable key).
+
+[#api_job_Upsert]
+=== `Upsert`
+
+Used to upsert list of Job resources. Requests are performed providing `io.restorecommerce.job.JobList` protobuf message as
+input and responses are a `io.restorecommerce.job.JobList` message. If job does not exist then a new job is created.
+If job already exists with given job id, then it is deleted and a new job is created with provided data but the job identiifer remains the same.
+
+[#api_job_Delete]
+=== `Delete`
+
+Used to delete list of Job resources. Requests are performed providing `io.restorecommerce.resourcebase.DeleteRequest` protobuf message as
+input and responses are a `google.protobuf.Empty` message. This operation supports passing a list of job identifiers `ids` to delete,
+it also exposes boolean param `collection` and if set to true all  the jobs in Redis data would be deleted. For the detailed protobuf message structure
+of`io.restorecommerce.job.DeleteRequest` refer link:https://github.com/restorecommerce/protos/blob/master/io/restorecommerce/job.proto[job.proto].
 
 [#events]
 == Events
