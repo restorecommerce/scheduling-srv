@@ -296,6 +296,50 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
       // Sleep for jobDone to get processed
       await new Promise(resolve => setTimeout(resolve, 100));
     });
+    it('should create a recurring job based on id and remove on completed', async () => {
+      const data = {
+        timezone: "Europe/Berlin",
+        payload: marshallProtobufAny({
+          testValue: 'test-value'
+        })
+      };
+      const job = {
+        id: 'test-job-id',
+        type: 'test-job',
+        data,
+        options: {
+          priority: Priority.HIGH,
+          attempts: 1,
+          backoff: {
+            delay: 1000,
+            type: Backoffs.FIXED,
+          },
+          repeat: {
+            cron: '*/2 * * * * *'  // every two seconds
+          },
+          removeOnComplete: true
+        }
+      } as NewJob;
+      const createdJob = await grpcSchedulingSrv.create({
+        items: [job], subject
+      }, {});
+
+      should.exist(createdJob);
+      should.exist(createdJob.data);
+      should.exist(createdJob.data.items);
+      createdJob.data.items.should.have.length(1);
+    });
+    it('should delete a recurring job based on provided id and throw an error on read operation', async () => {
+      const deletedJob = await grpcSchedulingSrv.delete({
+        ids: ['test-job-id'], subject
+      }, {});
+      should.not.exist(deletedJob.error);
+      deletedJob.data.should.be.empty();
+      const result = await grpcSchedulingSrv.read({ filter: { job_ids: ['test-job-id'] }, subject }, {});
+      should.exist(result.error);
+      should.exist(result.error.details);
+      result.error.details.should.equal('13 INTERNAL: Error! Jobs not found in any of the queues, jobIDs: test-job-id');
+    });
   });
   describe(`managing jobs ${testSuffix}`, function (): void {
     this.timeout(5000);
@@ -434,6 +478,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
       };
 
       const job = {
+        id: 'test-invalid-job-id',
         type: 'test-invalid-job',
         data,
         options: {
@@ -474,7 +519,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
         // READ action error is thrown since the job needs to be read first before updating
         result.error.details.should.equal('7 PERMISSION_DENIED: Access not allowed for request with subject:admin_user_id, resource:job, action:READ, target_scope:orgD; the response was DENY');
       });
-      it(`should upsert a job ${testSuffix}`, async () => {
+      it(`should throw an error when upserting a job with invalid scope ${testSuffix}`, async () => {
         const result = await grpcSchedulingSrv.upsert({
           items: [job], subject
         });
@@ -497,13 +542,11 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
       mockServer = await startGrpcMockServer([{ method: 'WhatIsAllowed', input: '\{.*\:\{.*\:.*\}\}', output: jobPolicySetRQ },
       { method: 'IsAllowed', input: '\{.*\:\{.*\:.*\}\}', output: { decision: 'PERMIT' } }], logger);
       subject.scope = 'orgC';
-      const offset = await jobEvents.$offset(-1);
       await grpcSchedulingSrv.delete({
         collection: true, subject
       }, {});
       const result = await grpcSchedulingSrv.read({ subject }, {});
       shouldBeEmpty(result);
-      await jobEvents.$wait(offset + 3);
     });
   });
 });

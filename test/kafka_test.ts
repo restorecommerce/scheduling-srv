@@ -385,7 +385,7 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, () => {
       await jobTopic.emit('deleteJobs', { collection: true, subject });
 
       const offset = await jobTopic.$offset(-1);
-      await jobTopic.$wait(offset + 3);
+      await jobTopic.$wait(offset + 2);
       schedulingService.disableAC();
       const result = await schedulingService.read({ request: { subject } }, {});
       shouldBeEmpty(result);
