@@ -16,8 +16,6 @@ import { RedisClient, createClient } from 'redis';
 const JOBS_CREATE_EVENT = 'createJobs';
 const JOBS_MODIFY_EVENT = 'modifyJobs';
 const JOBS_DELETE_EVENT = 'deleteJobs';
-const QUEUED_JOB = 'queuedJob';
-const FLUSH_STALLED_JOBS_TYPE = 'flushStalledJobs';
 
 chassis.cache.register('redis', (cacheConfig, logger) => {
   const options = {
@@ -272,13 +270,6 @@ export class Worker {
           (err) => {
             logger.error('Error occurred deleting jobs:', err.message);
           });
-      } else if (eventName === QUEUED_JOB) {
-        if (msg && msg.type === FLUSH_STALLED_JOBS_TYPE) {
-          await schedulingService.flushStalledJobs(msg.id, msg.type).catch(
-            (err) => {
-              logger.error('Error occured flushing jobs:', err.message);
-            });
-        }
       } else {  // commands
         await cis.command(msg, context);
       }
@@ -313,14 +304,25 @@ export class Worker {
     }));
 
     // Hook any external jobs
-    const externalJobFiles = fs.readdirSync('./lib/external-jobs');
-    externalJobFiles.forEach((externalFile) => {
-      if (externalFile.endsWith('.js')) {
-        (async () => require('./external-jobs/' + externalFile).default(cfg))().catch(err => {
-          this.logger.error(`Error scheduling external job ${externalFile}`, { err: err.message });
-        });
+    let externalJobFiles;
+    try {
+      externalJobFiles = fs.readdirSync('./lib/external-jobs');
+    } catch (err) {
+      if (err.message.includes('no such file or directory')) {
+        this.logger.info('No files for external job processors found');
+      } else {
+        this.logger.error('Error reading external-jobs files');
       }
-    });
+    }
+    if (externalJobFiles && externalJobFiles.length > 0) {
+      externalJobFiles.forEach((externalFile) => {
+        if (externalFile.endsWith('.js')) {
+          (async () => require('./external-jobs/' + externalFile).default(cfg))().catch(err => {
+            this.logger.error(`Error scheduling external job ${externalFile}`, { err: err.message });
+          });
+        }
+      });
+    }
 
     // Start server
     await server.start();

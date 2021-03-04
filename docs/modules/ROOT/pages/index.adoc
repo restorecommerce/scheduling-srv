@@ -211,6 +211,8 @@ input and responses are a `google.protobuf.Empty` message. This operation suppor
 it also exposes boolean param `collection` and if set to true all  the jobs in Redis data would be deleted. For the detailed protobuf message structure
 of`io.restorecommerce.job.DeleteRequest` refer link:https://github.com/restorecommerce/protos/blob/master/io/restorecommerce/job.proto[job.proto].
 
+NOTE: there is a folder `external-jobs` in the repository where any custom job processors can be placed.
+
 [#events]
 == Events
 

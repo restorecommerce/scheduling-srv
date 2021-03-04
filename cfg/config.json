@@ -206,8 +206,7 @@
           "events": [
             "createJobs",
             "modifyJobs",
-            "deleteJobs",
-            "queuedJob"
+            "deleteJobs"
           ]
         }
       }
@@ -370,16 +369,7 @@
       "path": "/admin/queues"
     }
   },
-  "externalJobs": [
-    { "deleteStalledJobs": true,
-      "stalledJob": {
-        "options": {
-          "jobType": "flushStalledJobs",
-          "cronParser": "0 0 2 * * *"
-        }
-      }
-    }
-  ],
+  "externalJobs": [],
   "queue": [
     {
       "name": "defaultQueue",

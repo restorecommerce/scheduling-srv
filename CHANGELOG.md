@@ -3,6 +3,7 @@
 - fix for create, update, upsert and delete to expose job ID
 - map job id to repeatable key for recurring jobs
 - upgraded dependencies
+- removed flush stalled jobs from external-jobs
 
 ## 0.1.15 (February 24th, 2021)
 
