@@ -231,6 +231,9 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, () => {
 
       await jobTopic.emit('createJobs', { items: [job], subject });
 
+      // jobsCreated
+      await jobTopic.$wait(offset + 1);
+
       schedulingService.disableAC();
       let result = await schedulingService.read({
         request: { subject }
