@@ -16,6 +16,8 @@ import { RedisClient, createClient } from 'redis';
 const JOBS_CREATE_EVENT = 'createJobs';
 const JOBS_MODIFY_EVENT = 'modifyJobs';
 const JOBS_DELETE_EVENT = 'deleteJobs';
+const COMMANDS_EVENTS = ['healthCheckCommand', 'versionCommand', 'restoreCommand',
+  'resetCommand', 'configUpdateCommand', 'setApiKeyCommand', 'flushCacheCommand'];
 
 chassis.cache.register('redis', (cacheConfig, logger) => {
   const options = {
@@ -270,7 +272,7 @@ export class Worker {
           (err) => {
             logger.error('Error occurred deleting jobs:', err.message);
           });
-      } else {  // commands
+      } else if (COMMANDS_EVENTS.indexOf(eventName) > -1) {  // commands
         await cis.command(msg, context);
       }
     };
