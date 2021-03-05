@@ -972,15 +972,24 @@ export class SchedulingService implements JobService {
             });
           }
 
-          callback.then(() => {
+          // since no CB is returned for removeRepeatableByKey by bull
+          if (!callback) {
             if (this.resourceEventsEnabled) {
               dispatch.push(this.jobEvents.emit(
                 'jobsDeleted', { id: jobDataKey })
               );
             }
-          }).catch(err => {
-            this._handleError(err);
-          });
+          } else {
+            callback.then(() => {
+              if (this.resourceEventsEnabled) {
+                dispatch.push(this.jobEvents.emit(
+                  'jobsDeleted', { id: jobDataKey })
+                );
+              }
+            }).catch(err => {
+              this._handleError(err);
+            });
+          }
         });
       }
     }
