@@ -11,12 +11,12 @@ import {
   FilterOpts, KafkaOpts
 } from './types';
 import { parseExpression } from 'cron-parser';
-import * as uuid from 'uuid';
 import * as crypto from 'crypto';
 import { AccessResponse, checkAccessRequest, ReadPolicyResponse } from './utilts';
 
 const JOB_DONE_EVENT = 'jobDone';
 const JOB_FAILED_EVENT = 'jobFailed';
+const uuidv4 = require('uuid/v4');
 
 // Marshall any job payload to google.protobuf.Any
 export const marshallProtobufAny = (data: any): any => {
@@ -531,7 +531,7 @@ export class SchedulingService implements JobService {
   }
 
   private idGen(): string {
-    return uuid.v4().replace(/-/g, '');
+    return uuidv4().replace(/-/g, '');
   }
 
   /**
