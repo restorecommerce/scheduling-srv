@@ -1,6 +1,6 @@
 {
   "name": "@restorecommerce/scheduling-srv",
-  "version": "0.1.16",
+  "version": "0.1.17",
   "description": "Restorecommerce job scheduling microservice",
   "main": "lib/start.js",
   "author": "n-fuse GmbH",

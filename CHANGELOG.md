@@ -1,3 +1,7 @@
+## 0.1.17 (March 11th, 2021)
+
+- updated dependencies.
+
 ## 0.1.16 (March 4th, 2021)
 
 - fix for create, update, upsert and delete to expose job ID
