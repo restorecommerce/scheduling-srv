@@ -2,7 +2,7 @@ import * as _ from 'lodash';
 import { errors } from '@restorecommerce/chassis-srv';
 import * as kafkaClient from '@restorecommerce/kafka-client';
 import { Subject, AuthZAction, ACSAuthZ, Decision, PermissionDenied, updateConfig } from '@restorecommerce/acs-client';
-import { RedisClient, createClient } from 'redis';
+import Redis, { Redis as RedisClient } from 'ioredis';
 import { Job, JobId, JobOptions } from 'bull';
 import * as Queue from 'bull';
 import {
@@ -63,7 +63,7 @@ export class SchedulingService implements JobService {
 
 
   constructor(jobEvents: kafkaClient.Topic,
-    redisConfig: any, logger: any, redisClient: any,
+    redisConfig: any, logger: any, redisClient: RedisClient,
     bullOptions: any, cfg: any, authZ: ACSAuthZ) {
     this.jobEvents = jobEvents;
     this.resourceEventsEnabled = true;
@@ -75,7 +75,7 @@ export class SchedulingService implements JobService {
 
     const repeatJobIdCfg = cfg.get('redis');
     repeatJobIdCfg.db = cfg.get('redis:db-indexes:db-repeatJobId');
-    this.repeatJobIdRedisClient = createClient(repeatJobIdCfg);
+    this.repeatJobIdRedisClient = new Redis(repeatJobIdCfg);
 
     this.canceledJobs = new Set<string>();
     this.cfg = cfg;

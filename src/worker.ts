@@ -11,7 +11,7 @@ import * as fs from 'fs';
 import { router as bullRouter, setQueues, BullAdapter } from 'bull-board';
 import * as express from 'express';
 import { initAuthZ, ACSAuthZ, updateConfig, initializeCache } from '@restorecommerce/acs-client';
-import { RedisClient, createClient } from 'redis';
+import Redis, { Redis as RedisClient } from 'ioredis';
 
 const JOBS_CREATE_EVENT = 'createJobs';
 const JOBS_MODIFY_EVENT = 'modifyJobs';
@@ -205,7 +205,7 @@ export class Worker {
 
     const reccurTimeCfg = cfg.get('redis');
     reccurTimeCfg.db = cfg.get('redis:db-indexes:db-reccurTime');
-    const redisClient = createClient(reccurTimeCfg);
+    const redisClient = new Redis(reccurTimeCfg);
 
     // Get Rate Limiter config
     const rateLimiterConfig = cfg.get('rateLimiter');
@@ -227,7 +227,7 @@ export class Worker {
     // init redis client for subject index
     const redisConfigSubject = cfg.get('redis');
     redisConfigSubject.db = cfg.get('redis:db-indexes:db-subject');
-    const redisSubjectClient = createClient(redisConfigSubject);
+    const redisSubjectClient = new Redis(redisConfigSubject);
 
     // init ACS cache
     initializeCache();

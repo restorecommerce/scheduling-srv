@@ -1,3 +1,8 @@
+## 0.1.18 (March 19th, 2021)
+
+- migrated from redis to ioredis module
+- updated dependencies.
+
 ## 0.1.17 (March 11th, 2021)
 
 - updated dependencies.
