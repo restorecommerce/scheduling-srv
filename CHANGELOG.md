@@ -1,3 +1,8 @@
+## 0.1.19 (April 13th, 2021)
+
+- updated Docker image Node version to 14.15.5
+for both docker files
+
 ## 0.1.18 (March 19th, 2021)
 
 - migrated from redis to ioredis module
