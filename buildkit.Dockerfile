@@ -7,6 +7,8 @@ ENV NO_UPDATE_NOTIFIER=true
 RUN npm install -g npm
 RUN npm install -g typescript@3.4.1
 
+RUN apk add g++ make python3
+
 RUN apk add --no-cache git
 
 USER node
