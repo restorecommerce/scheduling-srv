@@ -1,3 +1,8 @@
+## 0.1.21 (July 7th, 2021)
+
+- improved logging on event listener and added catch block for deleting job
+- updated bull 3.21.1 to 3.22.10
+
 ## 0.1.20 (June 28th, 2021)
 
 - updated node version to 16.3

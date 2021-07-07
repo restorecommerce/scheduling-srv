@@ -1,6 +1,6 @@
 {
   "name": "@restorecommerce/scheduling-srv",
-  "version": "0.1.20",
+  "version": "0.1.21",
   "description": "Restorecommerce job scheduling microservice",
   "main": "lib/start.js",
   "author": "n-fuse GmbH",
@@ -24,7 +24,7 @@
     "@restorecommerce/logger": "^0.8.1",
     "@restorecommerce/protos": "^0.0.23",
     "@restorecommerce/service-config": "^0.4.1",
-    "bull": "^3.21.1",
+    "bull": "^3.22.10",
     "bull-board": "^1.4.1",
     "cache-manager": "^3.4.1",
     "cache-manager-redis": "^0.6.0",

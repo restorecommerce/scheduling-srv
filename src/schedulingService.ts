@@ -182,15 +182,23 @@ export class SchedulingService implements JobService {
 
         let deleted = false;
 
+        logger.info('Received Job event', { event: eventName });
+        logger.info('Job details', { id: job.id, jobType: job.type });
         const cb = that.jobCbs[job.id];
         if (_.isNil(cb)) {
           logger.error(`job ${job.id} does not exist`);
         } else {
-          delete that.jobCbs[job.id];
-          cb();
-          const ret = await that._deleteJobInstance(job.id, queue);
-          logger.info(`job#${job.id} successfully deleted`, that._filterQueuedJob<JobType>(job));
-          deleted = true;
+          try {
+            delete that.jobCbs[job.id];
+            cb();
+            await that._deleteJobInstance(job.id, queue);
+            logger.info(`job#${job.id} successfully deleted`, that._filterQueuedJob<JobType>(job));
+            deleted = true;
+          } catch (err) {
+            logger.error('Error Stack', err.stack);
+            logger.error(`Error deleting job id ${job.id}`, { message: err.message });
+            logger.error('Error deleting job with ID', { id: job.id, jobType: job.type });
+          }
         }
 
         if (jobData && job.delete_scheduled) {
