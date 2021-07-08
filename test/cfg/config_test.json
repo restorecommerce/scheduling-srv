@@ -340,7 +340,11 @@
       "name": "defaultQueue",
       "concurrency": 5,
       "default": true,
-      "runMissedScheduled": true
+      "runMissedScheduled": true,
+      "advancedSettings": {
+        "lockDuration":  300000,
+        "lockRenewTime": 150000
+      }
     },
     {
       "name": "test-job",
@@ -351,6 +355,10 @@
         "enabled": false,
         "max": 1,
         "duration": 3000
+      },
+      "advancedSettings": {
+        "lockDuration":  300000,
+        "lockRenewTime": 150000
       }
     }
   ],
