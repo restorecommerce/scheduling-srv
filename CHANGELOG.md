@@ -1,6 +1,7 @@
 ## 0.1.22 (July 8th, 2021)
 
 - enabled to support advanced settings in queue configuration
+- removed the manual `deleteJobInstance` since we have support for `removeOnComplete` in job options
 - updated bull 3.22.10 to 3.22.11
 
 ## 0.1.21 (July 7th, 2021)
