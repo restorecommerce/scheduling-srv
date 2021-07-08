@@ -108,6 +108,7 @@ export class SchedulingService implements JobService {
       let queueOptions: Queue.QueueOptions;
       const prefix = queueCfg.name;
       const rateLimiting = queueCfg.rateLimiting;
+      const advancedSettings = queueCfg.advancedSettings;
 
       // Create Queue Configuration - Add Rate Limiting if enabled
       if (!_.isEmpty(rateLimiting) && rateLimiting.enabled == true) {
@@ -131,6 +132,9 @@ export class SchedulingService implements JobService {
         };
       }
 
+      if (!_.isEmpty(advancedSettings)) {
+        queueOptions.settings = advancedSettings;
+      }
       // Add Queue Objects
       let queue = new Queue(prefix, queueOptions);
       this.queuesList.push(queue);

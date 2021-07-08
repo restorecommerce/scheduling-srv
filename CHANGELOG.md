@@ -1,3 +1,8 @@
+## 0.1.22 (July 8th, 2021)
+
+- enabled to support advanced settings in queue configuration
+- updated bull 3.22.10 to 3.22.11
+
 ## 0.1.21 (July 7th, 2021)
 
 - improved logging on event listener and added catch block for deleting job

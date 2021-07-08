@@ -28,6 +28,7 @@ in the https://github.com/restorecommerce/scheduling-srv/blob/master/cfg/config.
 https://github.com/restorecommerce/scheduling-srv/blob/master/cfg/config.json#L342[concurrency]
 and https://github.com/restorecommerce/scheduling-srv/blob/master/test/cfg/config_test.json#L335[rate limiting]
 for job processing, where `max` is the maximum number of jobs processed, per `duration` in milliseconds.
+* Queues can be configured for link:https://github.com/OptimalBits/bull/blob/develop/REFERENCE.md#queue[advancedSettings] for configuring `lockDuration` and other properties in the https://github.com/restorecommerce/scheduling-srv/blob/master/cfg/config.json#L79[configuration], if the values are missing then `bull` configures to default values.
 * `authorization:enable`: default value is `true`, if set to `true` then access-control check is performed, if value is set to `false` then access-control check is overridden.
 * `authorization:enforce`: default value is `true`, if set to `true` then result of access-control-check is enforced, if value is set to `false` the result of access-control check if logged and ignored.
 
