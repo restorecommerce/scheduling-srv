@@ -178,7 +178,7 @@ export class SchedulingService implements JobService {
         }
 
         logger.info('Received Job event', { event: eventName });
-        logger.info('Job details', { id: job.id, jobType: job.type });
+        logger.info('Job details', job);
         const jobData: any = await queue.getJob(job.id).catch(error => {
           that._handleError(error);
         });
@@ -190,6 +190,8 @@ export class SchedulingService implements JobService {
           } catch (err) {
             this.logger.error('Error moving the job to completed state', { name: jobData.name });
           }
+        } else {
+          this.logger.error('Job does not exist to move to completed state', job);
         }
 
         if (jobData && job.delete_scheduled) {
