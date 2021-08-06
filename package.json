@@ -24,7 +24,7 @@
     "@restorecommerce/logger": "^0.8.1",
     "@restorecommerce/protos": "^0.0.23",
     "@restorecommerce/service-config": "^0.4.1",
-    "bull": "^3.22.11",
+    "bull": "^3.28.1",
     "bull-board": "^1.4.1",
     "cache-manager": "^3.4.1",
     "cache-manager-redis": "^0.6.0",

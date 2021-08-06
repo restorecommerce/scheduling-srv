@@ -51,7 +51,6 @@ export class SchedulingService implements JobService {
   queuesList: Queue.Queue[];
   defaultQueueName: string;
 
-  jobCbs: any;
   redisClient: RedisClient;
   resourceEventsEnabled: boolean;
   canceledJobs: Set<string>;
@@ -156,7 +155,6 @@ export class SchedulingService implements JobService {
    */
   async start(): Promise<any> {
     const logger = this.logger;
-    this.jobCbs = {};
     const that = this;
 
     const events = [JOB_DONE_EVENT, JOB_FAILED_EVENT];
@@ -165,7 +163,6 @@ export class SchedulingService implements JobService {
       await this.jobEvents.on(eventName, async (msg: any, ctx: any,
         config: any, eventName: string): Promise<any> => {
         let job = msg;
-
         // Match Job Type to Queue Name, else use Default Queue
         let queue = _.find(this.queuesList, { name: job.type });
         let defaultQueue = _.find(this.queuesList, { name: this.defaultQueueName });
@@ -180,36 +177,26 @@ export class SchedulingService implements JobService {
           logger.verbose(`job#${job.id} done`, that._filterQueuedJob<JobDoneType>(job));
         }
 
-        const jobData = await queue.getJob(job.id).catch(error => {
+        logger.info('Received Job event', { event: eventName });
+        logger.info('Job details', { id: job.id, jobType: job.type });
+        const jobData: any = await queue.getJob(job.id).catch(error => {
           that._handleError(error);
         });
 
-        let deleted = false;
-
-        logger.info('Received Job event', { event: eventName });
-        logger.info('Job details', { id: job.id, jobType: job.type });
-        const cb = that.jobCbs[job.id];
-        if (_.isNil(cb)) {
-          logger.error(`job ${job.id} does not exist`);
-        } else {
+        if (jobData) {
           try {
-            delete that.jobCbs[job.id];
-            cb();
-            logger.info(`job#${job.id} successfully deleted`, that._filterQueuedJob<JobType>(job));
-            deleted = true;
+            let moveJobResponse = await (jobData as Job).moveToCompleted('succeeded', true, true);
+            this.logger.debug('Job moved to completed state response', moveJobResponse);
           } catch (err) {
-            logger.error('Error Stack', err.stack);
-            logger.error(`Error deleting job id ${job.id}`, { message: err.message });
-            logger.error('Error deleting job with ID', { id: job.id, jobType: job.type });
+            this.logger.error('Error moving the job to completed state', { name: jobData.name });
           }
         }
 
         if (jobData && job.delete_scheduled) {
           await queue.removeRepeatable(jobData.name, jobData.opts.repeat);
-          deleted = true;
         }
 
-        if (deleted && that.resourceEventsEnabled) {
+        if (that.resourceEventsEnabled) {
           await that.jobEvents.emit('jobsDeleted', { id: job.id });
         }
         await queue.clean(0);
@@ -250,8 +237,7 @@ export class SchedulingService implements JobService {
         processName = queueCfg.name;
       }
 
-      queue.process(processName, concurrency, async (job, done) => {
-        this.jobCbs[job.id] = done;
+      queue.process(processName, concurrency, async (job) => {
 
         const filteredJob = that._filterQueuedJob<JobType>(job);
         // For recurring job add time so if service goes down we can fire jobs
@@ -294,10 +280,8 @@ export class SchedulingService implements JobService {
           data: filteredJob.data,
           schedule_type: filteredJob.opts.repeat ? 'RECCUR' : 'ONCE',
         }).catch((error) => {
-          delete this.jobCbs[filteredJob.id];
           that.logger.error(`Error while processing job ${filteredJob.id} in queue: ${error}`);
-          done(error);
-        }).then(() => done());
+        });
 
         that.logger.verbose(`job@${filteredJob.name}#${filteredJob.id} queued`, filteredJob);
       });
