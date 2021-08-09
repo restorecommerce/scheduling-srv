@@ -1215,6 +1215,10 @@ export class SchedulingService implements JobService {
         picked.backoff.type = picked.backoff.type.toUpperCase();
       }
     }
+    // remove key if it exists in repeat
+    if(picked && picked.repeat && (picked.repeat as any).key) {
+      delete (picked.repeat as any).key;
+    }
 
     return picked;
   }

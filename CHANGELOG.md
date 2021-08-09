@@ -1,3 +1,7 @@
+## 0.1.23 (August 9th, 2021)
+
+- removed jobcall back done and replaced with job.moveToCompleted and updated bull
+
 ## 0.1.22 (July 8th, 2021)
 
 - enabled to support advanced settings in queue configuration
