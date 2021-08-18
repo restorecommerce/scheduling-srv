@@ -1,3 +1,7 @@
+## 0.1.24 (August 18th, 2021)
+
+- removed default clean up of queues `queue.clean(0)` from jobDone / jobFailed listener and added setup clean interval to remove completed / failed jobs
+
 ## 0.1.23 (August 9th, 2021)
 
 - removed jobcall back done and replaced with job.moveToCompleted and updated bull
