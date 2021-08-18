@@ -15,6 +15,7 @@ A microservice for scheduling jobs part of the link:https://github.com/restoreco
 * Concurrency and rate limiting for job processing. The job processing is made
 by matching the Job type with the Queue name.
 In the case when there is no match the jobs are being added to the default Queue.
+* Inbuilt mechanism to clean up completed / failed jobs.
 
 [#configuration]
 == Configuration
@@ -31,6 +32,8 @@ for job processing, where `max` is the maximum number of jobs processed, per `du
 * Queues can be configured for link:https://github.com/OptimalBits/bull/blob/develop/REFERENCE.md#queue[advancedSettings] for configuring `lockDuration` and other properties in the https://github.com/restorecommerce/scheduling-srv/blob/master/cfg/config.json#L379[configuration], if the values are missing then `bull` configures to default values.
 * `authorization:enable`: default value is `true`, if set to `true` then access-control check is performed, if value is set to `false` then access-control check is overridden.
 * `authorization:enforce`: default value is `true`, if set to `true` then result of access-control-check is enforced, if value is set to `false` the result of access-control check if logged and ignored.
+* `queueCleanup:cleanInterval`: clean interval in milliseconds to remove completed / failed jobs from all queues.
+* `queueCleanup:ttlAfterFinished`: time to live after the job is in completed / failed state.
 
 [#API]
 == API

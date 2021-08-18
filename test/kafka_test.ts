@@ -181,8 +181,8 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, () => {
       const offset = await jobTopic.$offset(-1);
       await jobTopic.emit('createJobs', { items: [job], subject });
 
-      // createJobs, jobsCreated, queuedJob, jobDone, jobDeleted
-      await jobTopic.$wait(offset + 4);
+      // createJobs, queuedJob, jobDone
+      await jobTopic.$wait(offset + 3);
       // Simulate timeout
       await new Promise((resolve) => setTimeout(resolve, 100));
 
@@ -240,8 +240,8 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, () => {
       });
       result.items.should.have.length(1);
 
-      // createJobs, jobsCreated, queuedJob, jobDone
-      await jobTopic.$wait(offset + 4);
+      // jobsCreated, queuedJob, jobDone
+      await jobTopic.$wait(offset + 3);
 
       schedulingService.disableAC();
       result = await schedulingService.read({
@@ -309,8 +309,8 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, () => {
       should.exist(created.items);
 
       // wait for 3 'queuedJob', 3 'jobDone', 1 'createJobs'
-      // wait for '2 jobsDeleted', '1 jobsCreated'
-      await jobTopic.$wait(offset + 10);
+      // wait for '1 jobsCreated'
+      await jobTopic.$wait(offset + 7);
 
       // Sleep for jobDone to get processed
       await new Promise(resolve => setTimeout(resolve, 100));

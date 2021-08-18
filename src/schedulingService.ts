@@ -17,6 +17,10 @@ import { AccessResponse, checkAccessRequest, ReadPolicyResponse } from './utilts
 const JOB_DONE_EVENT = 'jobDone';
 const JOB_FAILED_EVENT = 'jobFailed';
 const uuidv4 = require('uuid/v4');
+const DEFAULT_CLEANUP_COMPLETED_JOBS = 604800000; // 7 days in miliseconds
+const COMPLETED_JOB_STATE = 'completed';
+const FAILED_JOB_STATE = 'failed';
+const QUEUE_CLEANUP = 'queueCleanup';
 
 // Marshall any job payload to google.protobuf.Any
 export const marshallProtobufAny = (data: any): any => {
@@ -184,11 +188,20 @@ export class SchedulingService implements JobService {
         });
 
         if (jobData) {
-          try {
-            let moveJobResponse = await (jobData as Job).moveToCompleted('succeeded', true, true);
-            this.logger.debug('Job moved to completed state response', moveJobResponse);
-          } catch (err) {
-            this.logger.error('Error moving the job to completed state', { name: jobData.name });
+          if (eventName === JOB_DONE_EVENT) {
+            try {
+              let moveJobResponse = await (jobData as Job).moveToCompleted('succeeded', true, true);
+              this.logger.debug('Job moved to completed state response', moveJobResponse);
+            } catch (err) {
+              this.logger.error('Error moving the job to completed state', { name: jobData.name });
+            }
+          } else if (eventName === JOB_FAILED_EVENT) {
+            try {
+              let moveJobResponse = await (jobData as Job).moveToFailed({ message: msg.error }, true);
+              this.logger.debug('Job moved to failed state response', moveJobResponse);
+            } catch (err) {
+              this.logger.error('Error moving the job to failed state', { name: jobData.name });
+            }
           }
         } else {
           this.logger.error('Job does not exist to move to completed state', job);
@@ -197,11 +210,6 @@ export class SchedulingService implements JobService {
         if (jobData && job.delete_scheduled) {
           await queue.removeRepeatable(jobData.name, jobData.opts.repeat);
         }
-
-        if (that.resourceEventsEnabled) {
-          await that.jobEvents.emit('jobsDeleted', { id: job.id });
-        }
-        await queue.clean(0);
       });
     }
 
@@ -313,7 +321,7 @@ export class SchedulingService implements JobService {
       let runMissedScheduled = queueCfg.runMissedScheduled;
       if (_.isNil(runMissedScheduled) ||
         (!_.isNil(runMissedScheduled) && runMissedScheduled == true)) {
-        await queue.getJobs(this.bullOptions['allJobTypes']).then(jobs => {
+        await queue.getJobs(this.bullOptions['activeAndFutureJobTypes']).then(jobs => {
           result = result.concat(jobs);
         }).catch(error => {
           thiz._handleError(`Error reading jobs: ${error}`);
@@ -808,7 +816,7 @@ export class SchedulingService implements JobService {
         try {
           let jobsList: any[] = [];
           for (let queue of this.queuesList) {
-            const getJobsResult = await queue.getJobs(this.bullOptions['allJobTypes']);
+            const getJobsResult = await queue.getJobs(this.bullOptions['activeAndFutureJobTypes']);
             jobsList = jobsList.concat(getJobsResult);
           }
           result = jobsList;
@@ -868,7 +876,7 @@ export class SchedulingService implements JobService {
   async _getJobList(): Promise<Job[]> {
     let jobsList: any[] = [];
     for (let queue of this.queuesList) {
-      const getJobsResult = await queue.getJobs(this.bullOptions['allJobTypes']);
+      const getJobsResult = await queue.getJobs(this.bullOptions['activeAndFutureJobTypes']);
       jobsList = jobsList.concat(getJobsResult);
     }
     return jobsList;
@@ -994,6 +1002,51 @@ export class SchedulingService implements JobService {
     await Promise.all(dispatch);
 
     return {};
+  }
+
+  /**
+   * Clean up queues - removes complted and failed jobs from queue
+   * @param {any} job clean up job
+   */
+  async cleanupJobs(ttlAfterFinished) {
+    for (let queue of this.queuesList) {
+      try {
+        await queue.clean(ttlAfterFinished, COMPLETED_JOB_STATE);
+        await queue.clean(ttlAfterFinished, FAILED_JOB_STATE);
+      } catch (err) {
+        this.logger.error('Error cleaning up jobs', err);
+      }
+    }
+    this.logger.info('Jobs cleaned up successfully');
+    let lastExecutedInterval = { lastExecutedInterval: (new Date()).toString() };
+    this.repeatJobIdRedisClient.set(QUEUE_CLEANUP, JSON.stringify(lastExecutedInterval));
+  }
+
+  async setupCleanInterval(cleanInterval: number, ttlAfterFinished: number) {
+    if (!ttlAfterFinished) {
+      ttlAfterFinished = DEFAULT_CLEANUP_COMPLETED_JOBS;
+    }
+    const intervalData = await this.getRedisValue(QUEUE_CLEANUP);
+    let timeInMs, delta;
+    const now = new Date().getTime();
+    if (intervalData?.lastExecutedInterval && typeof (intervalData.lastExecutedInterval) === 'string') {
+      timeInMs = new Date(intervalData.lastExecutedInterval).getTime();
+      this.logger.debug('Previous execution interval', intervalData);
+      delta = now - timeInMs;
+      this.logger.debug('Clean interval and previous difference', { cleanInterval, difference: delta });
+    }
+
+    if (delta && (delta < cleanInterval)) {
+      // use setTimeout and then create interval on setTimeout
+      this.logger.info('Restoring previous execution interval with set timeout', { time: cleanInterval - delta });
+      setTimeout(() => {
+        this.cleanupJobs(ttlAfterFinished);
+        setInterval(this.cleanupJobs.bind(this), cleanInterval, ttlAfterFinished);
+      }, cleanInterval - delta);
+    } else {
+      setInterval(this.cleanupJobs.bind(this), cleanInterval, ttlAfterFinished);
+      this.logger.info('Clean up job interval set successfully');
+    }
   }
 
   /**
@@ -1157,7 +1210,9 @@ export class SchedulingService implements JobService {
   }
 
   _filterQueuedJob<T extends FilterOpts>(job: T): Pick<T, 'id' | 'type' | 'data' | 'opts' | 'name'> {
-    (job as any).type = (job as any).name;
+    if (job && !job.type) {
+      (job as any).type = (job as any).name;
+    }
     const picked: any = _.pick(job, [
       'id', 'type', 'data', 'opts', 'name'
     ]);
@@ -1216,7 +1271,7 @@ export class SchedulingService implements JobService {
       }
     }
     // remove key if it exists in repeat
-    if(picked && picked.repeat && (picked.repeat as any).key) {
+    if (picked && picked.repeat && (picked.repeat as any).key) {
       delete (picked.repeat as any).key;
     }
 

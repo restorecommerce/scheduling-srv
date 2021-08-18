@@ -330,6 +330,12 @@
       "delayed",
       "paused"
     ],
+    "activeAndFutureJobTypes": [
+      "waiting",
+      "active",
+      "delayed",
+      "paused"
+    ],
     "board":  {
       "port": 3000,
       "path": "/admin/queue s"

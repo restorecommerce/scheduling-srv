@@ -179,7 +179,8 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
       const offset = await jobEvents.$offset(-1);
       await grpcSchedulingSrv.create({ items: [job], subject }, {});
 
-      await jobEvents.$wait(offset + 2); // queued, jobDone
+      // queuedJob (jobDone is emitted from here) - have remvoed jobsDeleted event since we now move the job to completed state
+      await jobEvents.$wait(offset + 1);
 
       // Simulate timeout
       await new Promise((resolve) => setTimeout(resolve, 100));
@@ -226,7 +227,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
         items: [job], subject
       }, {});
 
-      await jobEvents.$wait(offset + 3); // jobsCreated, queuedJob, jobDone
+      await jobEvents.$wait(offset + 2); // jobsCreated, queuedJob (jobDone is sent from test)
 
       const result = await grpcSchedulingSrv.read({ subject }, {});
       shouldBeEmpty(result);
@@ -289,9 +290,8 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
       should.exist(createdJob.data.items);
       createdJob.data.items.should.have.length(1);
 
-      // wait for 3 'queuedJob', 3 'jobDone',
-      // '2 jobsDeleted', '1 jobsCreated'
-      await jobEvents.$wait(offset + 9);
+      // wait for 3 'queuedJob', 3 'jobDone'
+      await jobEvents.$wait(offset + 6);
 
       // Sleep for jobDone to get processed
       await new Promise(resolve => setTimeout(resolve, 100));

@@ -364,6 +364,12 @@
       "delayed",
       "paused"
     ],
+    "activeAndFutureJobTypes": [
+      "waiting",
+      "active",
+      "delayed",
+      "paused"
+    ],
     "board":  {
       "port": 3000,
       "path": "/admin/queues"
@@ -429,5 +435,9 @@
       "code": "403",
       "message": "Action not allowed on this resource"
     }
+  },
+  "queueCleanup": {
+    "ttlAfterFinished": 10000,
+    "cleanInterval": 10000
   }
 }

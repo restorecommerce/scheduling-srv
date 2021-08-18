@@ -239,6 +239,12 @@ export class Worker {
     const serviceNamesCfg = cfg.get('serviceNames');
     await server.bind(serviceNamesCfg.scheduling, schedulingService);
 
+    // cleanup job
+    const queueCleanup = cfg.get('queueCleanup');
+    if (queueCleanup?.cleanInterval && typeof queueCleanup.cleanInterval === 'number') {
+      await schedulingService.setupCleanInterval(queueCleanup.cleanInterval, queueCleanup.ttlAfterFinished);
+    }
+
     const cis = new JobsCommandInterface(server, cfg,
       logger, events, schedulingService, redisSubjectClient);
     await server.bind(serviceNamesCfg.cis, cis);
