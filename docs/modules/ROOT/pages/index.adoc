@@ -33,7 +33,7 @@ for job processing, where `max` is the maximum number of jobs processed, per `du
 * `authorization:enable`: default value is `true`, if set to `true` then access-control check is performed, if value is set to `false` then access-control check is overridden.
 * `authorization:enforce`: default value is `true`, if set to `true` then result of access-control-check is enforced, if value is set to `false` the result of access-control check if logged and ignored.
 * `queueCleanup:cleanInterval`: clean interval in milliseconds to remove completed / failed jobs from all queues.
-* `queueCleanup:ttlAfterFinished`: time to live after the job is in completed / failed state.
+* `queueCleanup:ttlAfterFinished`: time to live after the job is in completed / failed state, default value is 604800000 (7 days) and this default configuration is applicable only if `queueCleanup:cleanInterval` is set.
 
 [#API]
 == API
