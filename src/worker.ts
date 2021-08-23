@@ -218,7 +218,7 @@ export class Worker {
 
     const JOBS_TOPIC_NAME = kafkaCfg.topics.jobs.topic;
     // Subscribe to events which the business logic requires
-    const jobEvents: Topic = events.topic(JOBS_TOPIC_NAME);
+    const jobEvents: Topic = await events.topic(JOBS_TOPIC_NAME);
 
     const bullOptions = cfg.get('bull');
     // Create the business logic
@@ -286,7 +286,7 @@ export class Worker {
     const topicTypes = _.keys(kafkaCfg.topics);
     for (let topicType of topicTypes) {
       const topicName = kafkaCfg.topics[topicType].topic;
-      const topic = events.topic(topicName);
+      const topic = await events.topic(topicName);
       const offsetValue = await this.offsetStore.getOffset(topicName);
       logger.info('subscribing to topic with offset value', topicName, offsetValue);
       if (kafkaCfg.topics[topicType].events) {

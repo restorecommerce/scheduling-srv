@@ -23,9 +23,13 @@
   "events": {
     "kafka": {
       "provider": "kafka",
-      "groupId": "scheduling-srv",
-      "clientId": "scheduling-srv",
-      "kafkaHost": "localhost:29092",
+      "groupId": "restore-scheduling-srv",
+      "kafka": {
+        "clientId": "restore-scheduling-srv",
+        "brokers": [
+          "localhost:29092"
+        ]
+      },
       "latestOffset": true,
       "queuedJob": {
         "protos": [
@@ -214,53 +218,29 @@
   },
   "client": {
     "acs-srv": {
-      "transports": {
-        "grpc": {
-          "service": "io.restorecommerce.access_control.Service",
-          "protos": [
-            "io/restorecommerce/access_control.proto"
-          ],
-          "protoRoot": "node_modules/@restorecommerce/protos/",
-          "timeout": 3000
+      "address": "localhost:50061",
+      "proto": {
+        "protoRoot": "node_modules/@restorecommerce/protos/",
+        "protoPath": "io/restorecommerce/access_control.proto",
+        "services": {
+          "acs-srv": {
+            "packageName": "io.restorecommerce.access_control",
+            "serviceName": "Service"
+          }
         }
-      },
-      "loadbalancer": {
-        "name": "roundRobin"
-      },
-      "publisher": {
-        "name": "static",
-        "instances": [
-          "grpc://localhost:50061"
-        ]
-      },
-      "endpoints": {
-        "isAllowed": {},
-        "whatIsAllowed": {}
       }
     },
     "user": {
-      "transports": {
-        "grpc": {
-          "service": "io.restorecommerce.user.Service",
-          "protos": [
-            "io/restorecommerce/user.proto"
-          ],
-          "protoRoot": "node_modules/@restorecommerce/protos/",
-          "timeout": 3000
+      "address": "localhost:50051",
+      "proto": {
+        "protoRoot": "node_modules/@restorecommerce/protos/",
+        "protoPath": "io/restorecommerce/user.proto",
+        "services": {
+          "user": {
+            "packageName": "io.restorecommerce.user",
+            "serviceName": "Service"
+          }
         }
-      },
-      "loadbalancer": {
-        "name": "roundRobin"
-      },
-      "publisher": {
-        "name": "static",
-        "instances": [
-          "grpc://localhost:50051"
-        ]
-      },
-      "endpoints": {
-        "find": {},
-        "findByToken": {}
       },
       "bufferFields": {
         "ReadRequest": "custom_arguments"
@@ -370,7 +350,7 @@
       "delayed",
       "paused"
     ],
-    "board":  {
+    "board": {
       "port": 3000,
       "path": "/admin/queues"
     }
@@ -383,7 +363,7 @@
       "default": true,
       "runMissedScheduled": true,
       "advancedSettings": {
-        "lockDuration":  300000,
+        "lockDuration": 300000,
         "lockRenewTime": 150000
       }
     }
@@ -418,7 +398,7 @@
       "delete": "urn:restorecommerce:acs:names:action:delete",
       "organization": "urn:restorecommerce:acs:model:organization.Organization"
     },
-    "cache":  {
+    "cache": {
       "host": "localhost",
       "port": 6379,
       "db-index": 5,

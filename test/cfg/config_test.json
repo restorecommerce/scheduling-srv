@@ -22,9 +22,13 @@
   "events": {
     "kafka": {
       "provider": "kafka",
-      "groupId": "scheduling-srv",
-      "clientId": "scheduling-srv",
-      "kafkaHost": "localhost:29092",
+      "groupId": "restore-scheduling-srv",
+      "kafka": {
+        "clientId": "restore-scheduling-srv-test",
+        "brokers": [
+          "localhost:29092"
+        ]
+      },
       "latestOffset": true,
       "queuedJob": {
         "protos": [
@@ -265,58 +269,48 @@
     "reflection": "io-restorecommerce-scheduling-reflection",
     "health": "grpc-health-v1"
   },
+
   "client": {
     "schedulingClient": {
-      "transports": {
-        "grpc": {
-          "service": "io.restorecommerce.job.Service",
-          "protos": [
-            "io/restorecommerce/job.proto"
-          ],
-          "protoRoot": "node_modules/@restorecommerce/protos/",
-          "timeout": 3000
+      "address": "localhost:50054",
+      "proto": {
+        "protoRoot": "node_modules/@restorecommerce/protos/",
+        "protoPath": "io/restorecommerce/job.proto",
+        "services": {
+          "schedulingClient": {
+            "packageName": "io.restorecommerce.job",
+            "serviceName": "Service"
+          }
         }
-      },
-      "loadbalancer": {
-        "name": "roundRobin"
-      },
-      "publisher": {
-        "name": "static",
-        "instances": [
-          "grpc://localhost:50054"
-        ]
-      },
-      "endpoints": {
-        "read": {},
-        "create": {},
-        "delete": {},
-        "update": {},
-        "upsert": {}
       }
     },
     "acs-srv": {
-      "transports": {
-        "grpc": {
-          "service": "io.restorecommerce.access_control.Service",
-          "protos": [
-            "io/restorecommerce/access_control.proto"
-          ],
-          "protoRoot": "node_modules/@restorecommerce/protos/",
-          "timeout": 3000
+      "address": "localhost:50061",
+      "proto": {
+        "protoRoot": "node_modules/@restorecommerce/protos/",
+        "protoPath": "io/restorecommerce/access_control.proto",
+        "services": {
+          "acs-srv": {
+            "packageName": "io.restorecommerce.access_control",
+            "serviceName": "Service"
+          }
+        }
+      }
+    },
+    "user": {
+      "address": "localhost:50051",
+      "proto": {
+        "protoRoot": "node_modules/@restorecommerce/protos/",
+        "protoPath": "io/restorecommerce/user.proto",
+        "services": {
+          "user": {
+            "packageName": "io.restorecommerce.user",
+            "serviceName": "Service"
+          }
         }
       },
-      "loadbalancer": {
-        "name": "roundRobin"
-      },
-      "publisher": {
-        "name": "static",
-        "instances": [
-          "grpc://localhost:50061"
-        ]
-      },
-      "endpoints": {
-        "isAllowed": {},
-        "whatIsAllowed": {}
+      "bufferFields": {
+        "ReadRequest": "custom_arguments"
       }
     }
   },

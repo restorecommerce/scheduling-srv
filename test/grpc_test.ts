@@ -4,7 +4,7 @@ import { marshallProtobufAny } from '../lib/schedulingService';
 import { Worker } from '../lib/worker';
 import { Topic } from '@restorecommerce/kafka-client';
 import { createServiceConfig } from '@restorecommerce/service-config';
-import { Client } from '@restorecommerce/grpc-client';
+import { GrpcClient } from '@restorecommerce/grpc-client';
 import { Logger } from 'winston';
 import {
   validateJob,
@@ -76,7 +76,7 @@ if (acsEnv && acsEnv.toLocaleLowerCase() === 'true') {
 describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
   let worker: Worker;
   let jobEvents: Topic;
-  let serviceClient: Client;
+  let serviceClient: GrpcClient;
   let grpcSchedulingSrv: any;
 
   before(async function (): Promise<any> {
@@ -86,7 +86,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
     await worker.start(cfg);
     logger = worker.logger;
 
-    jobEvents = worker.events.topic(JOB_EVENTS_TOPIC);
+    jobEvents = await worker.events.topic(JOB_EVENTS_TOPIC);
 
     if (acsEnv && acsEnv.toLowerCase() === 'true') {
       subject = acsSubject;
@@ -104,8 +104,8 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
     jobPolicySetRQ.policy_sets[0].policies[0].rules = [permitJobRule];
     mockServer = await startGrpcMockServer([{ method: 'WhatIsAllowed', input: '\{.*\:\{.*\:.*\}\}', output: jobPolicySetRQ },
     { method: 'IsAllowed', input: '\{.*\:\{.*\:.*\}\}', output: { decision: 'PERMIT' } }], logger);
-    serviceClient = new Client(cfg.get('client:schedulingClient'), logger);
-    grpcSchedulingSrv = await serviceClient.connect();
+    serviceClient = new GrpcClient(cfg.get('client:schedulingClient'), logger);
+    grpcSchedulingSrv = serviceClient.schedulingClient;
     const toDelete = (await grpcSchedulingSrv.read({ subject }, {})).total_count;
     const offset = await jobEvents.$offset(-1);
 

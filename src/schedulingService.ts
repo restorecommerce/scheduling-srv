@@ -13,10 +13,10 @@ import {
 import { parseExpression } from 'cron-parser';
 import * as crypto from 'crypto';
 import { AccessResponse, checkAccessRequest, ReadPolicyResponse } from './utilts';
+import * as uuid from 'uuid';
 
 const JOB_DONE_EVENT = 'jobDone';
 const JOB_FAILED_EVENT = 'jobFailed';
-const uuidv4 = require('uuid/v4');
 const DEFAULT_CLEANUP_COMPLETED_JOBS = 604800000; // 7 days in miliseconds
 const COMPLETED_JOB_STATE = 'completed';
 const FAILED_JOB_STATE = 'failed';
@@ -536,7 +536,7 @@ export class SchedulingService implements JobService {
   }
 
   private idGen(): string {
-    return uuidv4().replace(/-/g, '');
+    return uuid.v4().replace(/-/g, '');
   }
 
   /**

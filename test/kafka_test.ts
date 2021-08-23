@@ -90,7 +90,7 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, () => {
     schedulingService = worker.schedulingService;
     logger = worker.logger;
 
-    jobTopic = worker.events.topic(JOB_EVENTS_TOPIC);
+    jobTopic = await worker.events.topic(JOB_EVENTS_TOPIC);
 
     if (acsEnv && acsEnv.toLowerCase() === 'true') {
       subject = acsSubject;

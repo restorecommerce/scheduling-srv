@@ -1,11 +1,11 @@
 import {
-  AuthZAction, Decision, PolicySetRQ, accessRequest, Subject
+  AuthZAction, Decision, PolicySetRQ, accessRequest, Subject, DecisionResponse
 } from '@restorecommerce/acs-client';
 import * as _ from 'lodash';
 import { SchedulingService } from './schedulingService';
 import { createServiceConfig } from '@restorecommerce/service-config';
 import { createLogger } from '@restorecommerce/logger';
-import { Client } from '@restorecommerce/grpc-client';
+import { GrpcClient } from '@restorecommerce/grpc-client';
 
 export interface HierarchicalScope {
   id: string;
@@ -27,16 +27,47 @@ export interface AccessResponse {
   response?: Response;
 }
 
-export interface FilterType {
-  field?: string;
-  operation?: 'lt' | 'lte' | 'gt' | 'gte' | 'eq' | 'in' | 'isEmpty' | 'iLike';
-  value?: string;
-  type?: 'string' | 'boolean' | 'number' | 'date' | 'array';
+export enum FilterOperation {
+  eq = 0,
+  lt = 1,
+  lte = 2,
+  gt = 3,
+  gte = 4,
+  isEmpty = 5,
+  iLike = 6,
+  in = 7,
+  neq = 8
+}
+
+export enum FilterValueType {
+  STRING = 0,
+  NUMBER = 1,
+  BOOLEAN = 2,
+  DATE = 3,
+  ARRAY = 4
+}
+
+export enum OperatorType {
+  and = 0,
+  or = 1
+}
+
+export interface Filter {
+  field: string;
+  operation: FilterOperation;
+  value: string;
+  type?: FilterValueType;
+  filters?: FilterOp[];
+}
+
+export interface FilterOp {
+  filter?: Filter[];
+  operator?: OperatorType;
 }
 
 export interface ReadPolicyResponse extends AccessResponse {
-  policySet?: PolicySetRQ;
-  filter?: FilterType[];
+  policy_sets?: PolicySetRQ[];
+  filters?: FilterOp[];
   custom_query_args?: {
     custom_queries: any;
     custom_arguments: any;
@@ -52,8 +83,8 @@ const getUserServiceClient = async () => {
     const grpcIDSConfig = cfg.get('client:user');
     const logger = createLogger(cfg.get('logger'));
     if (grpcIDSConfig) {
-      const idsClient = new Client(grpcIDSConfig, logger);
-      idsClientInstance = await idsClient.connect();
+      const idsClient = new GrpcClient(grpcIDSConfig, logger);
+      idsClientInstance = idsClient.user;
     }
   }
   return idsClientInstance;
@@ -70,7 +101,7 @@ const getUserServiceClient = async () => {
  */
 /* eslint-disable prefer-arrow-functions/prefer-arrow-functions */
 export async function checkAccessRequest(subject: Subject, resources: any, action: AuthZAction,
-  entity: string, service: SchedulingService, resourceNameSpace?: string): Promise<AccessResponse | ReadPolicyResponse> {
+  entity: string, service: SchedulingService, resourceNameSpace?: string, useCache = true): Promise<DecisionResponse | ReadPolicyResponse> {
   let authZ = service.authZ;
   let data = _.cloneDeep(resources);
   // resolve subject id using findByToken api and update subject with id
@@ -79,8 +110,8 @@ export async function checkAccessRequest(subject: Subject, resources: any, actio
     const idsClient = await getUserServiceClient();
     if (idsClient) {
       dbSubject = await idsClient.findByToken({ token: subject.token });
-      if (dbSubject && dbSubject.data && dbSubject.data.id) {
-        subject.id = dbSubject.data.id;
+      if (dbSubject && dbSubject.payload && dbSubject.payload.id) {
+        subject.id = dbSubject.payload.id;
       }
     }
   }
@@ -91,33 +122,25 @@ export async function checkAccessRequest(subject: Subject, resources: any, actio
     data.entity = entity;
   }
 
-  let result: Decision | PolicySetRQ;
+  let result: DecisionResponse | ReadPolicyResponse;
   try {
-    result = await accessRequest(subject, data, action, authZ, entity, resourceNameSpace);
+    result = await accessRequest(subject, data, action, authZ, entity, resourceNameSpace, useCache);
   } catch (err) {
     return {
       decision: Decision.DENY,
-      response: {
-        payload: undefined,
-        count: 0,
-        status: {
-          code: err.code || 500,
-          message: err.details || err.message,
-        }
+      operation_status: {
+        code: err.code || 500,
+        message: err.details || err.message,
       }
     };
   }
-  if (typeof result === 'string') {
-    return {
-      decision: result
-    };
+  if (result && (result as ReadPolicyResponse).policy_sets) {
+    let custom_queries = data.args.custom_queries;
+    let custom_arguments = data.args.custom_arguments;
+    (result as ReadPolicyResponse).filters = data.args.filters;
+    (result as ReadPolicyResponse).custom_query_args = { custom_queries, custom_arguments };
+    return result as ReadPolicyResponse;
+  } else {
+    return result as DecisionResponse;
   }
-  let custom_queries = data.args.custom_queries;
-  let custom_arguments = data.args.custom_arguments;
-  return {
-    decision: Decision.PERMIT,
-    policySet: result,
-    filter: data.args.filter,
-    custom_query_args: { custom_queries, custom_arguments }
-  };
 }

@@ -14,25 +14,19 @@
   },
   "events": {
     "kafka": {
-      "kafkaHost": "kafka:9092"
+      "kafka": {
+        "brokers": [
+          "kafka:9092"
+        ]
+      }
     }
   },
   "client": {
     "acs-srv": {
-      "publisher": {
-        "name": "static",
-        "instances": [
-          "grpc://access-control-srv:50051"
-        ]
-      }
+      "address": "access-control-srv:50051"
     },
     "user": {
-      "publisher": {
-        "name": "static",
-        "instances": [
-          "grpc://identity-srv:50051"
-        ]
-      }
+      "address": "identity-srv:50051"
     }
   },
   "server": {
