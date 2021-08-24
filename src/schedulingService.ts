@@ -459,12 +459,6 @@ export class SchedulingService implements JobService {
    * @param opts
    */
   getNextMillis(millis, opts) {
-    if (opts.cron && opts.every) {
-      throw new Error(
-        'Both .cron and .every options are defined for this repeatable job'
-      );
-    }
-
     if (opts.every) {
       return Math.floor(millis / opts.every) * opts.every + opts.every;
     }
@@ -826,6 +820,16 @@ export class SchedulingService implements JobService {
           const jobIdData = await this.getRedisValue(jobID as string);
           if (jobIdData && jobIdData.repeatKey) {
             const repeatKey = jobIdData.repeatKey;
+            if (jobIdData?.options?.repeat?.cron && jobIdData?.options?.repeat?.every) {
+              jobListResponse.items.push({
+                status: {
+                  id: jobID.toString(),
+                  code: 400,
+                  message: 'Both .cron and .every options are defined for this repeatable job'
+                }
+              });
+              continue;
+            }
             const nextMillis = this.getNextMillis(Date.now(), jobIdData.options.repeat);
             this.logger.debug('Repeatable job identifier', { id: jobID, repeatId: `repeat:${repeatKey}:${nextMillis}` });
             // map the repeatKey with nextmilis for bull repeatable jobID
@@ -1049,8 +1053,7 @@ export class SchedulingService implements JobService {
       this.logger.verbose('Deleting jobs by their IDs', call.request.ids);
 
       for (let queue of this.queuesList) {
-        for (let jobDataKey of call.request.ids)
-        {
+        for (let jobDataKey of call.request.ids) {
           let callback: Promise<void>;
           const jobIdData = await this.getRedisValue(jobDataKey as string);
           if (jobIdData && jobIdData.repeatKey) {
@@ -1298,6 +1301,16 @@ export class SchedulingService implements JobService {
         const jobIdData = await this.getRedisValue(eachJob.id as string);
         if (jobIdData && jobIdData.repeatKey) {
           const repeatKey = jobIdData.repeatKey;
+          if (jobIdData?.options?.repeat?.cron && jobIdData?.options?.repeat?.every) {
+            result.push({
+              status: {
+                id: origJobId,
+                code: 400,
+                message: 'Both .cron and .every options are defined for this repeatable job'
+              }
+            });
+            continue;
+          }
           const nextMillis = this.getNextMillis(Date.now(), jobIdData.options.repeat);
           this.logger.debug('Repeatable job identifier', { id: eachJob.id, repeatId: `repeat:${repeatKey}:${nextMillis}` });
           // map the repeatKey with nextmilis for bull repeatable jobID
@@ -1520,7 +1533,6 @@ export class SchedulingService implements JobService {
               result = { items: [] };
             } else {
               this.logger.error(`Error reading job with resource ID ${resource.id}`, err);
-              throw err;
             }
           }
           // update owner info
