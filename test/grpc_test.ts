@@ -8,7 +8,7 @@ import { GrpcClient } from '@restorecommerce/grpc-client';
 import { Logger } from 'winston';
 import {
   validateJob,
-  shouldBeEmpty,
+  payloadShouldBeEmpty,
   validateScheduledJob,
   jobPolicySetRQ,
   startGrpcMockServer,
@@ -115,7 +115,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
       await jobEvents.$wait(offset + toDelete - 1);
     }
 
-    shouldBeEmpty(await grpcSchedulingSrv.read({ subject }, {}));
+    payloadShouldBeEmpty(await grpcSchedulingSrv.read({ subject }, {}));
   });
   beforeEach(async () => {
     for (let event of ['jobsCreated', 'jobsDeleted']) {
@@ -132,9 +132,9 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
     await jobEvents.removeAllListeners('queuedJob');
     await jobEvents.removeAllListeners('jobsCreated');
     await jobEvents.removeAllListeners('jobsDeleted');
-    await worker.schedulingService.clear();
-    await worker.stop();
-    await serviceClient.end();
+    // await worker.schedulingService.clear();
+    // await worker.stop();
+    await serviceClient.close();
   });
   describe(`create a one-time job ${testSuffix}`, function postJob(): void {
     this.timeout(8000);
@@ -177,15 +177,22 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
       } as NewJob;
 
       const offset = await jobEvents.$offset(-1);
-      await grpcSchedulingSrv.create({ items: [job], subject }, {});
-
+      const createResponse = await grpcSchedulingSrv.create({ items: [job], subject }, {});
+      createResponse.items.should.have.length(1);
+      createResponse.items[0].payload.type.should.equal('test-job');
+      createResponse.items[0].status.code.should.equal(200);
+      createResponse.items[0].status.message.should.equal('success');
+      createResponse.operation_status.code.should.equal(200);
+      createResponse.operation_status.message.should.equal('success');
       // queuedJob (jobDone is emitted from here) - have remvoed jobsDeleted event since we now move the job to completed state
       await jobEvents.$wait(offset + 1);
 
       // Simulate timeout
       await new Promise((resolve) => setTimeout(resolve, 100));
       const result = await grpcSchedulingSrv.read({ subject });
-      shouldBeEmpty(result);
+      payloadShouldBeEmpty(result);
+      createResponse.operation_status.code.should.equal(200);
+      createResponse.operation_status.message.should.equal('success');
     });
 
     it(`should create a new job and execute it at a scheduled time ${testSuffix}`, async () => {
@@ -223,14 +230,20 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
 
       const offset = await jobEvents.$offset(-1);
 
-      await grpcSchedulingSrv.create({
+      const createResponse = await grpcSchedulingSrv.create({
         items: [job], subject
       }, {});
+      createResponse.items.should.have.length(1);
+      createResponse.items[0].payload.type.should.equal('test-job');
+      createResponse.items[0].status.code.should.equal(200);
+      createResponse.items[0].status.message.should.equal('success');
+      createResponse.operation_status.code.should.equal(200);
+      createResponse.operation_status.message.should.equal('success');
 
       await jobEvents.$wait(offset + 2); // jobsCreated, queuedJob (jobDone is sent from test)
 
       const result = await grpcSchedulingSrv.read({ subject }, {});
-      shouldBeEmpty(result);
+      payloadShouldBeEmpty(result);
     });
   });
   describe(`should create a recurring job ${testSuffix}`, function (): void {
@@ -247,10 +260,18 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
         await new Promise(resolve => setTimeout(resolve, 100));
 
         let result = await grpcSchedulingSrv.read({ subject }, {});
-        should.exist(result);
+        should.exist(result.items);
+        result.items.length.should.equal(1);
+        result.items[0].payload.type.should.equal('test-job');
+        result.items[0].status.code.should.equal(200);
+        result.items[0].status.message.should.equal('success');
+        result.operation_status.code.should.equal(200);
+        result.operation_status.message.should.equal('success');
 
         if (jobExecs == 3) {
-          shouldBeEmpty(result);
+          payloadShouldBeEmpty(result);
+          result.operation_status.code.should.equal(200);
+          result.operation_status.message.should.equal('success');
         } else {
           result.data.total_count.should.be.equal(1);
         }
@@ -284,11 +305,14 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
       const createdJob = await grpcSchedulingSrv.create({
         items: [job], subject
       }, {});
-
       should.exist(createdJob);
-      should.exist(createdJob.data);
-      should.exist(createdJob.data.items);
-      createdJob.data.items.should.have.length(1);
+      should.exist(createdJob.items);
+      createdJob.items.should.have.length(1);
+      createdJob.items[0].payload.type.should.equal('test-job');
+      createdJob.items[0].status.code.should.equal(200);
+      createdJob.items[0].status.message.should.equal('success');
+      createdJob.operation_status.code.should.equal(200);
+      createdJob.operation_status.message.should.equal('success');
 
       // wait for 3 'queuedJob', 3 'jobDone'
       await jobEvents.$wait(offset + 6);
@@ -325,20 +349,28 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
       }, {});
 
       should.exist(createdJob);
-      should.exist(createdJob.data);
-      should.exist(createdJob.data.items);
-      createdJob.data.items.should.have.length(1);
+      createdJob.items.should.have.length(1);
+      createdJob.items[0].payload.type.should.equal('test-job');
+      createdJob.items[0].status.code.should.equal(200);
+      createdJob.items[0].status.message.should.equal('success');
+      createdJob.operation_status.code.should.equal(200);
+      createdJob.operation_status.message.should.equal('success');
     });
     it('should delete a recurring job based on provided id and throw an error on read operation', async () => {
       const deletedJob = await grpcSchedulingSrv.delete({
         ids: ['test-job-id'], subject
       }, {});
-      should.not.exist(deletedJob.error);
-      deletedJob.data.should.be.empty();
+      deletedJob.status[0].id.should.equal('test-job-id');
+      deletedJob.status[0].code.should.equal(200);
+      deletedJob.status[0].message.should.equal('success');
+      deletedJob.operation_status.code.should.equal(200);
+      deletedJob.operation_status.message.should.equal('success');
       const result = await grpcSchedulingSrv.read({ filter: { job_ids: ['test-job-id'] }, subject }, {});
-      should.exist(result.error);
-      should.exist(result.error.details);
-      result.error.details.should.equal('13 INTERNAL: Error! Jobs not found in any of the queues, jobIDs: test-job-id');
+      result.items[0].status.id.should.equal('test-job-id');
+      result.items[0].status.code.should.equal(404);
+      result.items[0].status.message.should.equal('Job ID test-job-id not found in any of the queues');
+      result.operation_status.code.should.equal(200);
+      result.operation_status.message.should.equal('success');
     });
   });
   describe(`managing jobs ${testSuffix}`, function (): void {
@@ -373,58 +405,75 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
         } as NewJob;
       }
 
-      await grpcSchedulingSrv.create({
+      const createResponse = await grpcSchedulingSrv.create({
         items: jobs, subject
       }, {});
-
+      should.exist(createResponse);
+      should.exist(createResponse.items);
+      createResponse.items.should.have.length(4);
+      createResponse.items[0].payload.type.should.equal('test-job');
+      createResponse.items[0].status.code.should.equal(200);
+      createResponse.items[0].status.message.should.equal('success');
+      createResponse.operation_status.code.should.equal(200);
+      createResponse.operation_status.message.should.equal('success');
     });
     it(`should retrieve all job properties correctly with empty filter ${testSuffix}`, async () => {
       const result = await grpcSchedulingSrv.read({ sort: SortOrder.DESCENDING, subject }, {});
       should.exist(result);
-      should.exist(result.data);
-      should.exist(result.data.items);
-      result.data.items.should.be.length(4);
-      result.data.items.forEach((job) => {
-        validateJob(job);
+      should.exist(result.items);
+      result.items.should.be.length(4);
+      result.items.forEach((job) => {
+        validateJob(job.payload);
+        job.status.code.should.equal(200);
+        job.status.message.should.equal('success');
       });
+      result.operation_status.code.should.equal(200);
+      result.operation_status.message.should.equal('success');
     });
     it(`should retrieve all job properties correctly with filter type or id ${testSuffix}`, async () => {
       const result = await grpcSchedulingSrv.read({ filter: { type: 'test-job' }, sort: 'ASCENDING', subject }, {});
       should.exist(result);
-      should.exist(result.data);
-      should.exist(result.data.items);
-      result.data.items.should.be.length(4);
-      result.data.items.forEach((job) => {
-        validateJob(job);
+      should.exist(result.items);
+      result.items.should.be.length(4);
+      result.items.forEach((job) => {
+        validateJob(job.payload);
+        job.status.code.should.equal(200);
+        job.status.message.should.equal('success');
       });
+      result.operation_status.code.should.equal(200);
+      result.operation_status.message.should.equal('success');
 
       const result_id_type = await grpcSchedulingSrv.read({
-        filter: { type: 'test-job', job_ids: result.data.items[0].id },
+        filter: { type: 'test-job', job_ids: [result.items[0].payload.id] },
         subject
       }, {});
       should.exist(result_id_type);
-      should.exist(result_id_type.data);
-      should.exist(result_id_type.data.items);
-      result_id_type.data.items.should.be.length(1);
-      result_id_type.data.items.forEach((job) => {
-        validateJob(job);
+      should.exist(result_id_type.items);
+      result_id_type.items.should.be.length(1);
+      result_id_type.items.forEach((job) => {
+        validateJob(job.payload);
+        job.status.code.should.equal(200);
+        job.status.message.should.equal('success');
       });
+      result_id_type.operation_status.code.should.equal(200);
+      result_id_type.operation_status.message.should.equal('success');
 
       const result_id = await grpcSchedulingSrv.read({
-        filter: { job_ids: result.data.items[0].id },
+        filter: { job_ids: [result.items[0].payload.id] },
         subject
       }, {});
       should.exist(result_id);
-      should.exist(result_id.data);
-      should.exist(result_id.data.items);
-      result_id.data.items.should.be.length(1);
-      result_id.data.items.forEach((job) => {
-        validateJob(job);
+      should.exist(result_id.items);
+      result_id.items.should.be.length(1);
+      result_id.items.forEach((job) => {
+        validateJob(job.payload);
+        job.status.code.should.equal(200);
+        job.status.message.should.equal('success');
       });
     });
     it(`should update / reschedule a job ${testSuffix}`, async () => {
       let result = await grpcSchedulingSrv.read({ subject }, {});
-      const job = result.data.items[0];
+      const job = result.items[0].payload;
 
       const scheduledTime = new Date();
       scheduledTime.setDate(scheduledTime.getDate() + 2); // two days from now
@@ -436,18 +485,21 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
       });
 
       should.exist(result);
-      should.exist(result.data);
-      should.exist(result.data.items);
-      result.data.items.should.have.length(1);
+      should.exist(result.items);
+      result.items.should.have.length(1);
 
-      const updatedJob = result.data.items[0];
-      validateJob(updatedJob);
+      const updatedJob = result.items[0];
+      validateJob(updatedJob.payload);
+      updatedJob.status.code.should.equal(200);
+      updatedJob.status.message.should.equal('success');
+      result.operation_status.code.should.equal(200);
+      result.operation_status.message.should.equal('success');
       // waiting for event creation
       await jobEvents.$wait(offset + 1);
     });
     it(`should upsert a job ${testSuffix}`, async () => {
       let result = await grpcSchedulingSrv.read({ subject }, {});
-      const job = result.data.items[0];
+      const job = result.items[0].payload;
 
       const scheduledTime = new Date();
       scheduledTime.setDate(scheduledTime.getDate() + 3); // three days from now
@@ -458,12 +510,15 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
         items: [job], subject
       });
       should.exist(result);
-      should.exist(result.data);
-      should.exist(result.data.items);
-      result.data.items.should.have.length(1);
+      should.exist(result.items);
+      result.items.should.have.length(1);
 
-      const upsertedJob = result.data.items[0];
-      validateJob(upsertedJob);
+      const upsertedJob = result.items[0];
+      validateJob(upsertedJob.payload);
+      upsertedJob.status.code.should.equal(200);
+      upsertedJob.status.message.should.equal('success');
+      result.operation_status.code.should.equal(200);
+      result.operation_status.message.should.equal('success');
       // waiting for event creation
       await jobEvents.$wait(offset + 1);
     });
@@ -500,13 +555,13 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
         { method: 'IsAllowed', input: '\{.*\:\{.*\:.*\}\}', output: { decision: 'DENY' } }], logger);
         subject.scope = 'orgD';
         let result = await grpcSchedulingSrv.create({ items: [job], subject }, {});
-        should.exist(result.error);
-        result.error.details.should.equal('7 PERMISSION_DENIED: Access not allowed for request with subject:admin_user_id, resource:job, action:CREATE, target_scope:orgD; the response was DENY');
+        result.operation_status.code.should.equal(403);
+        result.operation_status.message.should.equal('Access not allowed for request with subject:admin_user_id, resource:job, action:CREATE, target_scope:orgD; the response was DENY');
       });
       it(`should throw an error retreiving job properties with empty filter with invalid scope ${testSuffix}`, async () => {
         const result = await grpcSchedulingSrv.read({ sort: SortOrder.DESCENDING, subject }, {});
-        should.exist(result.error);
-        result.error.details.should.equal('7 PERMISSION_DENIED: Access not allowed for request with subject:admin_user_id, resource:job, action:READ, target_scope:orgD; the response was DENY');
+        result.operation_status.code.should.equal(403);
+        result.operation_status.message.should.equal('Access not allowed for request with subject:admin_user_id, resource:job, action:READ, target_scope:orgD; the response was DENY');
       });
       it(`should throw an error when updating / rescheduling a job with invalid scope ${testSuffix}`, async () => {
         const scheduledTime = new Date();
@@ -515,23 +570,22 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
         const result = await grpcSchedulingSrv.update({
           items: [job], subject
         });
-        should.exist(result.error);
-        // READ action error is thrown since the job needs to be read first before updating
-        result.error.details.should.equal('7 PERMISSION_DENIED: Access not allowed for request with subject:admin_user_id, resource:job, action:READ, target_scope:orgD; the response was DENY');
+        result.operation_status.code.should.equal(403);
+        result.operation_status.message.should.equal('Access not allowed for request with subject:admin_user_id, resource:job, action:MODIFY, target_scope:orgD; the response was DENY');
       });
       it(`should throw an error when upserting a job with invalid scope ${testSuffix}`, async () => {
         const result = await grpcSchedulingSrv.upsert({
           items: [job], subject
         });
-        should.exist(result.error);
-        // READ action error is thrown since the job needs to be read first before upserting
-        result.error.details.should.equal('7 PERMISSION_DENIED: Access not allowed for request with subject:admin_user_id, resource:job, action:READ, target_scope:orgD; the response was DENY');
+        result.operation_status.code.should.equal(403);
+        result.operation_status.message.should.equal('Access not allowed for request with subject:admin_user_id, resource:job, action:MODIFY, target_scope:orgD; the response was DENY');
       });
       it(`should throw an error deleting jobs ${testSuffix}`, async () => {
         const result = await grpcSchedulingSrv.delete({
           collection: true, subject
         }, {});
-        result.error.details.should.equal('7 PERMISSION_DENIED: Access not allowed for request with subject:admin_user_id, resource:job, action:DROP, target_scope:orgD; the response was DENY');
+        result.operation_status.code.should.equal(403);
+        result.operation_status.message.should.equal('Access not allowed for request with subject:admin_user_id, resource:job, action:DROP, target_scope:orgD; the response was DENY');
       });
     }
     it(`should delete all remaining scheduled jobs upon request ${testSuffix}`, async () => {
@@ -546,7 +600,9 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
         collection: true, subject
       }, {});
       const result = await grpcSchedulingSrv.read({ subject }, {});
-      shouldBeEmpty(result);
+      payloadShouldBeEmpty(result);
+      result.operation_status.code.should.equal(200);
+      result.operation_status.message.should.equal('success');
     });
   });
 });

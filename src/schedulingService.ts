@@ -1,7 +1,7 @@
 import * as _ from 'lodash';
 import { errors } from '@restorecommerce/chassis-srv';
 import * as kafkaClient from '@restorecommerce/kafka-client';
-import { Subject, AuthZAction, ACSAuthZ, Decision, PermissionDenied, updateConfig, DecisionResponse } from '@restorecommerce/acs-client';
+import { Subject, AuthZAction, ACSAuthZ, Decision, updateConfig, DecisionResponse } from '@restorecommerce/acs-client';
 import Redis, { Redis as RedisClient } from 'ioredis';
 import { Job, JobId, JobOptions } from 'bull';
 import * as Queue from 'bull';
@@ -665,7 +665,12 @@ export class SchedulingService implements JobService {
 
     for (let job of result) {
       jobListResponse.items.push({
-        payload: job,
+        payload: {
+          id: job.id,
+          type: job.name,
+          data: this._filterJobData(job.data, true),
+          options: this._filterJobOptions(job.opts)
+        },
         status: {
           id: (job.id).toString(),
           code: 200,
@@ -1044,9 +1049,9 @@ export class SchedulingService implements JobService {
       this.logger.verbose('Deleting jobs by their IDs', call.request.ids);
 
       for (let queue of this.queuesList) {
-        call.request.ids.forEach(async (jobDataKey) => {
+        for (let jobDataKey of call.request.ids)
+        {
           let callback: Promise<void>;
-
           const jobIdData = await this.getRedisValue(jobDataKey as string);
           if (jobIdData && jobIdData.repeatKey) {
             const jobs = await queue.getRepeatableJobs();
@@ -1114,7 +1119,7 @@ export class SchedulingService implements JobService {
               });
             });
           }
-        });
+        }
       }
     }
 
@@ -1519,13 +1524,13 @@ export class SchedulingService implements JobService {
             }
           }
           // update owner info
-          if (result.items.length === 1) {
+          if (result?.items?.length === 1) {
             let item = result.items[0].payload;
             resource.data.meta.owner = item.data.meta.owner;
             // adding meta to resource root (needed by access-contorl-srv for owner information check)
             // meta is inside data of resource since the data is persisted in redis using bull
             resource.meta = { owner: item.data.meta.owner };
-          } else if (result.items.length === 0 && action === AuthZAction.MODIFY) {
+          } else if (result?.items?.length === 0 && action === AuthZAction.MODIFY) {
             let ownerAttributes = _.cloneDeep(orgOwnerAttributes);
             // add user as default owner
             ownerAttributes.push(
