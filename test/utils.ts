@@ -25,8 +25,7 @@ export function validateJobDonePayload(job: any): void {
 }
 
 export function validateJob(job: any): void {
-  should.exist(job.data);
-  should.exist(job.data.payload);
+  should.exist(job);
   const payload = unmarshallProtobufAny(job.data.payload);
   should.exist(payload.testValue);
   payload.testValue.should.equal('test-value');
@@ -39,16 +38,10 @@ export function validateJob(job: any): void {
   job.options.attempts.should.equal(1);
 }
 
-export function shouldBeEmpty(result: any): void {
+export function payloadShouldBeEmpty(result: any): void {
   should.exist(result);
-  if (result.data) {
-    should.exist(result.data);
-    should.exist(result.data.items);
-    result.data.items.should.be.length(0);
-  } else {
-    should.exist(result.items);
-    result.items.should.be.length(0);
-  }
+  should.exist(result.items);
+  result.items.should.be.length(0);
 }
 
 export const permitJobRule = {

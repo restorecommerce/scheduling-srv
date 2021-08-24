@@ -10,7 +10,7 @@ import { createServiceConfig } from '@restorecommerce/service-config';
 
 import {
   validateJob,
-  shouldBeEmpty,
+  payloadShouldBeEmpty,
   validateScheduledJob,
   jobPolicySetRQ,
   startGrpcMockServer,
@@ -118,7 +118,7 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, () => {
       await jobTopic.$wait(jobOffset + toDelete - 1);
     }
 
-    shouldBeEmpty(await schedulingService.read({ request: { subject } }, {}));
+    payloadShouldBeEmpty(await schedulingService.read({ request: { subject } }, {}));
   });
   beforeEach(async () => {
     for (let event of ['jobsCreated', 'jobsDeleted']) {
@@ -191,7 +191,10 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, () => {
       // so disable AC to read again
       schedulingService.disableAC();
       const result = await schedulingService.read({ request: { subject } });
-      shouldBeEmpty(result);
+      payloadShouldBeEmpty(result);
+      should.exist(result.operation_status);
+      result.operation_status.code.should.equal(200);
+      result.operation_status.message.should.equal('success');
     });
     it('should create a new job and execute it at a scheduled time', async () => {
       await jobTopic.on('queuedJob', async (job, context, configRet, eventNameRet) => {
@@ -239,6 +242,11 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, () => {
         request: { subject }
       });
       result.items.should.have.length(1);
+      result.items[0].payload.type.should.equal('test-job');
+      result.items[0].status.code.should.equal(200);
+      result.items[0].status.message.should.equal('success');
+      result.operation_status.code.should.equal(200);
+      result.operation_status.message.should.equal('success');
 
       // jobsCreated, queuedJob, jobDone
       await jobTopic.$wait(offset + 3);
@@ -247,8 +255,9 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, () => {
       result = await schedulingService.read({
         request: { subject }
       });
-
-      shouldBeEmpty(result);
+      payloadShouldBeEmpty(result);
+      result.operation_status.code.should.equal(200);
+      result.operation_status.message.should.equal('success');
     });
   });
 
@@ -267,10 +276,18 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, () => {
 
         schedulingService.disableAC();
         let result = await schedulingService.read({ request: { subject } }, {});
-        should.exist(result);
+        should.exist(result.items);
+        result.items.length.should.equal(1);
+        result.items[0].payload.type.should.equal('test-job');
+        result.items[0].status.code.should.equal(200);
+        result.items[0].status.message.should.equal('success');
+        result.operation_status.code.should.equal(200);
+        result.operation_status.message.should.equal('success');
 
         if (jobExecs == 3) {
-          shouldBeEmpty(result);
+          payloadShouldBeEmpty(result);
+          result.operation_status.code.should.equal(200);
+          result.operation_status.message.should.equal('success');
         } else {
           result.total_count.should.be.equal(1);
         }
@@ -304,9 +321,16 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, () => {
       await jobTopic.emit('createJobs', { items: [job], subject });
 
       schedulingService.disableAC();
-      const created = await schedulingService.read({ request: { subject } }, {});
-      should.exist(created);
-      should.exist(created.items);
+      await new Promise(resolve => setTimeout(resolve, 200));
+      const createResponse = await schedulingService.read({ request: { subject } }, {});
+      should.exist(createResponse);
+      should.exist(createResponse.items);
+      createResponse.items.length.should.equal(1);
+      createResponse.items[0].payload.type.should.equal('test-job');
+      createResponse.items[0].status.code.should.equal(200);
+      createResponse.items[0].status.message.should.equal('success');
+      createResponse.operation_status.code.should.equal(200);
+      createResponse.operation_status.message.should.equal('success');
 
       // wait for 3 'queuedJob', 3 'jobDone', 1 'createJobs'
       // wait for '1 jobsCreated'
@@ -358,12 +382,20 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, () => {
 
       schedulingService.disableAC();
       let result = await schedulingService.read({ request: { subject } }, {});
+      result.items.map(job => {
+        should.exist(job.payload);
+        job.payload.type.should.equal('test-job');
+        job.status.code.should.equal(200);
+        job.status.message.should.equal('success');
+      });
       result.total_count.should.be.equal(4);
+      result.operation_status.code.should.equal(200);
+      result.operation_status.message.should.equal('success');
     });
     it('should update / reschedule a job', async () => {
       schedulingService.disableAC();
       let result = await schedulingService.read({ request: { subject } }, {});
-      const job = result.items[0];
+      const job = result.items[0].payload;
       const scheduledTime = new Date();
       scheduledTime.setDate(scheduledTime.getDate() + 2); // two days from now
       job.when = scheduledTime.toISOString();
@@ -380,8 +412,7 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, () => {
       should.exist(result.items);
       result.items = _.sortBy(result.items, ['id']);
       const updatedJob = _.last(result.items);
-      validateJob(updatedJob);
-      // waiting for event creation
+      validateJob((updatedJob as any).payload);
     });
     it('should delete all remaining scheduled jobs upon request', async () => {
 
@@ -391,7 +422,9 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, () => {
       await jobTopic.$wait(offset + 2);
       schedulingService.disableAC();
       const result = await schedulingService.read({ request: { subject } }, {});
-      shouldBeEmpty(result);
+      payloadShouldBeEmpty(result);
+      result.operation_status.code.should.equal(200);
+      result.operation_status.message.should.equal('success');
     });
   });
 });

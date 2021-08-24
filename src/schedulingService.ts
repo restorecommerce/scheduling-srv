@@ -568,7 +568,7 @@ export class SchedulingService implements JobService {
     for (let job of call.request.items) {
       try {
         jobs.push(this._validateJob(job));
-      } catch(err) {
+      } catch (err) {
         this.logger.error('Error validating job', job);
         jobListResponse.items.push({
           status: {
@@ -1420,7 +1420,7 @@ export class SchedulingService implements JobService {
         return job.remove();
       }
     }).then(() => {
-      this.logger.info(`Immediate job#${jobInstID} removed`);
+      this.logger.info(`Job#${jobInstID} removed`);
     }).catch(err => {
       this.logger.error(`Error removing job ${jobInstID}`, err);
       throw err;
@@ -1520,7 +1520,7 @@ export class SchedulingService implements JobService {
           }
           // update owner info
           if (result.items.length === 1) {
-            let item = result.items[0];
+            let item = result.items[0].payload;
             resource.data.meta.owner = item.data.meta.owner;
             // adding meta to resource root (needed by access-contorl-srv for owner information check)
             // meta is inside data of resource since the data is persisted in redis using bull
