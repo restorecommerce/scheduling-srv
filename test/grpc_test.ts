@@ -83,6 +83,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
     this.timeout(4000);
     worker = new Worker();
     const cfg = createServiceConfig(process.cwd() + '/test');
+    cfg.set('events:kafka:groupId', testSuffix + 'grpc');
     await worker.start(cfg);
     logger = worker.logger;
 

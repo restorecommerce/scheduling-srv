@@ -85,6 +85,7 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, () => {
     worker = new Worker();
 
     cfg = createServiceConfig(process.cwd() + '/test');
+    cfg.set('events:kafka:groupId', testSuffix + 'kafka');
     await worker.start(cfg);
 
     schedulingService = worker.schedulingService;

@@ -2,7 +2,7 @@
   "logger": {
     "console": {
       "handleExceptions": false,
-      "level": "silly",
+      "level": "crit",
       "colorize": true,
       "prettyPrint": true
     }
@@ -24,7 +24,7 @@
       "provider": "kafka",
       "groupId": "restore-scheduling-srv",
       "kafka": {
-        "clientId": "restore-scheduling-srv-test",
+        "clientId": "restore-scheduling-srv",
         "brokers": [
           "localhost:29092"
         ]
