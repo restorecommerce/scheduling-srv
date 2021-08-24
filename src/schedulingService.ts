@@ -1,14 +1,14 @@
 import * as _ from 'lodash';
 import { errors } from '@restorecommerce/chassis-srv';
 import * as kafkaClient from '@restorecommerce/kafka-client';
-import { Subject, AuthZAction, ACSAuthZ, Decision, PermissionDenied, updateConfig } from '@restorecommerce/acs-client';
+import { Subject, AuthZAction, ACSAuthZ, Decision, PermissionDenied, updateConfig, DecisionResponse } from '@restorecommerce/acs-client';
 import Redis, { Redis as RedisClient } from 'ioredis';
 import { Job, JobId, JobOptions } from 'bull';
 import * as Queue from 'bull';
 import {
   CreateCall, DeleteCall, Data, NewJob, JobService, ReadCall, UpdateCall,
-  SortOrder, GRPCResult, Priority, Backoffs, JobType, JobFailedType, JobDoneType,
-  FilterOpts, KafkaOpts
+  SortOrder, JobListResponse, Priority, Backoffs, JobType, JobFailedType, JobDoneType,
+  FilterOpts, KafkaOpts, DeleteResponse
 } from './types';
 import { parseExpression } from 'cron-parser';
 import * as crypto from 'crypto';
@@ -184,7 +184,7 @@ export class SchedulingService implements JobService {
         logger.info('Received Job event', { event: eventName });
         logger.info('Job details', job);
         const jobData: any = await queue.getJob(job.id).catch(error => {
-          that._handleError(error);
+          that.logger.error('Error retrieving job ${job.id} from queue', error);
         });
 
         if (jobData) {
@@ -324,7 +324,7 @@ export class SchedulingService implements JobService {
         await queue.getJobs(this.bullOptions['activeAndFutureJobTypes']).then(jobs => {
           result = result.concat(jobs);
         }).catch(error => {
-          thiz._handleError(`Error reading jobs: ${error}`);
+          thiz.logger.error('Error reading jobs to reschedule the missed recurring jobs', error);
         });
       }
     }
@@ -409,7 +409,7 @@ export class SchedulingService implements JobService {
 
   _validateJob(job: NewJob): NewJob {
     if (_.isNil(job.type)) {
-      this._handleError(new errors.InvalidArgument('Job type not specified.'));
+      throw new errors.InvalidArgument('Job type not specified.');
     }
 
     if (!job.options) {
@@ -418,18 +418,16 @@ export class SchedulingService implements JobService {
 
     if (job.when) {
       if (job.options.delay) {
-        this._handleError(new errors.InvalidArgument(
+        throw new errors.InvalidArgument(
           'Job can either be delayed or dated (when), not both.'
-        ));
+        );
       }
 
       // If the jobSchedule time has already lapsed then do not schedule the job
       const jobScheduleTime = new Date(job.when).getTime();
       const currentTime = new Date().getTime();
       if (jobScheduleTime < currentTime) {
-        this._handleError(new errors.InvalidArgument(
-          'Cannot schedule a job for an elapsed time'
-        ));
+        throw new errors.InvalidArgument('Cannot schedule a job for an elapsed time');
       }
 
       job.options.delay = jobScheduleTime - currentTime;
@@ -447,21 +445,12 @@ export class SchedulingService implements JobService {
     }
 
     if (_.isEmpty(job.data)) {
-      this._handleError(new errors.InvalidArgument('No job data specified.'));
+      throw new errors.InvalidArgument('No job data specified.');
     }
 
     job.data = this._filterJobData(job.data, false);
 
     return job;
-  }
-
-  _handleError(err: any): void {
-    this.logger.error(err);
-    if (_.isString(err)) {
-      throw new Error(err);
-    } else {
-      throw err;
-    }
   }
 
   /**
@@ -544,29 +533,54 @@ export class SchedulingService implements JobService {
    * @param {any} call RPC call argument
    * @param {any} context RPC context
    */
-  async create(call: CreateCall, context?: any): Promise<GRPCResult> {
+  async create(call: CreateCall, context?: any): Promise<JobListResponse> {
+    let jobListResponse: JobListResponse = { items: [], operation_status: { code: 0, message: '' } };
     let subject = call.request.subject;
     if (_.isNil(call) || _.isNil(call.request) || _.isNil(call.request.items)) {
-      this._handleError(new errors.InvalidArgument('Missing items in create request.'));
+      return {
+        operation_status: {
+          code: 400,
+          message: 'Missing items in create request'
+        }
+      };
     }
 
     await this.createMetadata(call.request.items, AuthZAction.CREATE, subject);
-    let acsResponse: AccessResponse;
+    let acsResponse: DecisionResponse;
     try {
       acsResponse = await checkAccessRequest(
         subject, call.request.items, AuthZAction.CREATE, 'job', this
       );
     } catch (err) {
       this.logger.error('Error occurred requesting access-control-srv:', err);
-      throw err;
+      return {
+        operation_status: {
+          code: err.code,
+          message: err.message
+        }
+      };
     }
     if (acsResponse.decision != Decision.PERMIT) {
-      throw new PermissionDenied(acsResponse.response.status.message, acsResponse.response.status.code);
+      return { operation_status: acsResponse.operation_status };
     }
 
-    const jobs = call.request.items.map(x => this._validateJob(x));
-    let result: Job[] = [];
+    let jobs = [];
+    for (let job of call.request.items) {
+      try {
+        jobs.push(this._validateJob(job));
+      } catch(err) {
+        this.logger.error('Error validating job', job);
+        jobListResponse.items.push({
+          status: {
+            id: job.id,
+            code: 400,
+            message: err.message
+          }
+        });
+      }
+    }
 
+    let result: Job[] = [];
     // Scheduling jobs
     for (let i = 0; i < jobs.length; i += 1) {
       let job = jobs[i];
@@ -579,10 +593,16 @@ export class SchedulingService implements JobService {
 
       // map the id to jobId as needed in JobOpts for bull
       if (job.id) {
-        // check if jobID already exists, if so throw error
+        // check if jobID already exists then map it as already exists error
         const existingJobId = await this.getRedisValue(job.id);
         if (existingJobId) {
-          throw new errors.AlreadyExists(`Job with ID already exists`);
+          jobListResponse.items.push({
+            status: {
+              id: job.id,
+              code: 403,
+              message: `Job with ID ${job.id} already exists`
+            }
+          });
         }
         if (!job.options) {
           job.options = { jobId: job.id };
@@ -643,6 +663,16 @@ export class SchedulingService implements JobService {
       }
     }
 
+    for (let job of result) {
+      jobListResponse.items.push({
+        payload: job,
+        status: {
+          id: (job.id).toString(),
+          code: 200,
+          message: 'success'
+        }
+      });
+    }
     const jobList = {
       items: result.map(job => ({
         id: job.id,
@@ -657,7 +687,8 @@ export class SchedulingService implements JobService {
       await this.jobEvents.emit('jobsCreated', jobList);
     }
 
-    return jobList;
+    jobListResponse.operation_status = { code: 200, message: 'success' };
+    return jobListResponse;
   }
 
   private filterByOwnerShip(readRequest, result) {
@@ -740,7 +771,8 @@ export class SchedulingService implements JobService {
    * @param {any} call RPC call argument
    * @param {any} context RPC context
    */
-  async read(call: ReadCall, context?: any): Promise<GRPCResult> {
+  async read(call: ReadCall, context?: any): Promise<JobListResponse> {
+    let jobListResponse: JobListResponse = { items: [], operation_status: { code: 0, message: '' } };
     const readRequest = _.cloneDeep(call.request);
     let subject = call.request.subject;
     let acsResponse: ReadPolicyResponse;
@@ -749,10 +781,15 @@ export class SchedulingService implements JobService {
         'job', this);
     } catch (err) {
       this.logger.error('Error occurred requesting access-control-srv:', err);
-      throw err;
+      return {
+        operation_status: {
+          code: err.code,
+          message: err.message
+        }
+      };
     }
     if (acsResponse.decision != Decision.PERMIT) {
-      throw new PermissionDenied(acsResponse.response.status.message, acsResponse.response.status.code);
+      return { operation_status: acsResponse.operation_status };
     }
 
     let result: Job[] = [];
@@ -774,7 +811,7 @@ export class SchedulingService implements JobService {
       // Search in all the queues and retrieve jobs after JobID
       // and add them to the jobIDsCopy list.
       // If the job is not found in any of the queues, continue looking
-      // Finally compare the two lists and throw an error for which
+      // Finally compare the two lists and add an error to status for which
       // job could not be found in any of the queues.
       if (jobIDs.length > 0) {
         // jobIDsCopy should contain the jobIDs duplicate values
@@ -803,14 +840,32 @@ export class SchedulingService implements JobService {
                   }
                 }
               }).catch(err => {
-                that._handleError(`Error reading jobs ${jobID}: ${err}`);
+                that.logger.error(`Error reading job ${jobID}`, err);
+                if (err?.code && typeof err.code === 'string') {
+                  err.code = 500;
+                }
+                jobListResponse.items.push({
+                  status: {
+                    id: jobID.toString(),
+                    code: err.code,
+                    message: err.message
+                  }
+                });
               });
             });
           }
         }
         if (!_.isEqual(jobIDs.sort(), jobIDsCopy.sort())) {
           const jobIDsDiff = _.difference(jobIDs, jobIDsCopy);
-          that._handleError(`Error! Jobs not found in any of the queues, jobIDs: ${jobIDsDiff}`);
+          for (let jobId of jobIDsDiff) {
+            jobListResponse.items.push({
+              status: {
+                id: jobId.toString(),
+                code: 404,
+                message: `Job ID ${jobId} not found in any of the queues`
+              }
+            });
+          }
         }
       } else {
         try {
@@ -821,7 +876,16 @@ export class SchedulingService implements JobService {
           }
           result = jobsList;
         } catch (err) {
-          that._handleError(`Error reading jobs: ${err}`);
+          that.logger.error('Error reading jobs', err);
+          if (typeof err.code === 'string') {
+            err.code = 500;
+          }
+          return {
+            operation_status: {
+              code: err.code,
+              message: err.message
+            }
+          };
         }
       }
 
@@ -862,15 +926,27 @@ export class SchedulingService implements JobService {
       }
     }
 
-    return {
-      items: result.map(job => ({
-        id: job.id,
-        type: job.name,
-        data: this._filterJobData(job.data, true),
-        options: this._filterJobOptions(job.opts)
-      })),
-      total_count: result.length
+    for (let job of result) {
+      jobListResponse.items.push({
+        payload: {
+          id: job.id,
+          type: job.name,
+          data: this._filterJobData(job.data, true),
+          options: this._filterJobOptions(job.opts)
+        },
+        status: {
+          id: job.id.toString(),
+          code: 200,
+          message: 'success'
+        }
+      });
+    }
+    jobListResponse.total_count = jobListResponse?.items?.length;
+    jobListResponse.operation_status = {
+      code: 200,
+      message: 'success'
     };
+    return jobListResponse;
   }
 
   async _getJobList(): Promise<Job[]> {
@@ -890,11 +966,15 @@ export class SchedulingService implements JobService {
   /**
    * Delete Job from queue.
    */
-  async delete(call: DeleteCall, context?: any): Promise<object> {
+  async delete(call: DeleteCall, context?: any): Promise<DeleteResponse> {
+    let deleteResponse: DeleteResponse = { status: [], operation_status: { code: 0, message: '' } };
     if (_.isEmpty(call)) {
-      this._handleError(new errors.InvalidArgument(
-        'No arguments provided for delete operation'
-      ));
+      return {
+        operation_status: {
+          code: 400,
+          message: 'No arguments provided for delete operation'
+        }
+      };
     }
     const subject = await call.request.subject;
     const jobIDs = call.request.ids;
@@ -915,16 +995,21 @@ export class SchedulingService implements JobService {
       action = AuthZAction.DROP;
       resources = [{ collection: call.request.collection }];
     }
-    let acsResponse: AccessResponse;
+    let acsResponse: DecisionResponse;
     try {
       acsResponse = await checkAccessRequest(subject, resources, action,
         'job', this);
     } catch (err) {
       this.logger.error('Error occurred requesting access-control-srv:', err);
-      throw err;
+      return {
+        operation_status: {
+          code: err.code,
+          message: err.message
+        }
+      };
     }
     if (acsResponse.decision != Decision.PERMIT) {
-      throw new PermissionDenied(acsResponse.response.status.message, acsResponse.response.status.code);
+      return { operation_status: acsResponse.operation_status };
     }
     const dispatch = [];
     this.logger.info('Received delete request');
@@ -937,6 +1022,11 @@ export class SchedulingService implements JobService {
           if (this.resourceEventsEnabled) {
             dispatch.push(this.jobEvents.emit('jobsDeleted', { id: job.id }));
           }
+          deleteResponse.status.push({
+            id: job.id.toString(),
+            code: 200,
+            message: 'success'
+          });
         }
       });
       // FLUSH redis DB index 8 used for mapping of repeat jobIds
@@ -964,6 +1054,11 @@ export class SchedulingService implements JobService {
               if (job.id === jobDataKey) {
                 this.logger.debug('Removing Repeatable job by key for jobId', { id: job.id });
                 callback = queue.removeRepeatableByKey(job.key);
+                deleteResponse.status.push({
+                  id: job.id,
+                  code: 200,
+                  message: 'success'
+                });
                 await this.deleteRedisKey(jobDataKey);
                 await this.deleteRedisKey(jobIdData.repeatKey);
                 break;
@@ -972,7 +1067,23 @@ export class SchedulingService implements JobService {
           } else {
             callback = queue.getJob(jobDataKey).then(async (jobData) => {
               if (jobData) {
-                this._removeBullJob(jobData.id, queue);
+                try {
+                  this._removeBullJob(jobData.id, queue);
+                  deleteResponse.status.push({
+                    id: jobData.id.toString(),
+                    code: 200,
+                    message: 'success'
+                  });
+                } catch (err) {
+                  if (typeof err?.code === 'string') {
+                    err.code = 500;
+                  }
+                  deleteResponse.status.push({
+                    id: jobData.id.toString(),
+                    code: err.code,
+                    message: err.message
+                  });
+                }
               }
             });
           }
@@ -992,7 +1103,15 @@ export class SchedulingService implements JobService {
                 );
               }
             }).catch(err => {
-              this._handleError(err);
+              this.logger.error('Error deleting job', { id: jobDataKey });
+              if (typeof err?.code === 'number') {
+                err.code = 500;
+              }
+              deleteResponse.status.push({
+                id: jobDataKey.toString(),
+                code: err.code,
+                message: err.message
+              });
             });
           }
         });
@@ -1000,8 +1119,8 @@ export class SchedulingService implements JobService {
     }
 
     await Promise.all(dispatch);
-
-    return {};
+    deleteResponse.operation_status = { code: 200, message: 'success' };
+    return deleteResponse;
   }
 
   /**
@@ -1052,26 +1171,34 @@ export class SchedulingService implements JobService {
   /**
    * Reschedules a job - deletes it and recreates it with a new generated ID.
    */
-  async update(call: UpdateCall, context?: any): Promise<GRPCResult> {
+  async update(call: UpdateCall, context?: any): Promise<JobListResponse> {
     let subject = call.request.subject;
     // update meta data for owner information
     await this.createMetadata(call.request.items, AuthZAction.MODIFY, subject);
-    let acsResponse: AccessResponse;
+    let acsResponse: DecisionResponse;
     try {
       acsResponse = await checkAccessRequest(
         subject, call.request.items, AuthZAction.MODIFY, 'job', this
       );
     } catch (err) {
       this.logger.error('Error occurred requesting access-control-srv:', err);
-      throw err;
+      return {
+        operation_status: {
+          code: err.code,
+          message: err.message
+        }
+      };
     }
     if (acsResponse.decision != Decision.PERMIT) {
-      throw new PermissionDenied(
-        acsResponse.response.status.message, acsResponse.response.status.code
-      );
+      return { operation_status: acsResponse.operation_status };
     }
     if (_.isNil(call) || _.isNil(call.request) || _.isNil(call.request.items)) {
-      this._handleError(new errors.InvalidArgument('Missing items in update request.'));
+      return {
+        operation_status: {
+          code: 400,
+          message: 'Missing items in update request'
+        }
+      };
     }
 
     const mappedJobs = call.request.items.reduce((obj, job) => {
@@ -1098,19 +1225,19 @@ export class SchedulingService implements JobService {
     const result: NewJob[] = [];
 
     jobData.items.forEach(job => {
-      const mappedJob = mappedJobs[job.id];
+      const mappedJob = mappedJobs[job?.payload?.id];
       // update job repeate key based on updated job repeat options
-      if (job.options?.repeat) {
-        this.storeRepeatKey(job.type, job.options, job.id);
+      if (job?.payload?.options?.repeat) {
+        this.storeRepeatKey(job?.payload?.type, job?.payload?.options, job?.payload?.id);
       }
       let endJob = {
         id: mappedJob.id,
-        type: mappedJob.type || job.name,
+        type: mappedJob.type || job.payload.name,
         options: {
-          ...job.opts,
+          ...job.payload.opts,
           ...(mappedJob.options ? mappedJob.options : {})
         },
-        data: mappedJob.data || job.data,
+        data: mappedJob.data || job.payload.data,
         when: mappedJob.when,
       };
 
@@ -1133,23 +1260,28 @@ export class SchedulingService implements JobService {
    * Upserts a job - creates a new job if it does not exist or update the
    * existing one if it already exists.
    */
-  async upsert(call: any, context?: any): Promise<GRPCResult> {
+  async upsert(call: any, context?: any): Promise<JobListResponse> {
     let subject = call.request.subject;
     await this.createMetadata(call.request.items, AuthZAction.MODIFY, subject);
-    let acsResponse;
+    let acsResponse: DecisionResponse;
     try {
       acsResponse = await checkAccessRequest(subject, call.request.items, AuthZAction.MODIFY,
         'job', this);
     } catch (err) {
       this.logger.error('Error occurred requesting access-control-srv:', err);
-      throw err;
+      return {
+        operation_status: {
+          code: err.code,
+          message: err.message
+        }
+      };
     }
 
     if (acsResponse.decision != Decision.PERMIT) {
-      throw new PermissionDenied(acsResponse.response.status.message, acsResponse.response.status.code);
+      return { operation_status: acsResponse.operation_status };
     }
     if (_.isNil(call) || _.isNil(call.request) || _.isNil(call.request.items)) {
-      this._handleError(new errors.InvalidArgument('Missing items in upsert request.'));
+      return { operation_status: { code: 400, message: 'Missing items in upsert request' } };
     }
 
     let result = [];
@@ -1191,7 +1323,11 @@ export class SchedulingService implements JobService {
 
     return {
       items: result,
-      total_count: result.length
+      total_count: result.length,
+      operation_status: {
+        code: 200,
+        message: 'success'
+      }
     };
   }
 
@@ -1204,7 +1340,7 @@ export class SchedulingService implements JobService {
       allJobs = allJobs.concat(await queue.getJobs(this.bullOptions['allJobTypes']));
     }
     return Promise.all(allJobs.map(async (job) => job.remove())).catch(err => {
-      this._handleError(err);
+      this.logger.error(`Error clearing jobs`, err);
       throw err;
     });
   }
@@ -1286,7 +1422,8 @@ export class SchedulingService implements JobService {
     }).then(() => {
       this.logger.info(`Immediate job#${jobInstID} removed`);
     }).catch(err => {
-      this._handleError(err);
+      this.logger.error(`Error removing job ${jobInstID}`, err);
+      throw err;
     });
   }
 
@@ -1377,7 +1514,7 @@ export class SchedulingService implements JobService {
               this.logger.debug('New job should be created', { jobId: resource.id });
               result = { items: [] };
             } else {
-              this.logger.error('Error reading job with resource ID', { jobId: resource.id });
+              this.logger.error(`Error reading job with resource ID ${resource.id}`, err);
               throw err;
             }
           }

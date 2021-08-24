@@ -107,16 +107,38 @@ export interface DeleteCall {
   };
 }
 
-export interface GRPCResult {
-  items: any[];
-  total_count: number;
+export interface Status {
+  id: string;
+  code: number;
+  message: string;
+};
+
+export interface JobResponse {
+  payload?: JobType;
+  status?: Status;
+}
+
+export interface OperationStatus {
+  code: number;
+  message: string;
+};
+
+export interface JobListResponse {
+  items?: JobResponse[];
+  total_count?: number;
+  operation_status: OperationStatus;
+}
+
+export interface DeleteResponse {
+  status?: Status[];
+  operation_status?: OperationStatus;
 }
 
 export interface JobService {
-  create(call: CreateCall, context: any): Promise<any>;
-  update(call: UpdateCall, context: any): any;
-  read(call: ReadCall, context: any): any;
-  delete(call: DeleteCall, context: any): any;
+  create(call: CreateCall, context: any): Promise<JobListResponse>;
+  update(call: UpdateCall, context: any): Promise<JobListResponse>;
+  read(call: ReadCall, context: any): Promise<JobListResponse>;
+  delete(call: DeleteCall, context: any): Promise<DeleteResponse>;
 }
 
 export enum SortOrder {

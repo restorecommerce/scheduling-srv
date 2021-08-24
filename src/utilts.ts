@@ -24,7 +24,11 @@ export interface Response {
 
 export interface AccessResponse {
   decision: Decision;
-  response?: Response;
+  obligation?: string;
+  operation_status: {
+    code: number;
+    message: string;
+  };
 }
 
 export enum FilterOperation {
