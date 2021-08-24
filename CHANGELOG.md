@@ -1,3 +1,11 @@
+## 0.2.0 (August 24th, 2021)
+
+- updated grpc-client
+- migraged kafka-client to kafkajs
+- chassis-srv using the latest grpc-js and protobufdef loader
+- filter changes (removed google.protobuf.struct completely and defined nested proto structure)
+- added status object to each item and also overall operation_status
+
 ## 0.1.24 (August 18th, 2021)
 
 - removed default clean up of queues `queue.clean(0)` from jobDone / jobFailed listener and added setup clean interval to remove completed / failed jobs
