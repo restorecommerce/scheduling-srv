@@ -309,7 +309,7 @@
           }
         }
       },
-      "bufferFields": {
+      "omittedFields": {
         "ReadRequest": "custom_arguments"
       }
     }
