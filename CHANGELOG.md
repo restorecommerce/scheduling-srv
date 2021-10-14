@@ -1,3 +1,7 @@
+## 0.2.4 (October 14th, 2021)
+
+- added payload check before creating meta data
+
 ## 0.2.3 (October 7th, 2021)
 
 - up protos and acs-client
