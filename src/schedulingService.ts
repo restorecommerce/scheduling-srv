@@ -1536,7 +1536,7 @@ export class SchedulingService implements JobService {
             }
           }
           // update owner info
-          if (result?.items?.length === 1) {
+          if (result?.items?.length === 1 && result?.items[0]?.payload) {
             let item = result.items[0].payload;
             resource.data.meta.owner = item.data.meta.owner;
             // adding meta to resource root (needed by access-contorl-srv for owner information check)
