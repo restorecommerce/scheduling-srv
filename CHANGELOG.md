@@ -1,3 +1,7 @@
+## 0.2.5 (October 15th, 2021)
+
+- fix filter by ownership
+
 ## 0.2.4 (October 14th, 2021)
 
 - added payload check before creating meta data
