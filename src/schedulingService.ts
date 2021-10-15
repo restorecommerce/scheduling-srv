@@ -709,11 +709,12 @@ export class SchedulingService implements JobService {
             if (idVal.id === ownerIndictaorEntURN && idVal.value === ownerIndicatorEntity) {
               match = true;
             }
-            if (idVal.id === ownerInstanceURN) {
+            if (match && idVal.id === ownerInstanceURN) {
               ownerInst = idVal.value;
+              match = false;
             }
           }
-          if (match && ownerInst && ownerValues.includes(ownerInst)) {
+          if (ownerInst && ownerValues.includes(ownerInst)) {
             return job;
           }
         }
