@@ -1555,7 +1555,7 @@ export class SchedulingService implements JobService {
             // adding meta to resource root (needed by access-contorl-srv for owner information check)
             // meta is inside data of resource since the data is persisted in redis using bull
             resource.meta = { owner: item.data.meta.owner };
-          } else if (!(result?.items[0]?.payload) && action === AuthZAction.MODIFY) {
+          } else if ( (!result || !result.items || !result.items[0] || !result.items[0].payload)  && action === AuthZAction.MODIFY) {
             // job does not exist - create new job (ex: Upsert with action modify)
             let ownerAttributes = _.cloneDeep(orgOwnerAttributes);
             // add user as default owner

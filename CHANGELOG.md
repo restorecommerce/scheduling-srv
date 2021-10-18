@@ -1,3 +1,7 @@
+## 0.2.6 (October 18th, 2021)
+
+- fix to pass meta owner information for update / upsert
+
 ## 0.2.5 (October 15th, 2021)
 
 - fix filter by ownership
