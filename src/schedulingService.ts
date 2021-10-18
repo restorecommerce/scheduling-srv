@@ -590,13 +590,25 @@ export class SchedulingService implements JobService {
         // check if jobID already exists then map it as already exists error
         const existingJobId = await this.getRedisValue(job.id);
         if (existingJobId) {
-          jobListResponse.items.push({
-            status: {
-              id: job.id,
-              code: 403,
-              message: `Job with ID ${job.id} already exists`
+          // read job to check if data exists
+          const jobData = await this.read({
+            request: {
+              filter: {
+                job_ids: [job.id]
+              },
+              subject
             }
           });
+          if ((jobData?.items as any)[0]?.payload) {
+            jobListResponse.items.push({
+              status: {
+                id: job.id,
+                code: 403,
+                message: `Job with ID ${job.id} already exists`
+              }
+            });
+            continue;
+          }
         }
         if (!job.options) {
           job.options = { jobId: job.id };
@@ -1543,7 +1555,8 @@ export class SchedulingService implements JobService {
             // adding meta to resource root (needed by access-contorl-srv for owner information check)
             // meta is inside data of resource since the data is persisted in redis using bull
             resource.meta = { owner: item.data.meta.owner };
-          } else if (result?.items?.length === 0 && action === AuthZAction.MODIFY) {
+          } else if (!(result?.items[0]?.payload) && action === AuthZAction.MODIFY) {
+            // job does not exist - create new job (ex: Upsert with action modify)
             let ownerAttributes = _.cloneDeep(orgOwnerAttributes);
             // add user as default owner
             ownerAttributes.push(
@@ -1553,7 +1566,7 @@ export class SchedulingService implements JobService {
               },
               {
                 id: urns.ownerInstance,
-                value: resource.id
+                value: subject.id
               });
             resource.data.meta.owner = ownerAttributes;
             resource.meta = { owner: ownerAttributes };
@@ -1569,11 +1582,13 @@ export class SchedulingService implements JobService {
               },
               {
                 id: urns.ownerInstance,
-                value: resource.id
+                value: subject.id
               });
           }
           resource.data.meta.owner = ownerAttributes;
           resource.meta = { owner: ownerAttributes };
+        } else if (action === AuthZAction.CREATE && resource?.data?.meta?.owner) {
+          resource.meta = { owner: resource.data.meta.owner };
         }
       }
     }
