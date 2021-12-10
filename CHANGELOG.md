@@ -1,3 +1,8 @@
+## 0.2.7 (December 10th, 2021)
+
+- updated acs-client and restructured checkAccessRequest accordingly
+- updated logger and other dependencies
+
 ## 0.2.6 (October 18th, 2021)
 
 - fix to pass meta owner information for update / upsert
