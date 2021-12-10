@@ -1,3 +1,7 @@
+## 0.2.8 (December 10th, 2021)
+
+- fix custom arguments
+
 ## 0.2.7 (December 10th, 2021)
 
 - updated acs-client and restructured checkAccessRequest accordingly

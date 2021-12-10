@@ -1,7 +1,7 @@
 import * as _ from 'lodash';
 import { errors } from '@restorecommerce/chassis-srv';
 import * as kafkaClient from '@restorecommerce/kafka-client';
-import { Subject, AuthZAction, ACSAuthZ, Decision, updateConfig, DecisionResponse, Operation } from '@restorecommerce/acs-client';
+import { Subject, AuthZAction, ACSAuthZ, Decision, updateConfig, DecisionResponse, Operation, PolicySetRQResponse } from '@restorecommerce/acs-client';
 import Redis, { Redis as RedisClient } from 'ioredis';
 import { Job, JobId, JobOptions } from 'bull';
 import * as Queue from 'bull';
@@ -12,7 +12,7 @@ import {
 } from './types';
 import { parseExpression } from 'cron-parser';
 import * as crypto from 'crypto';
-import { AccessResponse, checkAccessRequest, ReadPolicyResponse } from './utilts';
+import { checkAccessRequest } from './utilts';
 import * as uuid from 'uuid';
 
 const JOB_DONE_EVENT = 'jobDone';
@@ -790,7 +790,7 @@ export class SchedulingService implements JobService {
     let jobListResponse: JobListResponse = { items: [], operation_status: { code: 0, message: '' } };
     const readRequest = _.cloneDeep(call.request);
     let subject = call.request.subject;
-    let acsResponse: ReadPolicyResponse;
+    let acsResponse: PolicySetRQResponse;
     try {
       ctx.subject = subject;
       ctx.resources = [];
@@ -816,7 +816,10 @@ export class SchedulingService implements JobService {
       && (!call.request.filter || !call.request.filter.type ||
         _.isEmpty(call.request.filter.type))) {
       result = await this._getJobList();
-      const custom_arguments = acsResponse?.custom_query_args?.custom_arguments;
+      let custom_arguments;
+      if(acsResponse?.custom_query_args && acsResponse.custom_query_args.length > 0) {
+        custom_arguments = acsResponse.custom_query_args[0].custom_arguments;
+      }
       result = this.filterByOwnerShip({ custom_arguments }, result);
     } else {
       const that = this;
@@ -920,7 +923,10 @@ export class SchedulingService implements JobService {
       if (typeFilterName) {
         result = result.filter(job => job.name === typeFilterName);
       }
-      const custom_arguments = acsResponse?.custom_query_args?.custom_arguments;
+      let custom_arguments;
+      if(acsResponse?.custom_query_args && acsResponse.custom_query_args.length > 0) {
+        custom_arguments = acsResponse.custom_query_args[0].custom_arguments;
+      }
       result = this.filterByOwnerShip({ custom_arguments }, result);
     }
 

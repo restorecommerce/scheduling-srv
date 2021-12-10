@@ -1,5 +1,5 @@
 import {
-  AuthZAction, Decision, PolicySetRQ, accessRequest, Subject, DecisionResponse, Operation, Obligation
+  AuthZAction, Decision, PolicySetRQ, accessRequest, Subject, DecisionResponse, Operation, PolicySetRQResponse
 } from '@restorecommerce/acs-client';
 import * as _ from 'lodash';
 import { createServiceConfig } from '@restorecommerce/service-config';
@@ -16,15 +16,6 @@ export interface Response {
   payload: any;
   count: number;
   status?: {
-    code: number;
-    message: string;
-  };
-}
-
-export interface AccessResponse {
-  decision: Decision;
-  obligation?: Obligation[];
-  operation_status: {
     code: number;
     message: string;
   };
@@ -66,15 +57,6 @@ export interface Filter {
 export interface FilterOp {
   filter?: Filter[];
   operator?: OperatorType;
-}
-
-export interface ReadPolicyResponse extends AccessResponse {
-  policy_sets?: PolicySetRQ[];
-  filters?: FilterOp[];
-  custom_query_args?: {
-    custom_queries: any;
-    custom_arguments: any;
-  };
 }
 
 // Create a ids client instance
@@ -137,7 +119,7 @@ export interface GQLClientContext {
  */
 /* eslint-disable prefer-arrow-functions/prefer-arrow-functions */
 export async function checkAccessRequest(ctx: GQLClientContext, resource: Resource[], action: AuthZAction,
-  operation: Operation): Promise<DecisionResponse | ReadPolicyResponse> {
+  operation: Operation): Promise<DecisionResponse | PolicySetRQResponse> {
   let subject = ctx.subject;
   // resolve subject id using findByToken api and update subject with id
   let dbSubject;
@@ -151,7 +133,7 @@ export async function checkAccessRequest(ctx: GQLClientContext, resource: Resour
     }
   }
 
-  let result: DecisionResponse | ReadPolicyResponse;
+  let result: DecisionResponse | PolicySetRQResponse;
   try {
     result = await accessRequest(subject, resource, action, ctx, operation);
   } catch (err) {
