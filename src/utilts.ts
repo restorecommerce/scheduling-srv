@@ -1,8 +1,7 @@
 import {
-  AuthZAction, Decision, PolicySetRQ, accessRequest, Subject, DecisionResponse
+  AuthZAction, Decision, PolicySetRQ, accessRequest, Subject, DecisionResponse, Operation, Obligation
 } from '@restorecommerce/acs-client';
 import * as _ from 'lodash';
-import { SchedulingService } from './schedulingService';
 import { createServiceConfig } from '@restorecommerce/service-config';
 import { createLogger } from '@restorecommerce/logger';
 import { GrpcClient } from '@restorecommerce/grpc-client';
@@ -24,7 +23,7 @@ export interface Response {
 
 export interface AccessResponse {
   decision: Decision;
-  obligation?: string;
+  obligation?: Obligation[];
   operation_status: {
     code: number;
     message: string;
@@ -85,7 +84,12 @@ const getUserServiceClient = async () => {
     const cfg = createServiceConfig(process.cwd());
     // identity-srv client to resolve subject ID by token
     const grpcIDSConfig = cfg.get('client:user');
-    const logger = createLogger(cfg.get('logger'));
+    const loggerCfg = cfg.get('logger');
+    loggerCfg.esTransformer = (msg) => {
+      msg.fields = JSON.stringify(msg.fields);
+      return msg;
+    };
+    const logger = createLogger(loggerCfg);
     if (grpcIDSConfig) {
       const idsClient = new GrpcClient(grpcIDSConfig, logger);
       idsClientInstance = idsClient.user;
@@ -94,20 +98,47 @@ const getUserServiceClient = async () => {
   return idsClientInstance;
 };
 
+export interface Resource {
+  resource: string;
+  id?: string | string[]; // for what is allowed operation id is not mandatory
+  property?: string[];
+}
+
+export interface Attribute {
+  id: string;
+  value: string;
+  attribute: Attribute[];
+}
+
+export interface CtxResource {
+  id: string;
+  meta: {
+    created?: number;
+    modified?: number;
+    modified_by?: string;
+    owner: Attribute[]; // id and owner is mandatory in ctx resource other attributes are optional
+  };
+  [key: string]: any;
+}
+
+export interface GQLClientContext {
+  // if subject is missing by default it will be treated as unauthenticated subject
+  subject?: Subject;
+  resources?: CtxResource[];
+}
 
 /**
  * Perform an access request using inputs from a GQL request
  *
- * @param subject Subject information
- * @param resources resources
+ * @param ctx GQLClientContext containing subject and resources
+ * @param resource resource contains target resoruce, id and properties if any
  * @param action The action to perform
- * @param entity The entity type to check access against
+ * @param operation Operation either isAllowed or whatIsAllowed
  */
 /* eslint-disable prefer-arrow-functions/prefer-arrow-functions */
-export async function checkAccessRequest(subject: Subject, resources: any, action: AuthZAction,
-  entity: string, service: SchedulingService, resourceNameSpace?: string, useCache = true): Promise<DecisionResponse | ReadPolicyResponse> {
-  let authZ = service.authZ;
-  let data = _.cloneDeep(resources);
+export async function checkAccessRequest(ctx: GQLClientContext, resource: Resource[], action: AuthZAction,
+  operation: Operation): Promise<DecisionResponse | ReadPolicyResponse> {
+  let subject = ctx.subject;
   // resolve subject id using findByToken api and update subject with id
   let dbSubject;
   if (subject && subject.token) {
@@ -119,16 +150,10 @@ export async function checkAccessRequest(subject: Subject, resources: any, actio
       }
     }
   }
-  if (!_.isArray(resources) && action != AuthZAction.READ) {
-    data = [resources];
-  } else if (action === AuthZAction.READ) {
-    data.args = resources;
-    data.entity = entity;
-  }
 
   let result: DecisionResponse | ReadPolicyResponse;
   try {
-    result = await accessRequest(subject, data, action, authZ, entity, resourceNameSpace, useCache);
+    result = await accessRequest(subject, resource, action, ctx, operation);
   } catch (err) {
     return {
       decision: Decision.DENY,
@@ -138,13 +163,5 @@ export async function checkAccessRequest(subject: Subject, resources: any, actio
       }
     };
   }
-  if (result && (result as ReadPolicyResponse).policy_sets) {
-    let custom_queries = data.args.custom_queries;
-    let custom_arguments = data.args.custom_arguments;
-    (result as ReadPolicyResponse).filters = data.args.filters;
-    (result as ReadPolicyResponse).custom_query_args = { custom_queries, custom_arguments };
-    return result as ReadPolicyResponse;
-  } else {
-    return result as DecisionResponse;
-  }
+  return result;
 }

@@ -163,7 +163,7 @@ class JobsCommandInterface extends chassis.CommandInterface {
           request: {
             items: [message]
           }
-        });
+        }, {});
 
         return {};
       },
@@ -173,7 +173,7 @@ class JobsCommandInterface extends chassis.CommandInterface {
           request: {
             ids: [message.id]
           }
-        });
+        }, {});
         return {};
       }
     };
@@ -195,7 +195,12 @@ export class Worker {
       cfg = createServiceConfig(process.cwd());
     }
     // Create a new microservice Server
-    const logger = createLogger(cfg.get('logger'));
+    const loggerCfg = cfg.get('logger');
+    loggerCfg.esTransformer = (msg) => {
+      msg.fields = JSON.stringify(msg.fields);
+      return msg;
+    };
+    const logger = createLogger(loggerCfg);
     this.logger = logger;
     const server = new chassis.Server(cfg.get('server'), logger);
 

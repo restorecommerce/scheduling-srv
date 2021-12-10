@@ -1,7 +1,7 @@
 import * as _ from 'lodash';
 import { errors } from '@restorecommerce/chassis-srv';
 import * as kafkaClient from '@restorecommerce/kafka-client';
-import { Subject, AuthZAction, ACSAuthZ, Decision, updateConfig, DecisionResponse } from '@restorecommerce/acs-client';
+import { Subject, AuthZAction, ACSAuthZ, Decision, updateConfig, DecisionResponse, Operation } from '@restorecommerce/acs-client';
 import Redis, { Redis as RedisClient } from 'ioredis';
 import { Job, JobId, JobOptions } from 'bull';
 import * as Queue from 'bull';
@@ -384,7 +384,7 @@ export class SchedulingService implements JobService {
               request: {
                 items: [immediateJob]
               }
-            }));
+            }, {}));
           }
         }
       }
@@ -525,9 +525,9 @@ export class SchedulingService implements JobService {
   /**
    * Create and queue jobs.
    * @param {any} call RPC call argument
-   * @param {any} context RPC context
+   * @param {any} ctx RPC context
    */
-  async create(call: CreateCall, context?: any): Promise<JobListResponse> {
+  async create(call: CreateCall, ctx: any): Promise<JobListResponse> {
     let jobListResponse: JobListResponse = { items: [], operation_status: { code: 0, message: '' } };
     let subject = call.request.subject;
     if (_.isNil(call) || _.isNil(call.request) || _.isNil(call.request.items)) {
@@ -542,9 +542,12 @@ export class SchedulingService implements JobService {
     await this.createMetadata(call.request.items, AuthZAction.CREATE, subject);
     let acsResponse: DecisionResponse;
     try {
-      acsResponse = await checkAccessRequest(
-        subject, call.request.items, AuthZAction.CREATE, 'job', this
-      );
+      ctx.subject = subject;
+      ctx.resources = call.request.items;
+      acsResponse = await checkAccessRequest(ctx, [{
+        resource: 'job',
+        id: call.request.items.map(item => item.id)
+      }], AuthZAction.CREATE, Operation.isAllowed);
     } catch (err) {
       this.logger.error('Error occurred requesting access-control-srv:', err);
       return {
@@ -598,7 +601,7 @@ export class SchedulingService implements JobService {
               },
               subject
             }
-          });
+          }, ctx);
           if ((jobData?.items as any)[0]?.payload) {
             jobListResponse.items.push({
               status: {
@@ -702,9 +705,9 @@ export class SchedulingService implements JobService {
     return jobListResponse;
   }
 
-  private filterByOwnerShip(readRequest, result) {
+  private filterByOwnerShip(customArgsObj, result) {
     // applying filter based on custom arguments (filterByOwnerShip)
-    let customArgs = (readRequest as any).custom_arguments;
+    let customArgs = (customArgsObj)?.custom_arguments;
     if (customArgs && customArgs.value) {
       const customArgsFilter = JSON.parse(customArgs.value.toString());
       const ownerIndicatorEntity = customArgsFilter.entity;
@@ -781,16 +784,18 @@ export class SchedulingService implements JobService {
   /**
    * Retrieve jobs.
    * @param {any} call RPC call argument
-   * @param {any} context RPC context
+   * @param {any} ctx RPC context
    */
-  async read(call: ReadCall, context?: any): Promise<JobListResponse> {
+  async read(call: ReadCall, ctx: any): Promise<JobListResponse> {
     let jobListResponse: JobListResponse = { items: [], operation_status: { code: 0, message: '' } };
     const readRequest = _.cloneDeep(call.request);
     let subject = call.request.subject;
     let acsResponse: ReadPolicyResponse;
     try {
-      acsResponse = await checkAccessRequest(subject, readRequest, AuthZAction.READ,
-        'job', this);
+      ctx.subject = subject;
+      ctx.resources = [];
+      acsResponse = await checkAccessRequest(ctx, [{ resource: 'job' }], AuthZAction.READ,
+        Operation.whatIsAllowed);
     } catch (err) {
       this.logger.error('Error occurred requesting access-control-srv:', err);
       return {
@@ -811,7 +816,8 @@ export class SchedulingService implements JobService {
       && (!call.request.filter || !call.request.filter.type ||
         _.isEmpty(call.request.filter.type))) {
       result = await this._getJobList();
-      result = this.filterByOwnerShip(readRequest, result);
+      const custom_arguments = acsResponse?.custom_query_args?.custom_arguments;
+      result = this.filterByOwnerShip({ custom_arguments }, result);
     } else {
       const that = this;
       let jobIDs = call.request.filter.job_ids || [];
@@ -914,7 +920,8 @@ export class SchedulingService implements JobService {
       if (typeFilterName) {
         result = result.filter(job => job.name === typeFilterName);
       }
-      result = this.filterByOwnerShip(readRequest, result);
+      const custom_arguments = acsResponse?.custom_query_args?.custom_arguments;
+      result = this.filterByOwnerShip({ custom_arguments }, result);
     }
 
     result = result.filter(valid => !!valid);
@@ -988,7 +995,7 @@ export class SchedulingService implements JobService {
   /**
    * Delete Job from queue.
    */
-  async delete(call: DeleteCall, context?: any): Promise<DeleteResponse> {
+  async delete(call: DeleteCall, ctx: any): Promise<DeleteResponse> {
     let deleteResponse: DeleteResponse = { status: [], operation_status: { code: 0, message: '' } };
     if (_.isEmpty(call)) {
       return {
@@ -1019,8 +1026,10 @@ export class SchedulingService implements JobService {
     }
     let acsResponse: DecisionResponse;
     try {
-      acsResponse = await checkAccessRequest(subject, resources, action,
-        'job', this);
+      ctx.subject = subject;
+      ctx.resources = resources;
+      acsResponse = await checkAccessRequest(ctx, [{ resource: 'job', id: jobIDs as string[] }], action,
+        Operation.isAllowed);
     } catch (err) {
       this.logger.error('Error occurred requesting access-control-srv:', err);
       return {
@@ -1192,15 +1201,17 @@ export class SchedulingService implements JobService {
   /**
    * Reschedules a job - deletes it and recreates it with a new generated ID.
    */
-  async update(call: UpdateCall, context?: any): Promise<JobListResponse> {
+  async update(call: UpdateCall, ctx: any): Promise<JobListResponse> {
     let subject = call.request.subject;
     // update meta data for owner information
     await this.createMetadata(call.request.items, AuthZAction.MODIFY, subject);
     let acsResponse: DecisionResponse;
     try {
-      acsResponse = await checkAccessRequest(
-        subject, call.request.items, AuthZAction.MODIFY, 'job', this
-      );
+      ctx.subject = subject;
+      ctx.resources = call.request.items;
+      acsResponse = await checkAccessRequest(ctx,
+        [{ resource: 'job', id: call.request.items.map(item => item.id) }],
+        AuthZAction.MODIFY, Operation.isAllowed);
     } catch (err) {
       this.logger.error('Error occurred requesting access-control-srv:', err);
       return {
@@ -1234,14 +1245,14 @@ export class SchedulingService implements JobService {
         },
         subject
       }
-    });
+    }, ctx);
 
     await this.delete({
       request: {
         ids: Object.keys(mappedJobs),
         subject
       }
-    });
+    }, {});
 
     const result: NewJob[] = [];
 
@@ -1274,20 +1285,23 @@ export class SchedulingService implements JobService {
         items: result,
         subject
       }
-    });
+    }, ctx);
   }
 
   /**
    * Upserts a job - creates a new job if it does not exist or update the
    * existing one if it already exists.
    */
-  async upsert(call: any, context?: any): Promise<JobListResponse> {
+  async upsert(call: any, ctx: any): Promise<JobListResponse> {
     let subject = call.request.subject;
     await this.createMetadata(call.request.items, AuthZAction.MODIFY, subject);
     let acsResponse: DecisionResponse;
     try {
-      acsResponse = await checkAccessRequest(subject, call.request.items, AuthZAction.MODIFY,
-        'job', this);
+      ctx.subject = subject;
+      ctx.resources = call.request.items;
+      acsResponse = await checkAccessRequest(ctx,
+        [{ resource: 'job', id: call.request.items.map(item => item.id) }],
+        AuthZAction.MODIFY, Operation.isAllowed);
     } catch (err) {
       this.logger.error('Error occurred requesting access-control-srv:', err);
       return {
@@ -1337,7 +1351,7 @@ export class SchedulingService implements JobService {
           }
           result = [
             ...result,
-            ...(await this.update({ request: { items: [eachJob], subject } })).items
+            ...(await this.update({ request: { items: [eachJob], subject } }, ctx)).items
           ];
           jobExists = true;
           break;
@@ -1347,7 +1361,7 @@ export class SchedulingService implements JobService {
         // new job create it
         result = [
           ...result,
-          ...(await this.create({ request: { items: [eachJob], subject } })).items
+          ...(await this.create({ request: { items: [eachJob], subject } }, ctx)).items
         ];
       }
     }
@@ -1539,7 +1553,7 @@ export class SchedulingService implements JobService {
                 },
                 subject
               }
-            });
+            }, {});
           } catch (err) {
             if (err.message.startsWith('Error! Jobs not found in any of the queues') && action != AuthZAction.DELETE) {
               this.logger.debug('New job should be created', { jobId: resource.id });
@@ -1555,7 +1569,7 @@ export class SchedulingService implements JobService {
             // adding meta to resource root (needed by access-contorl-srv for owner information check)
             // meta is inside data of resource since the data is persisted in redis using bull
             resource.meta = { owner: item.data.meta.owner };
-          } else if ( (!result || !result.items || !result.items[0] || !result.items[0].payload)  && action === AuthZAction.MODIFY) {
+          } else if ((!result || !result.items || !result.items[0] || !result.items[0].payload) && action === AuthZAction.MODIFY) {
             // job does not exist - create new job (ex: Upsert with action modify)
             let ownerAttributes = _.cloneDeep(orgOwnerAttributes);
             // add user as default owner

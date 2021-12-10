@@ -191,7 +191,7 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, () => {
       // be restored to original value using restoreAC in worker
       // so disable AC to read again
       schedulingService.disableAC();
-      const result = await schedulingService.read({ request: { subject } });
+      const result = await schedulingService.read({ request: { subject } }, {});
       payloadShouldBeEmpty(result);
       should.exist(result.operation_status);
       result.operation_status.code.should.equal(200);
@@ -241,7 +241,7 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, () => {
       schedulingService.disableAC();
       let result = await schedulingService.read({
         request: { subject }
-      });
+      }, {});
       result.items.should.have.length(1);
       result.items[0].payload.type.should.equal('test-job');
       result.items[0].status.code.should.equal(200);
@@ -255,7 +255,7 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, () => {
       schedulingService.disableAC();
       result = await schedulingService.read({
         request: { subject }
-      });
+      }, {});
       payloadShouldBeEmpty(result);
       result.operation_status.code.should.equal(200);
       result.operation_status.message.should.equal('success');
