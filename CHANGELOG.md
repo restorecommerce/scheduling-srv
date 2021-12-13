@@ -1,3 +1,7 @@
+## 0.2.9 (December 13th, 2021)
+
+- added null check for context object
+
 ## 0.2.8 (December 10th, 2021)
 
 - fix custom arguments

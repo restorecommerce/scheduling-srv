@@ -542,6 +542,7 @@ export class SchedulingService implements JobService {
     await this.createMetadata(call.request.items, AuthZAction.CREATE, subject);
     let acsResponse: DecisionResponse;
     try {
+      if (!ctx) { ctx = {}; };
       ctx.subject = subject;
       ctx.resources = call.request.items;
       acsResponse = await checkAccessRequest(ctx, [{
@@ -792,6 +793,7 @@ export class SchedulingService implements JobService {
     let subject = call.request.subject;
     let acsResponse: PolicySetRQResponse;
     try {
+      if (!ctx) { ctx = {}; };
       ctx.subject = subject;
       ctx.resources = [];
       acsResponse = await checkAccessRequest(ctx, [{ resource: 'job' }], AuthZAction.READ,
@@ -1032,6 +1034,7 @@ export class SchedulingService implements JobService {
     }
     let acsResponse: DecisionResponse;
     try {
+      if (!ctx) { ctx = {}; };
       ctx.subject = subject;
       ctx.resources = resources;
       acsResponse = await checkAccessRequest(ctx, [{ resource: 'job', id: jobIDs as string[] }], action,
@@ -1213,6 +1216,7 @@ export class SchedulingService implements JobService {
     await this.createMetadata(call.request.items, AuthZAction.MODIFY, subject);
     let acsResponse: DecisionResponse;
     try {
+      if (!ctx) { ctx = {}; };
       ctx.subject = subject;
       ctx.resources = call.request.items;
       acsResponse = await checkAccessRequest(ctx,
@@ -1303,6 +1307,7 @@ export class SchedulingService implements JobService {
     await this.createMetadata(call.request.items, AuthZAction.MODIFY, subject);
     let acsResponse: DecisionResponse;
     try {
+      if (!ctx) { ctx = {}; };
       ctx.subject = subject;
       ctx.resources = call.request.items;
       acsResponse = await checkAccessRequest(ctx,
