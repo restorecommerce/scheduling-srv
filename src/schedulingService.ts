@@ -139,7 +139,7 @@ export class SchedulingService implements JobService {
         queueOptions.settings = advancedSettings;
       }
       // Add Queue Objects
-      let queue = new Queue(prefix, queueOptions);
+      let queue = new Queue.default(prefix, queueOptions);
       this.queuesList.push(queue);
 
       // Add Queue Configurations

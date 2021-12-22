@@ -348,7 +348,7 @@ export class Worker {
 
     setQueues(queues);
 
-    this.app = express();
+    this.app = express.default();
     this.app.use(cfg.get('bull:board:path'), bullRouter);
     this.app.listen(cfg.get('bull:board:port'), () => {
       logger.info(`Bull board listening on port ${cfg.get('bull:board:port')} at ${cfg.get('bull:board:path')}`);
