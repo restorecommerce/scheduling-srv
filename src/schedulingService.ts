@@ -3,8 +3,7 @@ import { errors } from '@restorecommerce/chassis-srv';
 import * as kafkaClient from '@restorecommerce/kafka-client';
 import { Subject, AuthZAction, ACSAuthZ, Decision, updateConfig, DecisionResponse, Operation, PolicySetRQResponse } from '@restorecommerce/acs-client';
 import Redis, { Redis as RedisClient } from 'ioredis';
-import { Job, JobId, JobOptions } from 'bull';
-import Queue from 'bull';
+import Bull, { Job, JobId, JobOptions } from 'bull';
 import {
   CreateCall, DeleteCall, Data, NewJob, JobService, ReadCall, UpdateCall,
   SortOrder, JobListResponse, Priority, Backoffs, JobType, JobFailedType, JobDoneType,
@@ -15,6 +14,7 @@ import * as crypto from 'crypto';
 import { checkAccessRequest } from './utilts';
 import * as uuid from 'uuid';
 
+const Queue = require('bull');
 const JOB_DONE_EVENT = 'jobDone';
 const JOB_FAILED_EVENT = 'jobFailed';
 const DEFAULT_CLEANUP_COMPLETED_JOBS = 604800000; // 7 days in miliseconds
@@ -52,7 +52,7 @@ export class SchedulingService implements JobService {
   logger: any;
 
   queuesConfigList: any;
-  queuesList: Queue.Queue[];
+  queuesList: Bull.Queue[];
   defaultQueueName: string;
 
   redisClient: RedisClient;
@@ -108,7 +108,7 @@ export class SchedulingService implements JobService {
 
     // Create Queues
     for (let queueCfg of queuesCfg) {
-      let queueOptions: Queue.QueueOptions;
+      let queueOptions: Bull.QueueOptions;
       const prefix = queueCfg.name;
       const rateLimiting = queueCfg.rateLimiting;
       const advancedSettings = queueCfg.advancedSettings;
@@ -254,8 +254,8 @@ export class SchedulingService implements JobService {
         // for the missed schedules comparing the last run time
         let lastRunTime;
         if (filteredJob.opts && filteredJob.opts.repeat &&
-          ((filteredJob.opts.repeat as Queue.EveryRepeatOptions).every ||
-            (filteredJob.opts.repeat as Queue.CronRepeatOptions).cron)) {
+          ((filteredJob.opts.repeat as Bull.EveryRepeatOptions).every ||
+            (filteredJob.opts.repeat as Bull.CronRepeatOptions).cron)) {
           if (filteredJob.data) {
             // adding time to payload data for recurring jobs
             const dateTime = new Date();
@@ -356,14 +356,14 @@ export class SchedulingService implements JobService {
         // convert redis string value to object and get actual time value
         lastRunTime = JSON.parse(lastRunTime);
         if (job.opts && job.opts.repeat &&
-          (job.opts.repeat as Queue.CronRepeatOptions).cron) {
+          (job.opts.repeat as Bull.CronRepeatOptions).cron) {
           let options = {
             currentDate: new Date(lastRunTime.time),
             endDate: new Date(),
             iterator: true
           };
           const intervalTime =
-            parseExpression((job.opts.repeat as Queue.CronRepeatOptions).cron, options);
+            parseExpression((job.opts.repeat as Bull.CronRepeatOptions).cron, options);
           while (intervalTime.hasNext()) {
             let nextInterval: any = intervalTime.next();
             const nextIntervalTime = nextInterval.value.toString();
@@ -998,7 +998,7 @@ export class SchedulingService implements JobService {
   }
 
   // delete a job by its job instance after processing 'jobDone' / 'jobFailed'
-  async _deleteJobInstance(jobId: JobId, queue: Queue.Queue): Promise<void> {
+  async _deleteJobInstance(jobId: JobId, queue: Bull.Queue): Promise<void> {
     return this._removeBullJob(jobId, queue);
   }
 
@@ -1100,7 +1100,7 @@ export class SchedulingService implements JobService {
                   code: 200,
                   message: 'success'
                 });
-                await this.deleteRedisKey(jobDataKey);
+                await this.deleteRedisKey(jobDataKey as string);
                 await this.deleteRedisKey(jobIdData.repeatKey);
                 break;
               }
@@ -1472,7 +1472,7 @@ export class SchedulingService implements JobService {
     return picked;
   }
 
-  async _removeBullJob(jobInstID: JobId, queue: Queue.Queue): Promise<void> {
+  async _removeBullJob(jobInstID: JobId, queue: Bull.Queue): Promise<void> {
     return queue.getJob(jobInstID).then(job => {
       if (job) {
         return job.remove();

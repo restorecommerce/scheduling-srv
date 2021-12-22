@@ -1,3 +1,7 @@
+## 0.2.14 (December 22nd, 2021)
+
+- fix default import to require
+
 ## 0.2.13 (December 22nd, 2021)
 
 - removed importHelpers flag from tsconfig

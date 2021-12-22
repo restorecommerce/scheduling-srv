@@ -9,10 +9,10 @@ import * as cacheManager from 'cache-manager';
 import * as redisStore from 'cache-manager-redis';
 import * as fs from 'fs';
 import { router as bullRouter, setQueues, BullAdapter } from 'bull-board';
-import express from 'express';
 import { initAuthZ, ACSAuthZ, updateConfig, initializeCache } from '@restorecommerce/acs-client';
 import Redis, { Redis as RedisClient } from 'ioredis';
 
+const express = require('express');
 const JOBS_CREATE_EVENT = 'createJobs';
 const JOBS_MODIFY_EVENT = 'modifyJobs';
 const JOBS_DELETE_EVENT = 'deleteJobs';
@@ -186,7 +186,7 @@ export class Worker {
   server: any;
   offsetStore: chassis.OffsetStore;
   logger: Logger;
-  app: express.Application;
+  app: any;
   authZ: ACSAuthZ;
 
   async start(cfg: any): Promise<any> {
