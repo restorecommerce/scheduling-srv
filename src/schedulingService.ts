@@ -269,14 +269,14 @@ export class SchedulingService implements JobService {
                 }
                 const jobTimeObj = Object.assign(jobBufferObj, { time: dateTime });
                 // set last run time on DB index 7 with jobType identifier
-                this.redisClient.set(filteredJob.name, lastRunTime);
+                await this.redisClient.set(filteredJob.name, lastRunTime);
                 filteredJob.data.payload.value = Buffer.from(JSON.stringify(jobTimeObj));
               } else {
-                this.redisClient.set(filteredJob.name, lastRunTime);
+                await this.redisClient.set(filteredJob.name, lastRunTime);
                 filteredJob.data.payload = { value: bufObj };
               }
             } else {
-              this.redisClient.set(filteredJob.name, lastRunTime);
+              await this.redisClient.set(filteredJob.name, lastRunTime);
               filteredJob.data = {
                 payload: { value: bufObj }
               };
@@ -294,13 +294,15 @@ export class SchedulingService implements JobService {
         });
 
         that.logger.verbose(`job@${filteredJob.name}#${filteredJob.id} queued`, filteredJob);
+      }).catch(err => {
+        this.logger.error('Error scheduling job', err);
       });
     }
 
     // If the scheduling service goes down and if there were
     // recurring jobs which have missed schedules then
     // we will need to reschedule it for those missing intervals.
-    this._rescheduleMissedJobs();
+    await this._rescheduleMissedJobs();
   }
 
   /**
@@ -499,7 +501,7 @@ export class SchedulingService implements JobService {
    * @param repeat - job repeate options
    * @param jobId - job id
    */
-  storeRepeatKey(name, options, jobId) {
+  async storeRepeatKey(name, options, jobId) {
     const repeat = options.repeat;
     const endDate = repeat.endDate
       ? new Date(repeat.endDate).getTime() + ':'
@@ -512,9 +514,9 @@ export class SchedulingService implements JobService {
     this.logger.info('Repeat key generated for JobId is', { repeatKey, jobId });
     const jobIdData = { repeatKey, options };
     // map jobID with jobIdData - containing repeatKey and options
-    this.repeatJobIdRedisClient.set(jobId, JSON.stringify(jobIdData));
+    await this.repeatJobIdRedisClient.set(jobId, JSON.stringify(jobIdData));
     // to resolve the jobId based on repeatkey
-    this.repeatJobIdRedisClient.set(repeatKey, jobId);
+    await this.repeatJobIdRedisClient.set(repeatKey, jobId);
     return repeatKey;
   }
 
@@ -621,7 +623,7 @@ export class SchedulingService implements JobService {
         }
         if (job?.options?.repeat) {
           (job as any).options.repeat.jobId = job.id;
-          this.storeRepeatKey(job.type, job.options, job.id);
+          await this.storeRepeatKey(job.type, job.options, job.id);
         }
       }
 
@@ -819,7 +821,7 @@ export class SchedulingService implements JobService {
         _.isEmpty(call.request.filter.type))) {
       result = await this._getJobList();
       let custom_arguments;
-      if(acsResponse?.custom_query_args && acsResponse.custom_query_args.length > 0) {
+      if (acsResponse?.custom_query_args && acsResponse.custom_query_args.length > 0) {
         custom_arguments = acsResponse.custom_query_args[0].custom_arguments;
       }
       result = this.filterByOwnerShip({ custom_arguments }, result);
@@ -926,7 +928,7 @@ export class SchedulingService implements JobService {
         result = result.filter(job => job.name === typeFilterName);
       }
       let custom_arguments;
-      if(acsResponse?.custom_query_args && acsResponse.custom_query_args.length > 0) {
+      if (acsResponse?.custom_query_args && acsResponse.custom_query_args.length > 0) {
         custom_arguments = acsResponse.custom_query_args[0].custom_arguments;
       }
       result = this.filterByOwnerShip({ custom_arguments }, result);
@@ -1107,7 +1109,7 @@ export class SchedulingService implements JobService {
             callback = queue.getJob(jobDataKey).then(async (jobData) => {
               if (jobData) {
                 try {
-                  this._removeBullJob(jobData.id, queue);
+                  await this._removeBullJob(jobData.id, queue);
                   deleteResponse.status.push({
                     id: jobData.id.toString(),
                     code: 200,
@@ -1177,7 +1179,7 @@ export class SchedulingService implements JobService {
     }
     this.logger.info('Jobs cleaned up successfully');
     let lastExecutedInterval = { lastExecutedInterval: (new Date()).toString() };
-    this.repeatJobIdRedisClient.set(QUEUE_CLEANUP, JSON.stringify(lastExecutedInterval));
+    await this.repeatJobIdRedisClient.set(QUEUE_CLEANUP, JSON.stringify(lastExecutedInterval));
   }
 
   async setupCleanInterval(cleanInterval: number, ttlAfterFinished: number) {
@@ -1197,8 +1199,8 @@ export class SchedulingService implements JobService {
     if (delta && (delta < cleanInterval)) {
       // use setTimeout and then create interval on setTimeout
       this.logger.info('Restoring previous execution interval with set timeout', { time: cleanInterval - delta });
-      setTimeout(() => {
-        this.cleanupJobs(ttlAfterFinished);
+      setTimeout(async () => {
+        await this.cleanupJobs(ttlAfterFinished);
         setInterval(this.cleanupJobs.bind(this), cleanInterval, ttlAfterFinished);
       }, cleanInterval - delta);
     } else {
@@ -1266,11 +1268,11 @@ export class SchedulingService implements JobService {
 
     const result: NewJob[] = [];
 
-    jobData.items.forEach(job => {
+    jobData.items.forEach(async (job) => {
       const mappedJob = mappedJobs[job?.payload?.id];
       // update job repeate key based on updated job repeat options
       if (job?.payload?.options?.repeat) {
-        this.storeRepeatKey(job?.payload?.type, job?.payload?.options, job?.payload?.id);
+        await this.storeRepeatKey(job?.payload?.type, job?.payload?.options, job?.payload?.id);
       }
       let endJob = {
         id: mappedJob.id,

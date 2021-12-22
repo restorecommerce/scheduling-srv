@@ -16,6 +16,7 @@ module.exports = {
     ],
     "rules": {
       "@typescript-eslint/adjacent-overload-signatures": "error",
+      "@typescript-eslint/no-floating-promises": 2,
       "@typescript-eslint/naming-convention": [
         "error",
         {

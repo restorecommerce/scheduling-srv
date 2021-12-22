@@ -1,3 +1,7 @@
+## 0.2.11 (December 22nd, 2021)
+
+- up RC dependencies and added no floating promises rule
+
 ## 0.2.10 (December 15th, 2021)
 
 - up acs-client and other dependencies

@@ -235,7 +235,7 @@ export class Worker {
     const redisSubjectClient = new Redis(redisConfigSubject);
 
     // init ACS cache
-    initializeCache();
+    await initializeCache();
 
     const schedulingService: SchedulingService = new SchedulingService(jobEvents,
       redisConfig, logger, redisClient, bullOptions, cfg, this.authZ);
