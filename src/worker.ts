@@ -9,7 +9,7 @@ import * as cacheManager from 'cache-manager';
 import * as redisStore from 'cache-manager-redis';
 import * as fs from 'fs';
 import { router as bullRouter, setQueues, BullAdapter } from 'bull-board';
-import * as express from 'express';
+import express from 'express';
 import { initAuthZ, ACSAuthZ, updateConfig, initializeCache } from '@restorecommerce/acs-client';
 import Redis, { Redis as RedisClient } from 'ioredis';
 
@@ -348,7 +348,7 @@ export class Worker {
 
     setQueues(queues);
 
-    this.app = express.default();
+    this.app = express();
     this.app.use(cfg.get('bull:board:path'), bullRouter);
     this.app.listen(cfg.get('bull:board:port'), () => {
       logger.info(`Bull board listening on port ${cfg.get('bull:board:port')} at ${cfg.get('bull:board:path')}`);

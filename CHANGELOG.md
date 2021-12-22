@@ -1,3 +1,7 @@
+## 0.2.12 (December 22nd, 2021)
+
+- fixed default import
+
 ## 0.2.11 (December 22nd, 2021)
 
 - up RC dependencies and added no floating promises rule

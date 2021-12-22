@@ -4,7 +4,7 @@ import * as kafkaClient from '@restorecommerce/kafka-client';
 import { Subject, AuthZAction, ACSAuthZ, Decision, updateConfig, DecisionResponse, Operation, PolicySetRQResponse } from '@restorecommerce/acs-client';
 import Redis, { Redis as RedisClient } from 'ioredis';
 import { Job, JobId, JobOptions } from 'bull';
-import * as Queue from 'bull';
+import Queue from 'bull';
 import {
   CreateCall, DeleteCall, Data, NewJob, JobService, ReadCall, UpdateCall,
   SortOrder, JobListResponse, Priority, Backoffs, JobType, JobFailedType, JobDoneType,
@@ -139,7 +139,7 @@ export class SchedulingService implements JobService {
         queueOptions.settings = advancedSettings;
       }
       // Add Queue Objects
-      let queue = new Queue.default(prefix, queueOptions);
+      let queue = new Queue(prefix, queueOptions);
       this.queuesList.push(queue);
 
       // Add Queue Configurations
