@@ -1,3 +1,7 @@
+## 0.2.15 (February 14th, 2022)
+
+- updated dependencies and migrated from ioredis to redis
+
 ## 0.2.14 (December 22nd, 2021)
 
 - fix default import to require
