@@ -2,7 +2,7 @@ import * as _ from 'lodash';
 import { errors } from '@restorecommerce/chassis-srv';
 import * as kafkaClient from '@restorecommerce/kafka-client';
 import { Subject, AuthZAction, ACSAuthZ, Decision, updateConfig, DecisionResponse, Operation, PolicySetRQResponse } from '@restorecommerce/acs-client';
-import Redis, { Redis as RedisClient } from 'ioredis';
+import { createClient, RedisClientType } from 'redis';
 import Bull, { Job, JobId, JobOptions } from 'bull';
 import {
   CreateCall, DeleteCall, Data, NewJob, JobService, ReadCall, UpdateCall,
@@ -55,18 +55,18 @@ export class SchedulingService implements JobService {
   queuesList: Bull.Queue[];
   defaultQueueName: string;
 
-  redisClient: RedisClient;
+  redisClient: RedisClientType<any, any>;
   resourceEventsEnabled: boolean;
   canceledJobs: Set<string>;
   bullOptions: any;
   cfg: any;
   authZ: ACSAuthZ;
   authZCheck: boolean;
-  repeatJobIdRedisClient: RedisClient;
+  repeatJobIdRedisClient: RedisClientType<any, any>;
 
 
   constructor(jobEvents: kafkaClient.Topic,
-    redisConfig: any, logger: any, redisClient: RedisClient,
+    redisConfig: any, logger: any, redisClient: RedisClientType<any, any>,
     bullOptions: any, cfg: any, authZ: ACSAuthZ) {
     this.jobEvents = jobEvents;
     this.resourceEventsEnabled = true;
@@ -77,8 +77,12 @@ export class SchedulingService implements JobService {
     this.redisClient = redisClient;
 
     const repeatJobIdCfg = cfg.get('redis');
-    repeatJobIdCfg.db = cfg.get('redis:db-indexes:db-repeatJobId');
-    this.repeatJobIdRedisClient = new Redis(repeatJobIdCfg);
+    repeatJobIdCfg.database = cfg.get('redis:db-indexes:db-repeatJobId');
+    this.repeatJobIdRedisClient = createClient(repeatJobIdCfg);
+    this.repeatJobIdRedisClient.on('error', (err) => logger.error('Redis client error in repeatable job store', err));
+    this.repeatJobIdRedisClient.connect().then((data) => {
+      logger.info('Redis client connection for repeatable job store successful');
+    }).catch(err => logger.error('Redis client error for repeatable job store', err));
 
     this.canceledJobs = new Set<string>();
     this.cfg = cfg;
@@ -334,21 +338,13 @@ export class SchedulingService implements JobService {
     for (let job of result) {
       // get the last run time for the job, we store the last run time only
       // for recurring jobs
-      lastRunTime = await new Promise<string>((resolve, reject) => {
-        this.redisClient.get(job.name, (err, response) => {
-          if (err) {
-            reject(err);
-          } else {
-            resolve(response);
-          }
-        });
-      }).catch(
-        (err) => {
-          this.logger.error(
-            'Error occurred reading the last run time for job type:',
-            { name: job.name, err });
-        }
-      );
+      try {
+        lastRunTime = await this.redisClient.get(job.name);
+      } catch (err) {
+        this.logger.error(
+          'Error occurred reading the last run time for job type:',
+          { name: job.name, err });
+      }
       // we store lastRunTime only for recurring jobs and if it exists check
       // cron interval and schedule immediate jobs for missed intervals
       this.logger.info(`Last run time of ${job.name} Job was:`, lastRunTime);
@@ -643,7 +639,7 @@ export class SchedulingService implements JobService {
         job.data.meta.modified = Date.now();
       }
 
-      if (job && job.data && job.data.payload && job.data.payload.value) {
+      if (job?.data?.payload?.value) {
         job.data.payload.value = job.data.payload.value.toString();
       }
 
@@ -684,7 +680,7 @@ export class SchedulingService implements JobService {
           options: this._filterJobOptions(job.opts)
         },
         status: {
-          id: (job.id).toString(),
+          id: (job?.id)?.toString(),
           code: 200,
           message: 'success'
         }
@@ -711,7 +707,7 @@ export class SchedulingService implements JobService {
   private filterByOwnerShip(customArgsObj, result) {
     // applying filter based on custom arguments (filterByOwnerShip)
     let customArgs = (customArgsObj)?.custom_arguments;
-    if (customArgs && customArgs.value) {
+    if (customArgs?.value) {
       const customArgsFilter = JSON.parse(customArgs.value.toString());
       const ownerIndicatorEntity = customArgsFilter.entity;
       const ownerValues = customArgsFilter.instance;
@@ -742,45 +738,34 @@ export class SchedulingService implements JobService {
   }
 
   async deleteRedisKey(key: string): Promise<any> {
-    await new Promise<string>((resolve: any, reject) => {
-      this.repeatJobIdRedisClient.del(key, (err, response) => {
-        if (err) {
-          reject(err);
-        } else {
-          this.logger.debug('Redis Key deleted successfully used for mapping repeatable jobID', { key });
-          resolve(response);
-        }
-      });
-    }).catch(
-      (err) => {
-        this.logger.error(
-          'Error occurred deleting redis key',
-          { key, msg: err.message });
-      }
-    );
+    try {
+      await this.repeatJobIdRedisClient.del(key);
+      this.logger.debug('Redis Key deleted successfully used for mapping repeatable jobID', { key });
+    } catch (err) {
+      this.logger.error(
+        'Error occurred deleting redis key',
+        { key, msg: err.message });
+    }
   }
 
   async getRedisValue(key: string): Promise<any> {
-    const redisValue = await new Promise<string>((resolve, reject) => {
-      this.repeatJobIdRedisClient.get(key, (err, response) => {
-        if (err) {
-          reject(err);
-        } else {
-          try {
-            resolve(JSON.parse(response));
-          } catch (err) {
-            resolve(response);
-          }
-        }
-      });
-    }).catch(
-      (err) => {
+    let redisValue;
+    try {
+      redisValue = await this.repeatJobIdRedisClient.get(key);
+      if (redisValue) {
+        return JSON.parse(redisValue);
+      } else {
+        return;
+      }
+    } catch (err) {
+      if (err?.message?.startsWith('Unexpected token') || err.message.startsWith('Unexpected number')) {
+        return redisValue;
+      } else {
         this.logger.error(
           'Error occurred reading redis key',
           { key, msg: err.message });
       }
-    );
-    return redisValue;
+    }
   }
 
 
@@ -1071,17 +1056,13 @@ export class SchedulingService implements JobService {
           });
         }
       });
-      // FLUSH redis DB index 8 used for mapping of repeat jobIds
-      await new Promise((resolve, reject) => {
-        this.repeatJobIdRedisClient.flushdb((delResp) => {
-          if (delResp) {
-            this.logger.debug('Mapped keys for repeatable jobs deleted successfully');
-          } else {
-            this.logger.debug('Could not delete map keys', delResp);
-          }
-          resolve(delResp);
-        });
-      });
+      // FLUSH redis DB index 8 used for mapping of repeat jobIds (since req is for dropping job collection)
+      const delResp = await this.repeatJobIdRedisClient.flushDb();
+      if (delResp) {
+        this.logger.debug('Mapped keys for repeatable jobs deleted successfully');
+      } else {
+        this.logger.debug('Could not delete repeatable job keys');
+      }
     } else if ('ids' in call.request) {
       this.logger.verbose('Deleting jobs by their IDs', call.request.ids);
 

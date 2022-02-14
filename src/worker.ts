@@ -5,12 +5,10 @@ import { createLogger } from '@restorecommerce/logger';
 import { Logger } from 'winston';
 import { SchedulingService } from './schedulingService';
 import { createServiceConfig } from '@restorecommerce/service-config';
-import * as cacheManager from 'cache-manager';
-import * as redisStore from 'cache-manager-redis';
 import * as fs from 'fs';
 import { router as bullRouter, setQueues, BullAdapter } from 'bull-board';
 import { initAuthZ, ACSAuthZ, updateConfig, initializeCache } from '@restorecommerce/acs-client';
-import Redis, { Redis as RedisClient } from 'ioredis';
+import { createClient, RedisClientType } from 'redis';
 
 const express = require('express');
 const JOBS_CREATE_EVENT = 'createJobs';
@@ -19,22 +17,10 @@ const JOBS_DELETE_EVENT = 'deleteJobs';
 const COMMANDS_EVENTS = ['healthCheckCommand', 'versionCommand', 'restoreCommand',
   'resetCommand', 'configUpdateCommand', 'setApiKeyCommand', 'flushCacheCommand'];
 
-chassis.cache.register('redis', (cacheConfig, logger) => {
-  const options = {
-    store: redisStore,
-    host: cacheConfig.host,
-    port: cacheConfig.port,
-    auth_pass: cacheConfig.authPass,
-    db: cacheConfig.db,
-    ttl: cacheConfig.ttl,
-  };
-  return cacheManager.caching(options);
-});
-
 class JobsCommandInterface extends chassis.CommandInterface {
   schedulingService: SchedulingService;
   constructor(server: chassis.Server, cfg: any, logger: any, events: Events,
-    schedulingService: SchedulingService, redisClient: RedisClient) {
+    schedulingService: SchedulingService, redisClient: RedisClientType<any, any>) {
     super(server, cfg, logger, events, redisClient);
     this.schedulingService = schedulingService;
   }
@@ -206,11 +192,14 @@ export class Worker {
 
     // Get a redis connection
     const redisConfig = cfg.get('redis');
+    // below config is used for bull queu options and it still uses db config
     redisConfig.db = cfg.get('redis:db-indexes:db-jobStore');
 
     const reccurTimeCfg = cfg.get('redis');
-    reccurTimeCfg.db = cfg.get('redis:db-indexes:db-reccurTime');
-    const redisClient = new Redis(reccurTimeCfg);
+    reccurTimeCfg.database = cfg.get('redis:db-indexes:db-reccurTime');
+    const redisClient = createClient(reccurTimeCfg);
+    redisClient.on('error', (err) => logger.error('Redis client error in recurring time store', err));
+    await redisClient.connect();
 
     // Get Rate Limiter config
     const rateLimiterConfig = cfg.get('rateLimiter');
@@ -231,8 +220,10 @@ export class Worker {
 
     // init redis client for subject index
     const redisConfigSubject = cfg.get('redis');
-    redisConfigSubject.db = cfg.get('redis:db-indexes:db-subject');
-    const redisSubjectClient = new Redis(redisConfigSubject);
+    redisConfigSubject.database = cfg.get('redis:db-indexes:db-subject');
+    const redisSubjectClient = createClient(redisConfigSubject);
+    redisSubjectClient.on('error', (err) => logger.error('Redis client error in subject store', err));
+    await redisSubjectClient.connect();
 
     // init ACS cache
     await initializeCache();
