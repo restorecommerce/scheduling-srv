@@ -143,7 +143,8 @@ export class SchedulingService implements JobService {
         queueOptions.settings = advancedSettings;
       }
       // Add Queue Objects
-      let queue = new Queue(prefix, queueOptions);
+      const redisURL = (queueOptions.redis as any).url;
+      let queue = new Queue(prefix, redisURL, queueOptions);
       this.queuesList.push(queue);
 
       // Add Queue Configurations
@@ -164,7 +165,6 @@ export class SchedulingService implements JobService {
   async start(): Promise<any> {
     const logger = this.logger;
     const that = this;
-
     const events = [JOB_DONE_EVENT, JOB_FAILED_EVENT];
     for (let eventName of events) {
       // A Scheduling Service Event Listener
