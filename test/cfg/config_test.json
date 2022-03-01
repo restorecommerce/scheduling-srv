@@ -8,8 +8,7 @@
     }
   },
   "redis": {
-    "host": "localhost",
-    "port": 6379,
+    "url": "redis://localhost:6379",
     "provider": "redis",
     "offsetStoreInterval": 1000,
     "db-indexes": {
