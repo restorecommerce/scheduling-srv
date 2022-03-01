@@ -1,3 +1,7 @@
+## 0.2.18 (March 1st, 2022)
+
+- fixed redis url for bull
+
 ## 0.2.17 (February 18th, 2022)
 
 - updated chassis-srv (includes fix for offset store config)
