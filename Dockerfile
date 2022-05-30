@@ -1,4 +1,4 @@
-FROM node:16.9.0-stretch
+FROM node:18.2.0-stretch
 
 ENV HOME=/home/node
 ENV APP_HOME=/home/node/scheduling-srv

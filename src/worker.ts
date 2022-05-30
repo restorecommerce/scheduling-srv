@@ -197,7 +197,7 @@ export class Worker {
 
     const reccurTimeCfg = cfg.get('redis');
     reccurTimeCfg.database = cfg.get('redis:db-indexes:db-reccurTime');
-    const redisClient = createClient(reccurTimeCfg);
+    const redisClient: RedisClientType<any, any> = createClient(reccurTimeCfg);
     redisClient.on('error', (err) => logger.error('Redis client error in recurring time store', err));
     await redisClient.connect();
 
@@ -221,7 +221,7 @@ export class Worker {
     // init redis client for subject index
     const redisConfigSubject = cfg.get('redis');
     redisConfigSubject.database = cfg.get('redis:db-indexes:db-subject');
-    const redisSubjectClient = createClient(redisConfigSubject);
+    const redisSubjectClient: RedisClientType<any, any> = createClient(redisConfigSubject);
     redisSubjectClient.on('error', (err) => logger.error('Redis client error in subject store', err));
     await redisSubjectClient.connect();
 
