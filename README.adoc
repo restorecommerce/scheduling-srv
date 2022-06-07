@@ -1,8 +1,8 @@
 = Scheduling Service
 
-https://travis-ci.org/restorecommerce/scheduling-srv?branch=master[image:http://img.shields.io/travis/restorecommerce/scheduling-srv/master.svg?style=flat-square[Build Status]]
-https://david-dm.org/restorecommerce/scheduling-srv[image:https://img.shields.io/david/restorecommerce/scheduling-srv.svg?style=flat-square[Dependencies]]
-https://coveralls.io/github/restorecommerce/scheduling-srv?branch=master[image:http://img.shields.io/coveralls/restorecommerce/scheduling-srv/master.svg?style=flat-square[Coverage Status]]
+https://travis-ci.org/restorecommerce/scheduling-srv?branch=master[image:https://img.shields.io/travis/restorecommerce/scheduling-srv/master.svg?style=flat-square[Build Status]]
+https://depfu.com/repos/github/restorecommerce/scheduling-srv?branch=master[image:https://img.shields.io/depfu/dependencies/github/restorecommerce/scheduling-srv?style=flat-square[Dependencies]]
+https://coveralls.io/github/restorecommerce/scheduling-srv?branch=master[image:http://img.shields.io/coveralls/github/restorecommerce/scheduling-srv/master.svg?style=flat-square[Coverage Status]]
 
 A microservice for job scheduling and processing.
 
