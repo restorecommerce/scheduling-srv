@@ -17,7 +17,7 @@
     "scheduling"
   ],
   "dependencies": {
-    "@restorecommerce/acs-client": "^0.6.30",
+    "@restorecommerce/acs-client": "^0.6.31",
     "@restorecommerce/chassis-srv": "^0.3.10",
     "@restorecommerce/cluster-service": "^0.1.12",
     "@restorecommerce/kafka-client": "^0.4.0",
