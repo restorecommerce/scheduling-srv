@@ -19,7 +19,7 @@
   "dependencies": {
     "@restorecommerce/acs-client": "^0.6.30",
     "@restorecommerce/chassis-srv": "^0.3.10",
-    "@restorecommerce/cluster-service": "^0.1.12",
+    "@restorecommerce/cluster-service": "^0.1.13",
     "@restorecommerce/kafka-client": "^0.4.0",
     "@restorecommerce/logger": "^0.12.2",
     "@restorecommerce/protos": "^0.6.9",
