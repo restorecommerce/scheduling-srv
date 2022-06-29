@@ -17,6 +17,9 @@
     "scheduling"
   ],
   "dependencies": {
+    "@bull-board/api": "^4.0.0",
+    "@bull-board/express": "^4.0.0",
+    "@bull-board/koa": "^4.0.0",
     "@restorecommerce/acs-client": "^0.6.35",
     "@restorecommerce/chassis-srv": "^0.3.11",
     "@restorecommerce/cluster-service": "^0.1.13",
@@ -25,8 +28,8 @@
     "@restorecommerce/protos": "^0.7.2",
     "@restorecommerce/service-config": "^0.4.27",
     "bull": "^4.8.4",
-    "bull-board": "^1.7.2",
-    "cache-manager": "^3.6.3",
+    "express": "^4.18.1",
+    "cache-manager": "^4.0.1",
     "cache-manager-redis": "^0.6.0",
     "cron-parser": "^4.5.0",
     "crypto": "^1.0.1",

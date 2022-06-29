@@ -6,7 +6,9 @@ import { Logger } from 'winston';
 import { SchedulingService } from './schedulingService';
 import { createServiceConfig } from '@restorecommerce/service-config';
 import * as fs from 'fs';
-import { router as bullRouter, setQueues, BullAdapter } from 'bull-board';
+import { createBullBoard } from '@bull-board/api';
+import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
+import { ExpressAdapter } from '@bull-board/express';
 import { initAuthZ, ACSAuthZ, updateConfig, initializeCache } from '@restorecommerce/acs-client';
 import { createClient, RedisClientType } from 'redis';
 
@@ -335,12 +337,16 @@ export class Worker {
     this.events = events;
     this.server = server;
 
-    let queues: BullAdapter[] = this.schedulingService.queuesList.map(q => new BullAdapter(q));
-
-    setQueues(queues);
+    const serverAdapter = new ExpressAdapter();
+    let queues: BullMQAdapter[] = this.schedulingService.queuesList.map(q => new BullMQAdapter(q));
+    createBullBoard({
+      queues,
+      serverAdapter,
+    });
 
     this.app = express();
-    this.app.use(cfg.get('bull:board:path'), bullRouter);
+    serverAdapter.setBasePath(cfg.get('bull:board:path'));
+    this.app.use(cfg.get('bull:board:path'), serverAdapter.getRouter());
     this.app.listen(cfg.get('bull:board:port'), () => {
       logger.info(`Bull board listening on port ${cfg.get('bull:board:port')} at ${cfg.get('bull:board:path')}`);
     });
