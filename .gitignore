@@ -21,6 +21,7 @@ config
 id_rsa
 id_rsa.pub
 
+test/tsconfig.test.tsbuildinfo
 test/*.d.ts
 test/*.js
 test/*.js.map
