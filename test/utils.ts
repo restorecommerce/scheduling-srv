@@ -1,7 +1,7 @@
 import { unmarshallProtobufAny } from '../lib/schedulingService';
 import * as should from 'should';
 import { Priority } from '../lib/types';
-import { createMockServer } from 'grpc-mock';
+// import { createMockServer } from 'grpc-mock';
 
 export function validateScheduledJob(job: any, expectedSchedule: string): void {
   should.exist(job.data);
@@ -108,25 +108,3 @@ export interface serverRule {
   input: any,
   output: any
 }
-
-export const startGrpcMockServer = async (rules: serverRule[], logger): Promise<any> => {
-  // Create a mock ACS server to expose isAllowed and whatIsAllowed
-  const mockServer = createMockServer({
-    protoPath: 'test/protos/io/restorecommerce/access_control.proto',
-    packageName: 'io.restorecommerce.access_control',
-    serviceName: 'Service',
-    options: {
-      keepCase: true
-    },
-    rules
-  });
-  mockServer.listen('0.0.0.0:50061');
-  logger.info('ACS Server started on port 50061');
-  return mockServer;
-};
-
-export const stopGrpcMockServer = async (mockServer, logger) => {
-  await mockServer.close(() => {
-    logger.info('Server closed successfully');
-  });
-};

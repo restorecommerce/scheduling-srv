@@ -6,13 +6,14 @@ import { Topic } from '@restorecommerce/kafka-client';
 import { createServiceConfig } from '@restorecommerce/service-config';
 import { GrpcClient } from '@restorecommerce/grpc-client';
 import { Logger } from 'winston';
+import { GrpcMockServer, ProtoUtils } from '@alenon/grpc-mock-server';
+import * as proto_loader from '@grpc/proto-loader';
+import * as grpc from '@grpc/grpc-js';
 import {
   validateJob,
   payloadShouldBeEmpty,
   validateScheduledJob,
   jobPolicySetRQ,
-  startGrpcMockServer,
-  stopGrpcMockServer,
   permitJobRule,
   denyJobRule,
   validateJobDonePayload
@@ -27,7 +28,6 @@ import * as _ from 'lodash';
 
 const JOB_EVENTS_TOPIC = 'io.restorecommerce.jobs';
 
-let mockServer: any;
 let logger: Logger;
 let subject;
 // mainOrg -> orgA -> orgB -> orgC
@@ -73,6 +73,82 @@ if (acsEnv && acsEnv.toLocaleLowerCase() === 'true') {
   testSuffix = 'with ACS Disabled';
 }
 
+interface MethodWithOutput {
+  method: string,
+  output: any
+};
+
+const PROTO_PATH: string = 'io/restorecommerce/access_control.proto';
+const PKG_NAME: string = 'io.restorecommerce.access_control';
+const SERVICE_NAME: string = 'Service';
+const pkgDef: grpc.GrpcObject = grpc.loadPackageDefinition(
+  proto_loader.loadSync(PROTO_PATH, {
+    includeDirs: ['node_modules/@restorecommerce/protos'],
+    keepCase: true,
+    longs: String,
+    enums: String,
+    defaults: true,
+    oneofs: true
+  })
+);
+
+const proto: any = ProtoUtils.getProtoFromPkgDefinition(
+  PKG_NAME,
+  pkgDef
+);
+
+const mockServer = new GrpcMockServer('localhost:50061');
+
+const startGrpcMockServer = async (methodWithOutput: MethodWithOutput[]) => {
+  // create mock implementation based on the method name and output
+  const implementations = {
+    isAllowed: (call: any, callback: any) => {
+      const isAllowedResponse = methodWithOutput.filter(e => e.method === 'IsAllowed');
+      let response: any = new proto.Response.constructor(isAllowedResponse[0].output);
+      // Create invalid jobs - DENY
+      if (call.request.context && call.request.context.resources && call.request.context.resources.length > 0 && call.request.context.resources[0].value) {
+        let resourceObj = JSON.parse(call?.request?.context?.resources[0]?.value?.toString());
+        if (resourceObj && resourceObj.id === 'test-invalid-job-id') {
+          response = { decision: 'DENY' };
+        }
+      }
+      // Delete request with invalid scope - DENY
+      if (call.request && call.request.target && call.request.target.subject && call.request.target.subject.length === 3) {
+        let reqSubject = call.request.target.subject;
+        if (reqSubject[2]?.id === 'urn:restorecommerce:acs:names:roleScopingInstance' && reqSubject[2]?.value === 'orgD') {
+          response = { decision: 'DENY' };
+        }
+      }
+      callback(null, response);
+    },
+    whatIsAllowed: (call: any, callback: any) => {
+      // check the request object and provide UserPolicies / RolePolicies
+      const whatIsAllowedResponse = methodWithOutput.filter(e => e.method === 'WhatIsAllowed');
+      const response: any = new proto.ReverseQuery.constructor(whatIsAllowedResponse[0].output);
+      callback(null, response);
+    }
+  };
+  try {
+    mockServer.addService(PROTO_PATH, PKG_NAME, SERVICE_NAME, implementations, {
+      includeDirs: ['node_modules/@restorecommerce/protos/'],
+      keepCase: true,
+      longs: String,
+      enums: String,
+      defaults: true,
+      oneofs: true
+    });
+    await mockServer.start();
+    logger.info('Mock ACS Server started on port 50061');
+  } catch (err) {
+    logger.error('Error starting mock ACS server', err);
+  }
+};
+
+const stopGrpcMockServer = async () => {
+  await mockServer.stop();
+  logger.info('Mock ACS Server closed successfully');
+};
+
 describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
   let worker: Worker;
   let jobEvents: Topic;
@@ -103,8 +179,8 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
     // start acs mock service with PERMIT rule
     jobPolicySetRQ.policy_sets[0].policies[0].effect = 'PERMIT';
     jobPolicySetRQ.policy_sets[0].policies[0].rules = [permitJobRule];
-    mockServer = await startGrpcMockServer([{ method: 'WhatIsAllowed', input: '\{.*\:\{.*\:.*\}\}', output: jobPolicySetRQ },
-    { method: 'IsAllowed', input: '\{.*\:\{.*\:.*\}\}', output: { decision: 'PERMIT' } }], logger);
+    await startGrpcMockServer([{ method: 'WhatIsAllowed', output: jobPolicySetRQ },
+    { method: 'IsAllowed', output: { decision: 'PERMIT' } }]);
     serviceClient = new GrpcClient(cfg.get('client:schedulingClient'), logger);
     grpcSchedulingSrv = serviceClient.schedulingClient;
     const toDelete = (await grpcSchedulingSrv.read({ subject }, {})).total_count;
@@ -129,7 +205,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
     await jobEvents.removeAllListeners('jobsDeleted');
   });
   after(async () => {
-    await stopGrpcMockServer(mockServer, logger);
+    await stopGrpcMockServer();
     await jobEvents.removeAllListeners('queuedJob');
     await jobEvents.removeAllListeners('jobsCreated');
     await jobEvents.removeAllListeners('jobsDeleted');
@@ -548,12 +624,9 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
         }
       } as NewJob;
       it(`should throw an error when creating a new job with invalid scope ${testSuffix}`, async () => {
-        // restart mock service with DENY rules
-        jobPolicySetRQ.policy_sets[0].policies[0].effect = 'DENY';
-        jobPolicySetRQ.policy_sets[0].policies[0].rules = [denyJobRule];
-        await stopGrpcMockServer(mockServer, logger);
-        mockServer = await startGrpcMockServer([{ method: 'WhatIsAllowed', input: '\{.*\:\{.*\:.*\}\}', output: jobPolicySetRQ },
-        { method: 'IsAllowed', input: '\{.*\:\{.*\:.*\}\}', output: { decision: 'DENY' } }], logger);
+        // // restart mock service with DENY rules
+        // jobPolicySetRQ.policy_sets[0].policies[0].effect = 'DENY';
+        // jobPolicySetRQ.policy_sets[0].policies[0].rules = [denyJobRule];
         subject.scope = 'orgD';
         let result = await grpcSchedulingSrv.create({ items: [job], subject }, {});
         result.operation_status.code.should.equal(403);
@@ -590,12 +663,9 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
       });
     }
     it(`should delete all remaining scheduled jobs upon request ${testSuffix}`, async () => {
-      // restart mock service with PERMIT rules
-      jobPolicySetRQ.policy_sets[0].policies[0].effect = 'PERMIT';
-      jobPolicySetRQ.policy_sets[0].policies[0].rules = [permitJobRule];
-      await stopGrpcMockServer(mockServer, logger);
-      mockServer = await startGrpcMockServer([{ method: 'WhatIsAllowed', input: '\{.*\:\{.*\:.*\}\}', output: jobPolicySetRQ },
-      { method: 'IsAllowed', input: '\{.*\:\{.*\:.*\}\}', output: { decision: 'PERMIT' } }], logger);
+      // // restart mock service with PERMIT rules
+      // jobPolicySetRQ.policy_sets[0].policies[0].effect = 'PERMIT';
+      // jobPolicySetRQ.policy_sets[0].policies[0].rules = [permitJobRule];
       subject.scope = 'orgC';
       await grpcSchedulingSrv.delete({
         collection: true, subject

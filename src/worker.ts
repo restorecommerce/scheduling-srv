@@ -176,6 +176,7 @@ export class Worker {
   logger: Logger;
   app: any;
   authZ: ACSAuthZ;
+  bullBoardServer: any;
 
   async start(cfg: any): Promise<any> {
     // Load config
@@ -347,13 +348,16 @@ export class Worker {
     this.app = express();
     serverAdapter.setBasePath(cfg.get('bull:board:path'));
     this.app.use(cfg.get('bull:board:path'), serverAdapter.getRouter());
-    this.app.listen(cfg.get('bull:board:port'), () => {
+    this.bullBoardServer = this.app.listen(cfg.get('bull:board:port'), () => {
       logger.info(`Bull board listening on port ${cfg.get('bull:board:port')} at ${cfg.get('bull:board:path')}`);
     });
   }
 
   async stop(): Promise<any> {
     this.server.logger.info('Shutting down');
+    if(this.bullBoardServer) {
+      this.bullBoardServer.close();
+    }
     await this.server.stop();
     await this.events.stop();
     await this.offsetStore.stop();

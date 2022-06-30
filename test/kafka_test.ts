@@ -7,14 +7,14 @@ import { Worker } from '../lib/worker';
 
 import { Topic } from '@restorecommerce/kafka-client';
 import { createServiceConfig } from '@restorecommerce/service-config';
-
+import { GrpcMockServer, ProtoUtils } from '@alenon/grpc-mock-server';
+import * as proto_loader from '@grpc/proto-loader';
+import * as grpc from '@grpc/grpc-js';
 import {
   validateJob,
   payloadShouldBeEmpty,
   validateScheduledJob,
   jobPolicySetRQ,
-  startGrpcMockServer,
-  stopGrpcMockServer,
   permitJobRule,
   validateJobDonePayload
 } from './utils';
@@ -29,7 +29,6 @@ import { updateConfig } from '@restorecommerce/acs-client';
 
 const JOB_EVENTS_TOPIC = 'io.restorecommerce.jobs';
 
-let mockServer: any;
 let logger: Logger;
 let cfg;
 let subject;
@@ -76,7 +75,69 @@ if (acsEnv && acsEnv.toLocaleLowerCase() === 'true') {
   testSuffix = 'with ACS Disabled';
 }
 
-describe(`testing scheduling-srv ${testSuffix}: Kafka`, () => {
+interface MethodWithOutput {
+  method: string,
+  output: any
+};
+
+const PROTO_PATH: string = 'io/restorecommerce/access_control.proto';
+const PKG_NAME: string = 'io.restorecommerce.access_control';
+const SERVICE_NAME: string = 'Service';
+const pkgDef: grpc.GrpcObject = grpc.loadPackageDefinition(
+  proto_loader.loadSync(PROTO_PATH, {
+    includeDirs: ['node_modules/@restorecommerce/protos'],
+    keepCase: true,
+    longs: String,
+    enums: String,
+    defaults: true,
+    oneofs: true
+  })
+);
+
+const proto: any = ProtoUtils.getProtoFromPkgDefinition(
+  PKG_NAME,
+  pkgDef
+);
+
+const mockServer = new GrpcMockServer('localhost:50061');
+
+const startGrpcMockServer = async (methodWithOutput: MethodWithOutput[]) => {
+  // create mock implementation based on the method name and output
+  const implementations = {
+    isAllowed: (call: any, callback: any) => {
+      const isAllowedResponse = methodWithOutput.filter(e => e.method === 'IsAllowed');
+      const response: any = new proto.Response.constructor(isAllowedResponse[0].output);
+      callback(null, response);
+    },
+    whatIsAllowed: (call: any, callback: any) => {
+      // check the request object and provide UserPolicies / RolePolicies
+      const whatIsAllowedResponse = methodWithOutput.filter(e => e.method === 'WhatIsAllowed');
+      const response: any = new proto.ReverseQuery.constructor(whatIsAllowedResponse[0].output);
+      callback(null, response);
+    }
+  };
+  try {
+    mockServer.addService(PROTO_PATH, PKG_NAME, SERVICE_NAME, implementations, {
+      includeDirs: ['node_modules/@restorecommerce/protos/'],
+      keepCase: true,
+      longs: String,
+      enums: String,
+      defaults: true,
+      oneofs: true
+    });
+    await mockServer.start();
+    logger.info('Mock ACS Server started on port 50061');
+  } catch (err) {
+    logger.error('Error starting mock ACS server', err);
+  }
+};
+
+const stopGrpcMockServer = async () => {
+  await mockServer.stop();
+  logger.info('Mock ACS Server closed successfully');
+};
+
+describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
   let worker: Worker;
   let jobTopic: Topic;
   let schedulingService: SchedulingService;
@@ -91,6 +152,13 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, () => {
     schedulingService = worker.schedulingService;
     logger = worker.logger;
 
+    // start acs mock service
+    jobPolicySetRQ.policy_sets[0].policies[0].effect = 'PERMIT';
+    jobPolicySetRQ.policy_sets[0].policies[0].rules = [permitJobRule];
+    // start mock acs-srv - needed for read operation since acs-client makes a req to acs-srv
+    // to get applicable policies although acs-lookup is disabled
+    await startGrpcMockServer([{ method: 'WhatIsAllowed', output: jobPolicySetRQ },
+    { method: 'IsAllowed', output: { decision: 'PERMIT' } }]);
     jobTopic = await worker.events.topic(JOB_EVENTS_TOPIC);
 
     if (acsEnv && acsEnv.toLowerCase() === 'true') {
@@ -103,12 +171,6 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, () => {
       updateConfig(cfg);
       subject = {};
     }
-
-    // start acs mock service
-    jobPolicySetRQ.policy_sets[0].policies[0].effect = 'PERMIT';
-    jobPolicySetRQ.policy_sets[0].policies[0].rules = [permitJobRule];
-    mockServer = await startGrpcMockServer([{ method: 'WhatIsAllowed', input: '\{.*\:\{.*\:.*\}\}', output: jobPolicySetRQ },
-    { method: 'IsAllowed', input: '\{.*\:\{.*\:.*\}\}', output: { decision: 'PERMIT' } }], logger);
 
     const toDelete = (await schedulingService.read({ request: { subject } }, {})).total_count;
     const jobOffset = await jobTopic.$offset(-1);
@@ -132,7 +194,7 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, () => {
     await jobTopic.removeAllListeners('jobsDeleted');
   });
   after(async () => {
-    await stopGrpcMockServer(mockServer, logger);
+    await stopGrpcMockServer();
     await jobTopic.removeAllListeners('queuedJob');
     await jobTopic.removeAllListeners('jobsCreated');
     await jobTopic.removeAllListeners('jobsDeleted');
