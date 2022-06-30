@@ -1,3 +1,8 @@
+## 0.3.0 (June 30th, 2022)
+
+- up deps
+- migrated bullboard to @bullboard
+
 ## 0.2.18 (March 1st, 2022)
 
 - fixed redis url for bull
