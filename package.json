@@ -28,7 +28,7 @@
     "@restorecommerce/protos": "^0.7.2",
     "@restorecommerce/service-config": "^0.4.27",
     "bull": "^4.8.4",
-    "cache-manager": "^4.0.1",
+    "cache-manager": "^4.1.0",
     "cache-manager-redis": "^0.6.0",
     "cron-parser": "^4.5.0",
     "crypto": "^1.0.1",
