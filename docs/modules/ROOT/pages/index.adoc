@@ -22,7 +22,7 @@ In the case when there is no match the jobs are being added to the default Queue
 
 * This service will hook any modules that are placed in the
 link:https://github.com/restorecommerce/scheduling-srv/tree/master/src/external-jobs[external-jobs] directory.
-Use this to execute jobs on the scheduling-srv itself.
+Use this to execute jobs on the scheduling-srv itself, the service looks for default export functions from each of the file in the `external-jobs` directory.
 * The rescheduling of missed recurring jobs on service start up can be disabled
 in the https://github.com/restorecommerce/scheduling-srv/blob/master/cfg/config.json#L344[configuration].
 * Queues can be configured to use
