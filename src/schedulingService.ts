@@ -589,8 +589,6 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
     // Scheduling jobs
     for (let i = 0; i < jobs.length; i += 1) {
       let job = jobs[i];
-      job.data.timezone = job.data.timezone || 'Europe/London'; // fallback to GMT
-
       // if not jobID is specified generate a UUID
       if (!job.id) {
         job.id = this.idGen();
@@ -650,6 +648,16 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
         job.data.payload.value = job.data.payload.value.toString();
       }
 
+      // convert enum priority back to number as its expected by bull
+      if(job?.options?.priority) {
+        job.options.priority = Priority[job.options.priority];
+      }
+
+      // if its a repeat job and tz is empty delete the key (else cron parser throws an error)
+      if(job?.options?.repeat?.tz === '' ) {
+        delete job.options.repeat.tz;
+      }
+
       const bullOptions = {
         ...job.options
       };
@@ -666,7 +674,6 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
         queue = defaultQueue;
       }
       result.push(await queue.add(job.type, job.data, bullOptions));
-
       this.logger.verbose(`job@${job.type} created`, job);
     }
 

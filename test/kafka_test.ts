@@ -18,9 +18,10 @@ import {
   permitJobRule,
   validateJobDonePayload
 } from './utils';
-import { Backoffs, NewJob, Priority } from "../lib/types";
+import { Priority } from "../lib/types";
 import { Logger } from 'winston';
 import { updateConfig } from '@restorecommerce/acs-client';
+import { JobOptions_Priority, Backoff_Type, JobReadRequest } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/job';
 
 /**
  * NOTE: Running instances of Redis and Kafka are required to run the tests.
@@ -172,7 +173,7 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
       subject = {};
     }
 
-    const toDelete = (await schedulingService.read({ request: { subject } }, {})).total_count;
+    const toDelete = (await schedulingService.read(JobReadRequest.fromPartial({ subject }), {})).total_count;
     const jobOffset = await jobTopic.$offset(-1);
 
     await jobTopic.emit('deleteJobs', { collection: true, subject });
@@ -181,7 +182,7 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
       await jobTopic.$wait(jobOffset + toDelete - 1);
     }
 
-    payloadShouldBeEmpty(await schedulingService.read({ request: { subject } }, {}));
+    payloadShouldBeEmpty(await schedulingService.read(JobReadRequest.fromPartial({ subject }), {}));
   });
   beforeEach(async () => {
     for (let event of ['jobsCreated', 'jobsDeleted']) {
@@ -232,14 +233,14 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
         data,
         options: {
           timeout: 1,
-          priority: Priority.HIGH,
+          priority: JobOptions_Priority.HIGH,
           attempts: 1,
           backoff: {
-            type: Backoffs.FIXED,
+            type: Backoff_Type.FIXED,
             delay: 1000,
           }
         }
-      } as NewJob;
+      };
 
       const offset = await jobTopic.$offset(-1);
       await jobTopic.emit('createJobs', { items: [job], subject });
@@ -253,7 +254,7 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
       // be restored to original value using restoreAC in worker
       // so disable AC to read again
       schedulingService.disableAC();
-      const result = await schedulingService.read({ request: { subject } }, {});
+      const result = await schedulingService.read(JobReadRequest.fromPartial({ subject }), {});
       payloadShouldBeEmpty(result);
       should.exist(result.operation_status);
       result.operation_status.code.should.equal(200);
@@ -284,14 +285,14 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
         data,
         when: scheduledTime.toISOString(),
         options: {
-          priority: Priority.HIGH,
+          priority: JobOptions_Priority.HIGH,
           attempts: 1,
           backoff: {
             delay: 1000,
-            type: Backoffs.FIXED,
+            type: Backoff_Type.FIXED,
           },
         }
-      } as NewJob;
+      };
 
       const offset = await jobTopic.$offset(-1);
 
@@ -301,9 +302,7 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
       await jobTopic.$wait(offset + 1);
 
       schedulingService.disableAC();
-      let result = await schedulingService.read({
-        request: { subject }
-      }, {});
+      let result = await schedulingService.read(JobReadRequest.fromPartial({ subject }), {});
       result.items.should.have.length(1);
       result.items[0].payload.type.should.equal('test-job');
       result.items[0].status.code.should.equal(200);
@@ -315,9 +314,7 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
       await jobTopic.$wait(offset + 3);
 
       schedulingService.disableAC();
-      result = await schedulingService.read({
-        request: { subject }
-      }, {});
+      result = await schedulingService.read(JobReadRequest.fromPartial({ subject }), {});
       payloadShouldBeEmpty(result);
       result.operation_status.code.should.equal(200);
       result.operation_status.message.should.equal('success');
@@ -338,7 +335,7 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
         await new Promise(resolve => setTimeout(resolve, 100));
 
         schedulingService.disableAC();
-        let result = await schedulingService.read({ request: { subject } }, {});
+        let result = await schedulingService.read(JobReadRequest.fromPartial({ subject }), {});
         should.exist(result.items);
         result.items.length.should.equal(1);
         result.items[0].payload.type.should.equal('test-job');
@@ -368,24 +365,24 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
         type: 'test-job',
         data,
         options: {
-          priority: Priority.HIGH,
+          priority: JobOptions_Priority.HIGH,
           attempts: 1,
           backoff: {
             delay: 1000,
-            type: Backoffs.FIXED,
+            type: Backoff_Type.FIXED,
           },
           repeat: {
             every: 2000
           }
         }
-      } as NewJob;
+      };
 
       const offset = await jobTopic.$offset(-1);
       await jobTopic.emit('createJobs', { items: [job], subject });
 
       schedulingService.disableAC();
       await new Promise(resolve => setTimeout(resolve, 200));
-      const createResponse = await schedulingService.read({ request: { subject } }, {});
+      const createResponse = await schedulingService.read(JobReadRequest.fromPartial({ subject }), {});
       should.exist(createResponse);
       should.exist(createResponse.items);
       createResponse.items.length.should.equal(1);
@@ -427,14 +424,14 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
           data,
           when: scheduledTime.toISOString(),
           options: {
-            priority: Priority.HIGH,
+            priority: JobOptions_Priority.HIGH,
             attempts: 1,
             backoff: {
               delay: 1000,
-              type: Backoffs.FIXED,
+              type: Backoff_Type.FIXED,
             }
           }
-        } as NewJob;
+        };
       }
 
       const offset = await jobTopic.$offset(-1);
@@ -444,7 +441,7 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
       await jobTopic.$wait(offset + 1);
 
       schedulingService.disableAC();
-      let result = await schedulingService.read({ request: { subject } }, {});
+      let result = await schedulingService.read(JobReadRequest.fromPartial({ subject }), {});
       result.items.map(job => {
         should.exist(job.payload);
         job.payload.type.should.equal('test-job');
@@ -457,7 +454,7 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
     });
     it('should update / reschedule a job', async () => {
       schedulingService.disableAC();
-      let result = await schedulingService.read({ request: { subject } }, {});
+      let result = await schedulingService.read(JobReadRequest.fromPartial({ subject }), {});
       const job = result.items[0].payload;
       const scheduledTime = new Date();
       scheduledTime.setDate(scheduledTime.getDate() + 2); // two days from now
@@ -470,7 +467,7 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
       await jobTopic.$wait(offset + 1);
 
       schedulingService.disableAC();
-      result = await schedulingService.read({ request: { subject } }, {});
+      result = await schedulingService.read(JobReadRequest.fromPartial({ subject }), {});
       should.exist(result);
       should.exist(result.items);
       result.items = _.sortBy(result.items, ['id']);
@@ -484,7 +481,7 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
       const offset = await jobTopic.$offset(-1);
       await jobTopic.$wait(offset + 2);
       schedulingService.disableAC();
-      const result = await schedulingService.read({ request: { subject } }, {});
+      const result = await schedulingService.read(JobReadRequest.fromPartial({ subject }), {});
       payloadShouldBeEmpty(result);
       result.operation_status.code.should.equal(200);
       result.operation_status.message.should.equal('success');

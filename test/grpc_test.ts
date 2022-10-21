@@ -4,7 +4,8 @@ import { marshallProtobufAny } from '../lib/schedulingService';
 import { Worker } from '../lib/worker';
 import { Topic } from '@restorecommerce/kafka-client';
 import { createServiceConfig } from '@restorecommerce/service-config';
-import { GrpcClient } from '@restorecommerce/grpc-client';
+import { createChannel, createClient } from '@restorecommerce/grpc-client';
+import { ServiceClient as SchedulingServiceClient, ServiceDefinition as SchedulingServiceDefinition, JobOptions_Priority, Backoff_Type, JobReadRequest, JobReadRequest_SortOrder, JobList } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/job';
 import { Logger } from 'winston';
 import { GrpcMockServer, ProtoUtils } from '@alenon/grpc-mock-server';
 import * as proto_loader from '@grpc/proto-loader';
@@ -18,7 +19,6 @@ import {
   denyJobRule,
   validateJobDonePayload
 } from './utils';
-import { Backoffs, Priority, SortOrder, NewJob } from "../lib/types";
 import { updateConfig } from '@restorecommerce/acs-client';
 import * as _ from 'lodash';
 
@@ -152,8 +152,7 @@ const stopGrpcMockServer = async () => {
 describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
   let worker: Worker;
   let jobEvents: Topic;
-  let serviceClient: GrpcClient;
-  let grpcSchedulingSrv: any;
+  let grpcSchedulingSrv: SchedulingServiceClient;
 
   before(async function (): Promise<any> {
     this.timeout(4000);
@@ -181,8 +180,13 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
     jobPolicySetRQ.policy_sets[0].policies[0].rules = [permitJobRule];
     await startGrpcMockServer([{ method: 'WhatIsAllowed', output: jobPolicySetRQ },
     { method: 'IsAllowed', output: { decision: 'PERMIT' } }]);
-    serviceClient = new GrpcClient(cfg.get('client:schedulingClient'), logger);
-    grpcSchedulingSrv = serviceClient.schedulingClient;
+    const schedulingClientCfg = cfg.get('client:schedulingClient');
+    if (schedulingClientCfg) {
+      grpcSchedulingSrv = createClient({
+        ...schedulingClientCfg,
+        logger
+      }, SchedulingServiceDefinition, createChannel(schedulingClientCfg.address));
+    }
     const toDelete = (await grpcSchedulingSrv.read({ subject }, {})).total_count;
     const offset = await jobEvents.$offset(-1);
 
@@ -211,7 +215,6 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
     await jobEvents.removeAllListeners('jobsDeleted');
     // await worker.schedulingService.clear();
     // await worker.stop();
-    await serviceClient.close();
   });
   describe(`create a one-time job ${testSuffix}`, function postJob(): void {
     this.timeout(8000);
@@ -233,7 +236,6 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
       });
 
       const data = {
-        timezone: "Europe/Berlin",
         payload: marshallProtobufAny({
           testValue: 'test-value'
         })
@@ -244,14 +246,14 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
         data,
         options: {
           timeout: 1,
-          priority: Priority.HIGH,
+          priority: JobOptions_Priority.HIGH,
           attempts: 1,
           backoff: {
-            type: Backoffs.FIXED,
+            type: Backoff_Type.FIXED,
             delay: 1000,
           }
         }
-      } as NewJob;
+      };
 
       const offset = await jobEvents.$offset(-1);
       const createResponse = await grpcSchedulingSrv.create({ items: [job], subject }, {});
@@ -296,14 +298,14 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
         data,
         when: scheduledTime.toISOString(),
         options: {
-          priority: Priority.HIGH,
+          priority: JobOptions_Priority.HIGH,
           attempts: 1,
           backoff: {
             delay: 1000,
-            type: Backoffs.FIXED,
+            type: Backoff_Type.FIXED,
           },
         }
-      } as NewJob;
+      };
 
       const offset = await jobEvents.$offset(-1);
 
@@ -350,7 +352,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
           result.operation_status.code.should.equal(200);
           result.operation_status.message.should.equal('success');
         } else {
-          result.data.total_count.should.be.equal(1);
+          result.total_count.should.be.equal(1);
         }
       });
 
@@ -365,17 +367,17 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
         type: 'test-job',
         data,
         options: {
-          priority: Priority.HIGH,
+          priority: JobOptions_Priority.HIGH,
           attempts: 1,
           backoff: {
             delay: 1000,
-            type: Backoffs.FIXED,
+            type: Backoff_Type.FIXED,
           },
           repeat: {
             every: 2000
           }
         }
-      } as NewJob;
+      };
 
       const offset = await jobEvents.$offset(-1);
 
@@ -409,18 +411,18 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
         type: 'test-job',
         data,
         options: {
-          priority: Priority.HIGH,
+          priority: JobOptions_Priority.HIGH,
           attempts: 1,
           backoff: {
             delay: 1000,
-            type: Backoffs.FIXED,
+            type: Backoff_Type.FIXED,
           },
           repeat: {
             cron: '*/2 * * * * *'  // every two seconds
           },
           removeOnComplete: true
         }
-      } as NewJob;
+      };
       const createdJob = await grpcSchedulingSrv.create({
         items: [job], subject
       }, {});
@@ -472,14 +474,14 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
           data,
           when: scheduledTime.toISOString(),
           options: {
-            priority: Priority.HIGH,
+            priority: JobOptions_Priority.HIGH,
             attempts: 1,
             backoff: {
               delay: 1000,
-              type: Backoffs.FIXED,
+              type: Backoff_Type.FIXED,
             }
           }
-        } as NewJob;
+        };
       }
 
       const createResponse = await grpcSchedulingSrv.create({
@@ -495,7 +497,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
       createResponse.operation_status.message.should.equal('success');
     });
     it(`should retrieve all job properties correctly with empty filter ${testSuffix}`, async () => {
-      const result = await grpcSchedulingSrv.read({ sort: SortOrder.DESCENDING, subject }, {});
+      const result = await grpcSchedulingSrv.read(JobReadRequest.fromPartial({ sort: JobReadRequest_SortOrder.DESCENDING, subject }), {});
       should.exist(result);
       should.exist(result.items);
       result.items.should.be.length(4);
@@ -508,7 +510,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
       result.operation_status.message.should.equal('success');
     });
     it(`should retrieve all job properties correctly with filter type or id ${testSuffix}`, async () => {
-      const result = await grpcSchedulingSrv.read({ filter: { type: 'test-job' }, sort: 'ASCENDING', subject }, {});
+      const result = await grpcSchedulingSrv.read(JobReadRequest.fromPartial({ filter: { type: 'test-job' }, sort: JobReadRequest_SortOrder.ASCENDING, subject }), {});
       should.exist(result);
       should.exist(result.items);
       result.items.should.be.length(4);
@@ -615,14 +617,14 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
         data,
         options: {
           timeout: 1,
-          priority: Priority.HIGH,
+          priority: JobOptions_Priority.HIGH,
           attempts: 1,
           backoff: {
-            type: Backoffs.FIXED,
+            type: Backoff_Type.FIXED,
             delay: 1000,
           }
         }
-      } as NewJob;
+      };
       it(`should throw an error when creating a new job with invalid scope ${testSuffix}`, async () => {
         // // restart mock service with DENY rules
         // jobPolicySetRQ.policy_sets[0].policies[0].effect = 'DENY';
@@ -633,17 +635,17 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
         result.operation_status.message.should.equal('Access not allowed for request with subject:admin_user_id, resource:job, action:CREATE, target_scope:orgD; the response was DENY');
       });
       it(`should throw an error retreiving job properties with empty filter with invalid scope ${testSuffix}`, async () => {
-        const result = await grpcSchedulingSrv.read({ sort: SortOrder.DESCENDING, subject }, {});
+        const result = await grpcSchedulingSrv.read({ sort: JobReadRequest_SortOrder.DESCENDING, subject }, {});
         result.operation_status.code.should.equal(403);
         result.operation_status.message.should.equal('Access not allowed for request with subject:admin_user_id, resource:job, action:READ, target_scope:orgD; the response was DENY');
       });
       it(`should throw an error when updating / rescheduling a job with invalid scope ${testSuffix}`, async () => {
         const scheduledTime = new Date();
         scheduledTime.setDate(scheduledTime.getDate() + 2); // two days from now
-        job.when = scheduledTime.toISOString();
-        const result = await grpcSchedulingSrv.update({
+        (job as any).when = scheduledTime.toISOString();
+        const result = await grpcSchedulingSrv.update(JobList.fromPartial({
           items: [job], subject
-        });
+        }));
         result.operation_status.code.should.equal(403);
         result.operation_status.message.should.equal('Access not allowed for request with subject:admin_user_id, resource:job, action:MODIFY, target_scope:orgD; the response was DENY');
       });
