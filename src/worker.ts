@@ -1,6 +1,6 @@
 import * as _ from 'lodash';
 import * as chassis from '@restorecommerce/chassis-srv';
-import { Events, Topic } from '@restorecommerce/kafka-client';
+import { Events, Topic, registerProtoMeta } from '@restorecommerce/kafka-client';
 import { createLogger } from '@restorecommerce/logger';
 import { Logger } from 'winston';
 import { SchedulingService } from './schedulingService';
@@ -11,6 +11,15 @@ import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
 import { ExpressAdapter } from '@bull-board/express';
 import { initAuthZ, ACSAuthZ, updateConfig, initializeCache } from '@restorecommerce/acs-client';
 import { createClient, RedisClientType } from 'redis';
+import { protoMetadata as schedulingMeta, ServiceDefinition as SchedulingServiceDefinition, JobList } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/job';
+import { protoMetadata as commandInterfaceMeta, ServiceDefinition as CommandInterfaceServiceDefinition } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/commandinterface';
+import {
+  protoMetadata as reflectionMeta
+} from '@restorecommerce/rc-grpc-clients/dist/generated-server/grpc/reflection/v1alpha/reflection';
+import { ServerReflectionService } from 'nice-grpc-server-reflection';
+import { BindConfig } from '@restorecommerce/chassis-srv/lib/microservice/transport/provider/grpc';
+import { HealthDefinition } from '@restorecommerce/rc-grpc-clients/dist/generated-server/grpc/health/v1/health';
+import { DeleteRequest } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/resource_base';
 
 const express = require('express');
 const JOBS_CREATE_EVENT = 'createJobs';
@@ -18,6 +27,12 @@ const JOBS_MODIFY_EVENT = 'modifyJobs';
 const JOBS_DELETE_EVENT = 'deleteJobs';
 const COMMANDS_EVENTS = ['healthCheckCommand', 'versionCommand', 'restoreCommand',
   'resetCommand', 'configUpdateCommand', 'setApiKeyCommand', 'flushCacheCommand'];
+
+registerProtoMeta(
+  schedulingMeta,
+  commandInterfaceMeta,
+  reflectionMeta
+);
 
 class JobsCommandInterface extends chassis.CommandInterface {
   schedulingService: SchedulingService;
@@ -147,21 +162,17 @@ class JobsCommandInterface extends chassis.CommandInterface {
           return {};
         }
 
-        await that.schedulingService.create({
-          request: {
-            items: [message]
-          }
-        }, {});
+        await that.schedulingService.create(JobList.fromPartial({
+          items: [message]
+        }), {});
 
         return {};
       },
       jobsDeleted: async function restoreDeleted(message: any, context: any,
         config: any, eventName: string): Promise<any> {
-        await that.schedulingService.delete({
-          request: {
-            ids: [message.id]
-          }
-        }, {});
+        await that.schedulingService.delete(DeleteRequest.fromPartial({
+          ids: [message.id]
+        }), {});
         return {};
       }
     };
@@ -236,7 +247,10 @@ export class Worker {
     await schedulingService.start();
     // Bind business logic to server
     const serviceNamesCfg = cfg.get('serviceNames');
-    await server.bind(serviceNamesCfg.scheduling, schedulingService);
+    await server.bind(serviceNamesCfg.scheduling, {
+      service: SchedulingServiceDefinition,
+      implementation: schedulingService
+    } as BindConfig<SchedulingServiceDefinition>);
 
     // cleanup job
     const queueCleanup = cfg.get('queueCleanup');
@@ -246,7 +260,10 @@ export class Worker {
 
     const cis = new JobsCommandInterface(server, cfg,
       logger, events, schedulingService, redisSubjectClient);
-    await server.bind(serviceNamesCfg.cis, cis);
+    await server.bind(serviceNamesCfg.cis, {
+      service: CommandInterfaceServiceDefinition,
+      implementation: cis
+    } as BindConfig<CommandInterfaceServiceDefinition>);
 
     const schedulingServiceEventsListener = async (msg: any,
       context: any, config: any, eventName: string): Promise<any> => {
@@ -254,9 +271,8 @@ export class Worker {
       if (eventName === JOBS_CREATE_EVENT) {
         // protobuf.js appends unnecessary properties to object
         msg.items = _.map(msg.items, schedulingService._filterKafkaJob.bind(schedulingService));
-        const call = { request: { items: msg.items, subject: msg.subject, api_key: msg.api_key } };
         // to disableAC and enable scheduling jobs emitted via kafka event 'createJobs'
-        await schedulingService.create(call, {}).catch(
+        await schedulingService.create(JobList.fromPartial({ items: msg.items, subject: msg.subject }), {}).catch(
           (err) => {
             logger.error(`Error occurred scheduling job, ${err}`);
           });
@@ -264,16 +280,14 @@ export class Worker {
         msg.items = msg.items.map((job) => {
           return schedulingService._filterKafkaJob(job);
         });
-        const call = { request: { items: msg.items, subject: msg.subject, api_key: msg.api_key } };
-        await schedulingService.update(call, {}).catch(
+        await schedulingService.update(JobList.fromPartial({ items: msg.items, subject: msg.subject }), {}).catch(
           (err) => {
             logger.error('Error occurred updating jobs:', err.message);
           });
       } else if (eventName === JOBS_DELETE_EVENT) {
         const ids = msg.ids;
         const collection = msg.collection;
-        const call = { request: { ids, collection, subject: msg.subject, api_key: msg.api_key } };
-        await schedulingService.delete(call, {}).catch(
+        await schedulingService.delete(DeleteRequest.fromPartial({ ids, collection, subject: msg.subject }), {}).catch(
           (err) => {
             logger.error('Error occurred deleting jobs:', err.message);
           });
@@ -299,16 +313,23 @@ export class Worker {
 
     // Add reflection service
     const reflectionServiceName = serviceNamesCfg.reflection;
-    const transportName = cfg.get(`server:services:${reflectionServiceName}:serverReflectionInfo:transport:0`);
-    const transport = server.transport[transportName];
-    const reflectionService = new chassis.grpc.ServerReflection(transport.$builder, server.config);
-    await server.bind(reflectionServiceName, reflectionService);
+    const reflectionService = chassis.buildReflectionService([
+      { descriptor: schedulingMeta.fileDescriptor },
+      { descriptor: commandInterfaceMeta.fileDescriptor }
+    ]);
+    await server.bind(reflectionServiceName, {
+      service: ServerReflectionService,
+      implementation: reflectionService
+    });
 
-    await server.bind(serviceNamesCfg.health, new chassis.Health(cis, {
-      logger,
-      cfg,
-      dependencies: ['acs-srv'],
-    }));
+    await server.bind(serviceNamesCfg.health, {
+      service: HealthDefinition,
+      implementation: new chassis.Health(cis, {
+        logger,
+        cfg,
+        dependencies: ['acs-srv'],
+      })
+    } as BindConfig<HealthDefinition>);
 
     // Hook any external jobs
     let externalJobFiles;
@@ -351,11 +372,12 @@ export class Worker {
     this.bullBoardServer = this.app.listen(cfg.get('bull:board:port'), () => {
       logger.info(`Bull board listening on port ${cfg.get('bull:board:port')} at ${cfg.get('bull:board:path')}`);
     });
+    logger.info('Server started successfully');
   }
 
   async stop(): Promise<any> {
     this.server.logger.info('Shutting down');
-    if(this.bullBoardServer) {
+    if (this.bullBoardServer) {
       this.bullBoardServer.close();
     }
     await this.server.stop();

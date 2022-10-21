@@ -1,18 +1,29 @@
 import * as _ from 'lodash';
 import { errors } from '@restorecommerce/chassis-srv';
 import * as kafkaClient from '@restorecommerce/kafka-client';
-import { Subject, AuthZAction, ACSAuthZ, Decision, updateConfig, DecisionResponse, Operation, PolicySetRQResponse } from '@restorecommerce/acs-client';
+import { AuthZAction, ACSAuthZ, updateConfig, DecisionResponse, Operation, PolicySetRQResponse } from '@restorecommerce/acs-client';
+import {
+  ServiceServiceImplementation as SchedulingServiceServiceImplementation,
+  JobFailed, JobDone, DeepPartial, JobList, JobListResponse, Data,
+  Backoff_Type, JobOptions_Priority, JobReadRequest, JobReadRequest_SortOrder
+} from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/job';
 import { createClient, RedisClientType } from 'redis';
 import Bull, { Job, JobId, JobOptions } from 'bull';
-import {
-  CreateCall, DeleteCall, Data, NewJob, JobService, ReadCall, UpdateCall,
-  SortOrder, JobListResponse, Priority, Backoffs, JobType, JobFailedType, JobDoneType,
-  FilterOpts, KafkaOpts, DeleteResponse
-} from './types';
+// import {
+//   CreateCall, DeleteCall, Data, NewJob, JobService, ReadCall, UpdateCall,
+//   SortOrder, JobListResponse, Priority, Backoffs, JobType, JobFailedType, JobDoneType,
+//   FilterOpts, KafkaOpts, DeleteResponse
+// } from './types';
+import { NewJob, JobType, Priority, KafkaOpts, FilterOpts } from './types';
 import { parseExpression } from 'cron-parser';
 import * as crypto from 'crypto';
 import { checkAccessRequest } from './utilts';
 import * as uuid from 'uuid';
+import { Logger } from 'winston';
+import { Response_Decision } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/access_control';
+import { Subject } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/auth';
+import { Attribute } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/attribute';
+import { DeleteRequest, DeleteResponse } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/resource_base';
 
 const Queue = require('bull');
 const JOB_DONE_EVENT = 'jobDone';
@@ -46,10 +57,10 @@ export const unmarshallProtobufAny = (data: any): any => {
 /**
  * A job scheduling service.
  */
-export class SchedulingService implements JobService {
+export class SchedulingService implements SchedulingServiceServiceImplementation {
 
   jobEvents: kafkaClient.Topic;
-  logger: any;
+  logger: Logger;
 
   queuesConfigList: any;
   queuesList: Bull.Queue[];
@@ -180,9 +191,9 @@ export class SchedulingService implements JobService {
 
         if (eventName === JOB_FAILED_EVENT) {
           logger.error(`job@${job.type}#${job.id} failed with error #${job.error}`,
-            that._filterQueuedJob<JobFailedType>(job));
+            that._filterQueuedJob<JobFailed>(job));
         } else if (eventName === JOB_DONE_EVENT) {
-          logger.verbose(`job#${job.id} done`, that._filterQueuedJob<JobDoneType>(job));
+          logger.verbose(`job#${job.id} done`, that._filterQueuedJob<JobDone>(job));
         }
 
         logger.info('Received Job event', { event: eventName });
@@ -223,10 +234,10 @@ export class SchedulingService implements JobService {
         logger.error('kue-scheduler', error);
       });
       queue.on('schedule success', (job) => {
-        logger.verbose(`job@${job.type}#${job.id} scheduled`, that._filterQueuedJob<JobType>(job));
+        logger.verbose(`job@${job.type}#${job.id} scheduled`, that._filterQueuedJob<Job>(job));
       });
       queue.on('already scheduled', (job) => {
-        logger.warn(`job@${job.type}#${job.id} already scheduled`, that._filterQueuedJob<JobType>(job));
+        logger.warn(`job@${job.type}#${job.id} already scheduled`, that._filterQueuedJob<Job>(job));
       });
       queue.on('scheduler unknown job expiry key', (message) => {
         logger.warn('scheduler unknown job expiry key', message);
@@ -253,7 +264,7 @@ export class SchedulingService implements JobService {
 
       queue.process(processName, concurrency, async (job) => {
 
-        const filteredJob = that._filterQueuedJob<JobType>(job);
+        const filteredJob = that._filterQueuedJob<JobType>(job as any);
         // For recurring job add time so if service goes down we can fire jobs
         // for the missed schedules comparing the last run time
         let lastRunTime;
@@ -277,12 +288,13 @@ export class SchedulingService implements JobService {
                 filteredJob.data.payload.value = Buffer.from(JSON.stringify(jobTimeObj));
               } else {
                 await this.redisClient.set(filteredJob.name, lastRunTime);
-                filteredJob.data.payload = { value: bufObj };
+                filteredJob.data.payload = { value: bufObj, type_url: '' };
               }
             } else {
               await this.redisClient.set(filteredJob.name, lastRunTime);
               filteredJob.data = {
-                payload: { value: bufObj }
+                subject_id: filteredJob.data.subject_id,
+                payload: { value: bufObj, type_url: '' }
               };
             }
           }
@@ -370,7 +382,7 @@ export class SchedulingService implements JobService {
               })
             };
             const currentTime = new Date();
-            const immediateJob = {
+            const immediateJob: any = {
               type: job.name,
               data,
               // give a delay of 2 sec between each job
@@ -379,9 +391,8 @@ export class SchedulingService implements JobService {
               options: {}
             };
             createDispatch.push(thiz.create({
-              request: {
-                items: [immediateJob]
-              }
+              items: [immediateJob],
+              total_count: 0,
             }, {}));
           }
         }
@@ -415,12 +426,6 @@ export class SchedulingService implements JobService {
     }
 
     if (job.when) {
-      if (job.options.delay) {
-        throw new errors.InvalidArgument(
-          'Job can either be delayed or dated (when), not both.'
-        );
-      }
-
       // If the jobSchedule time has already lapsed then do not schedule the job
       const jobScheduleTime = new Date(job.when).getTime();
       const currentTime = new Date().getTime();
@@ -433,13 +438,13 @@ export class SchedulingService implements JobService {
 
     if (job.options.backoff && typeof job.options.backoff !== 'number') {
       if (typeof job.options.backoff.type === 'number') {
-        job.options.backoff.type = Object.keys(Backoffs)[job.options.backoff.type];
+        job.options.backoff.type = Object.keys(Backoff_Type)[job.options.backoff.type];
       }
       job.options.backoff.type = job.options.backoff.type.toLowerCase();
     }
 
     if (job.options.priority && typeof job.options.priority === 'string') {
-      job.options.priority = Priority[job.options.priority] as any;
+      job.options.priority = JobOptions_Priority[job.options.priority] as any;
     }
 
     if (_.isEmpty(job.data)) {
@@ -525,11 +530,13 @@ export class SchedulingService implements JobService {
    * @param {any} call RPC call argument
    * @param {any} ctx RPC context
    */
-  async create(call: CreateCall, ctx: any): Promise<JobListResponse> {
-    let jobListResponse: JobListResponse = { items: [], operation_status: { code: 0, message: '' } };
-    let subject = call.request.subject;
-    if (_.isNil(call) || _.isNil(call.request) || _.isNil(call.request.items)) {
+  async create(request: JobList, ctx: any): Promise<DeepPartial<JobListResponse>> {
+    let jobListResponse: JobListResponse = { items: [], operation_status: { code: 0, message: '' }, total_count: 0 };
+    let subject = request.subject;
+    if (_.isNil(request) || _.isNil(request.items)) {
       return {
+        items: [],
+        total_count: 0,
         operation_status: {
           code: 400,
           message: 'Missing items in create request'
@@ -537,33 +544,35 @@ export class SchedulingService implements JobService {
       };
     }
 
-    await this.createMetadata(call.request.items, AuthZAction.CREATE, subject);
+    await this.createMetadata(request.items, AuthZAction.CREATE, subject);
     let acsResponse: DecisionResponse;
     try {
       if (!ctx) { ctx = {}; };
       ctx.subject = subject;
-      ctx.resources = call.request.items;
+      ctx.resources = request.items;
       acsResponse = await checkAccessRequest(ctx, [{
         resource: 'job',
-        id: call.request.items.map(item => item.id)
+        id: request.items.map(item => item.id)
       }], AuthZAction.CREATE, Operation.isAllowed);
     } catch (err) {
       this.logger.error('Error occurred requesting access-control-srv:', err);
       return {
+        items: [],
+        total_count: 0,
         operation_status: {
           code: err.code,
           message: err.message
         }
       };
     }
-    if (acsResponse.decision != Decision.PERMIT) {
-      return { operation_status: acsResponse.operation_status };
+    if (acsResponse.decision != Response_Decision.PERMIT) {
+      return { items: [], total_count: 0, operation_status: acsResponse.operation_status };
     }
 
     let jobs = [];
-    for (let job of call.request.items) {
+    for (let job of request.items) {
       try {
-        jobs.push(this._validateJob(job));
+        jobs.push(this._validateJob(job as any));
       } catch (err) {
         this.logger.error('Error validating job', job);
         jobListResponse.items.push({
@@ -593,14 +602,12 @@ export class SchedulingService implements JobService {
         const existingJobId = await this.getRedisValue(job.id);
         if (existingJobId) {
           // read job to check if data exists
-          const jobData = await this.read({
-            request: {
-              filter: {
-                job_ids: [job.id]
-              },
-              subject
-            }
-          }, ctx);
+          const jobData = await this.read(JobReadRequest.fromPartial({
+            filter: {
+              job_ids: [job.id]
+            },
+            subject
+          }), ctx);
           if ((jobData?.items as any)[0]?.payload) {
             jobListResponse.items.push({
               status: {
@@ -672,12 +679,13 @@ export class SchedulingService implements JobService {
     }
 
     for (let job of result) {
+      let when = job?.opts?.delay ? new Date(job?.opts?.delay).toString() : '';
       jobListResponse.items.push({
         payload: {
-          id: job.id,
+          id: job.id as string,
           type: job.name,
           data: this._filterJobData(job.data, true),
-          options: this._filterJobOptions(job.opts)
+          when
         },
         status: {
           id: (job?.id)?.toString(),
@@ -714,7 +722,7 @@ export class SchedulingService implements JobService {
       const ownerIndictaorEntURN = this.cfg.get('authorization:urns:ownerIndicatoryEntity');
       const ownerInstanceURN = this.cfg.get('authorization:urns:ownerInstance');
       let ownerInst;
-      let jobOwner = [];
+      let jobOwner: Attribute[] = [];
       result = result.filter(job => {
         if (job && job.data && job.data.meta && job.data.meta.owner) {
           jobOwner = job.data.meta.owner;
@@ -774,10 +782,9 @@ export class SchedulingService implements JobService {
    * @param {any} call RPC call argument
    * @param {any} ctx RPC context
    */
-  async read(call: ReadCall, ctx: any): Promise<JobListResponse> {
-    let jobListResponse: JobListResponse = { items: [], operation_status: { code: 0, message: '' } };
-    const readRequest = _.cloneDeep(call.request);
-    let subject = call.request.subject;
+  async read(request: JobReadRequest, ctx: any): Promise<DeepPartial<JobListResponse>> {
+    let jobListResponse: JobListResponse = { items: [], operation_status: { code: 0, message: '' }, total_count: 0 };
+    let subject = request.subject;
     let acsResponse: PolicySetRQResponse;
     try {
       if (!ctx) { ctx = {}; };
@@ -794,16 +801,16 @@ export class SchedulingService implements JobService {
         }
       };
     }
-    if (acsResponse.decision != Decision.PERMIT) {
+    if (acsResponse.decision != Response_Decision.PERMIT) {
       return { operation_status: acsResponse.operation_status };
     }
 
     let result: Job[] = [];
-    if (_.isEmpty(call) || _.isEmpty(call.request) || _.isEmpty(call.request.filter)
-      && (!call.request.filter || !call.request.filter.job_ids
-        || _.isEmpty(call.request.filter.job_ids))
-      && (!call.request.filter || !call.request.filter.type ||
-        _.isEmpty(call.request.filter.type))) {
+    if (_.isEmpty(request) || _.isEmpty(request.filter)
+      && (!request.filter || !request.filter.job_ids
+        || _.isEmpty(request.filter.job_ids))
+      && (!request.filter || !request.filter.type ||
+        _.isEmpty(request.filter.type))) {
       result = await this._getJobList();
       let custom_arguments;
       if (acsResponse?.custom_query_args && acsResponse.custom_query_args.length > 0) {
@@ -812,11 +819,11 @@ export class SchedulingService implements JobService {
       result = this.filterByOwnerShip({ custom_arguments }, result);
     } else {
       const that = this;
-      let jobIDs = call.request.filter.job_ids || [];
+      let jobIDs = request.filter.job_ids || [];
       if (!_.isArray(jobIDs)) {
         jobIDs = [jobIDs];
       }
-      const typeFilterName = call.request.filter.type;
+      const typeFilterName = request.filter.type;
 
       // Search in all the queues and retrieve jobs after JobID
       // and add them to the jobIDsCopy list.
@@ -921,14 +928,14 @@ export class SchedulingService implements JobService {
 
     result = result.filter(valid => !!valid);
 
-    if (!_.isEmpty(call.request) && !_.isEmpty(call.request.sort)
-      && _.includes(['ASCENDING', 'DESCENDING'], call.request.sort)) {
+    if (!_.isEmpty(request) && !_.isEmpty(request.sort)
+      && _.includes(['ASCENDING', 'DESCENDING'], request.sort)) {
       let sort;
-      switch (call.request.sort) {
-        case SortOrder.DESCENDING:
+      switch (request.sort) {
+        case JobReadRequest_SortOrder.DESCENDING:
           sort = 'desc';
           break;
-        case SortOrder.ASCENDING:
+        case JobReadRequest_SortOrder.ASCENDING:
           sort = 'asc';
           break;
         default:
@@ -951,12 +958,14 @@ export class SchedulingService implements JobService {
     }
 
     for (let job of result) {
+      let when = job?.opts?.delay ? new Date(job?.opts?.delay).toString() : '';
       jobListResponse.items.push({
         payload: {
-          id: job.id,
+          id: job.id as string,
           type: job.name,
           data: this._filterJobData(job.data, true),
-          options: this._filterJobOptions(job.opts)
+          options: this._filterJobOptions(job.opts) as any,
+          when
         },
         status: {
           id: job.id.toString(),
@@ -990,9 +999,9 @@ export class SchedulingService implements JobService {
   /**
    * Delete Job from queue.
    */
-  async delete(call: DeleteCall, ctx: any): Promise<DeleteResponse> {
+  async delete(request: DeleteRequest, ctx: any): Promise<DeepPartial<DeleteResponse>> {
     let deleteResponse: DeleteResponse = { status: [], operation_status: { code: 0, message: '' } };
-    if (_.isEmpty(call)) {
+    if (_.isEmpty(request)) {
       return {
         operation_status: {
           code: 400,
@@ -1000,8 +1009,8 @@ export class SchedulingService implements JobService {
         }
       };
     }
-    const subject = await call.request.subject;
-    const jobIDs = call.request.ids;
+    const subject = request.subject;
+    const jobIDs = request.ids;
     let resources = [];
     let action;
     if (jobIDs) {
@@ -1015,9 +1024,9 @@ export class SchedulingService implements JobService {
       }
       await this.createMetadata(resources, action, subject);
     }
-    if (call.request.collection) {
+    if (request.collection) {
       action = AuthZAction.DROP;
-      resources = [{ collection: call.request.collection }];
+      resources = [{ collection: request.collection }];
     }
     let acsResponse: DecisionResponse;
     try {
@@ -1035,12 +1044,12 @@ export class SchedulingService implements JobService {
         }
       };
     }
-    if (acsResponse.decision != Decision.PERMIT) {
+    if (acsResponse.decision != Response_Decision.PERMIT) {
       return { operation_status: acsResponse.operation_status };
     }
     const dispatch = [];
     this.logger.info('Received delete request');
-    if ('collection' in call.request && call.request.collection) {
+    if ('collection' in request && request.collection) {
       this.logger.verbose('Deleting all jobs');
 
       await this._getJobList().then(async (jobs) => {
@@ -1063,11 +1072,11 @@ export class SchedulingService implements JobService {
       } else {
         this.logger.debug('Could not delete repeatable job keys');
       }
-    } else if ('ids' in call.request) {
-      this.logger.verbose('Deleting jobs by their IDs', call.request.ids);
+    } else if ('ids' in request) {
+      this.logger.verbose('Deleting jobs by their IDs', request.ids);
 
       for (let queue of this.queuesList) {
-        for (let jobDataKey of call.request.ids) {
+        for (let jobDataKey of request.ids) {
           let callback: Promise<void>;
           const jobIdData = await this.getRedisValue(jobDataKey as string);
           if (jobIdData && jobIdData.repeatKey) {
@@ -1193,17 +1202,17 @@ export class SchedulingService implements JobService {
   /**
    * Reschedules a job - deletes it and recreates it with a new generated ID.
    */
-  async update(call: UpdateCall, ctx: any): Promise<JobListResponse> {
-    let subject = call.request.subject;
+  async update(request: JobList, ctx: any): Promise<DeepPartial<JobListResponse>> {
+    let subject = request.subject;
     // update meta data for owner information
-    await this.createMetadata(call.request.items, AuthZAction.MODIFY, subject);
+    await this.createMetadata(request.items, AuthZAction.MODIFY, subject);
     let acsResponse: DecisionResponse;
     try {
       if (!ctx) { ctx = {}; };
       ctx.subject = subject;
-      ctx.resources = call.request.items;
+      ctx.resources = request.items;
       acsResponse = await checkAccessRequest(ctx,
-        [{ resource: 'job', id: call.request.items.map(item => item.id) }],
+        [{ resource: 'job', id: request.items.map(item => item.id) }],
         AuthZAction.MODIFY, Operation.isAllowed);
     } catch (err) {
       this.logger.error('Error occurred requesting access-control-srv:', err);
@@ -1214,10 +1223,10 @@ export class SchedulingService implements JobService {
         }
       };
     }
-    if (acsResponse.decision != Decision.PERMIT) {
+    if (acsResponse.decision != Response_Decision.PERMIT) {
       return { operation_status: acsResponse.operation_status };
     }
-    if (_.isNil(call) || _.isNil(call.request) || _.isNil(call.request.items)) {
+    if (_.isNil(request) || _.isNil(request.items)) {
       return {
         operation_status: {
           code: 400,
@@ -1226,28 +1235,26 @@ export class SchedulingService implements JobService {
       };
     }
 
-    const mappedJobs = call.request.items.reduce((obj, job) => {
+    const mappedJobs = request.items.reduce((obj, job) => {
       obj[job.id] = job;
       return obj;
     }, {});
 
-    const jobData = await this.read({
-      request: {
+    const jobData = await this.read(JobReadRequest.fromPartial(
+      {
         filter: {
           job_ids: Object.keys(mappedJobs)
         },
         subject
       }
-    }, ctx);
+    ), ctx);
 
-    await this.delete({
-      request: {
-        ids: Object.keys(mappedJobs),
-        subject
-      }
-    }, {});
+    await this.delete(DeleteRequest.fromPartial({
+      ids: Object.keys(mappedJobs),
+      subject
+    }), {});
 
-    const result: NewJob[] = [];
+    const result = [];
 
     jobData.items.forEach(async (job) => {
       const mappedJob = mappedJobs[job?.payload?.id];
@@ -1257,9 +1264,9 @@ export class SchedulingService implements JobService {
       }
       let endJob = {
         id: mappedJob.id,
-        type: mappedJob.type || job.payload.name,
+        type: mappedJob.type,
         options: {
-          ...job.payload.opts,
+          ...job.payload.options,
           ...(mappedJob.options ? mappedJob.options : {})
         },
         data: mappedJob.data || job.payload.data,
@@ -1273,28 +1280,26 @@ export class SchedulingService implements JobService {
       result.push(endJob);
     });
 
-    return this.create({
-      request: {
-        items: result,
-        subject
-      }
-    }, ctx);
+    return this.create(JobList.fromPartial({
+      items: result,
+      subject
+    }), ctx);
   }
 
   /**
    * Upserts a job - creates a new job if it does not exist or update the
    * existing one if it already exists.
    */
-  async upsert(call: any, ctx: any): Promise<JobListResponse> {
-    let subject = call.request.subject;
-    await this.createMetadata(call.request.items, AuthZAction.MODIFY, subject);
+  async upsert(request: JobList, ctx: any): Promise<DeepPartial<JobListResponse>> {
+    let subject = request.subject;
+    await this.createMetadata(request.items, AuthZAction.MODIFY, subject);
     let acsResponse: DecisionResponse;
     try {
       if (!ctx) { ctx = {}; };
       ctx.subject = subject;
-      ctx.resources = call.request.items;
+      ctx.resources = request.items;
       acsResponse = await checkAccessRequest(ctx,
-        [{ resource: 'job', id: call.request.items.map(item => item.id) }],
+        [{ resource: 'job', id: request.items.map(item => item.id) }],
         AuthZAction.MODIFY, Operation.isAllowed);
     } catch (err) {
       this.logger.error('Error occurred requesting access-control-srv:', err);
@@ -1306,16 +1311,16 @@ export class SchedulingService implements JobService {
       };
     }
 
-    if (acsResponse.decision != Decision.PERMIT) {
+    if (acsResponse.decision != Response_Decision.PERMIT) {
       return { operation_status: acsResponse.operation_status };
     }
-    if (_.isNil(call) || _.isNil(call.request) || _.isNil(call.request.items)) {
+    if (_.isNil(request) || _.isNil(request.items)) {
       return { operation_status: { code: 400, message: 'Missing items in upsert request' } };
     }
 
     let result = [];
 
-    for (let eachJob of call.request.items) {
+    for (let eachJob of request.items) {
       let jobExists = false;
       let origJobId = _.cloneDeep(eachJob.id);
       for (let queue of this.queuesList) {
@@ -1345,7 +1350,7 @@ export class SchedulingService implements JobService {
           }
           result = [
             ...result,
-            ...(await this.update({ request: { items: [eachJob], subject } }, ctx)).items
+            ...(await this.update(JobList.fromPartial({ items: [eachJob], subject }), ctx)).items
           ];
           jobExists = true;
           break;
@@ -1355,7 +1360,7 @@ export class SchedulingService implements JobService {
         // new job create it
         result = [
           ...result,
-          ...(await this.create({ request: { items: [eachJob], subject } }, ctx)).items
+          ...(await this.create(JobList.fromPartial({ items: [eachJob], subject }), ctx)).items
         ];
       }
     }
@@ -1415,9 +1420,9 @@ export class SchedulingService implements JobService {
     return picked as any;
   }
 
-  _filterJobData(data: Data, encode: boolean): Pick<Data, 'meta' | 'payload' | 'timezone' | 'subject_id'> {
+  _filterJobData(data: Data, encode: boolean): Pick<Data, 'meta' | 'payload' | 'subject_id'> {
     const picked = _.pick(data, [
-      'meta', 'payload', 'timezone', 'subject_id'
+      'meta', 'payload', 'subject_id'
     ]);
 
     if (encode) {
@@ -1429,9 +1434,9 @@ export class SchedulingService implements JobService {
     return picked as any;
   }
 
-  _filterJobOptions(data: JobOptions): Pick<JobOptions, 'priority' | 'attempts' | 'backoff' | 'repeat'> {
+  _filterJobOptions(data: JobOptions): Pick<JobOptions, 'priority' | 'attempts' | 'backoff' | 'repeat' | 'timeout' | 'jobId' | 'removeOnComplete'> {
     let picked = _.pick(data, [
-      'priority', 'attempts', 'backoff', 'repeat'
+      'priority', 'attempts', 'backoff', 'repeat', 'timeout', 'jobId', 'removeOnComplete'
     ]);
 
     if (typeof picked.priority === 'number') {
@@ -1511,8 +1516,8 @@ export class SchedulingService implements JobService {
    * @param action resource action
    * @param subject subject name
    */
-  async createMetadata(resources: any, action: string, subject?: Subject): Promise<any> {
-    let orgOwnerAttributes = [];
+  async createMetadata(resources: any, action: string, subject): Promise<any> {
+    let orgOwnerAttributes: Attribute[] = [];
     if (resources && !_.isArray(resources)) {
       resources = [resources];
     }
@@ -1522,11 +1527,13 @@ export class SchedulingService implements JobService {
       orgOwnerAttributes.push(
         {
           id: urns.ownerIndicatoryEntity,
-          value: urns.organization
+          value: urns.organization,
+          attribute: []
         },
         {
           id: urns.ownerInstance,
-          value: subject.scope
+          value: subject.scope,
+          attribute: []
         });
     }
 
@@ -1540,14 +1547,12 @@ export class SchedulingService implements JobService {
         if (action === AuthZAction.MODIFY || action === AuthZAction.DELETE) {
           let result;
           try {
-            result = await this.read({
-              request: {
-                filter: {
-                  job_ids: resource.id
-                },
-                subject
-              }
-            }, {});
+            result = await this.read(JobReadRequest.fromPartial({
+              filter: {
+                job_ids: resource.id
+              },
+              subject
+            }), {});
           } catch (err) {
             if (err.message.startsWith('Error! Jobs not found in any of the queues') && action != AuthZAction.DELETE) {
               this.logger.debug('New job should be created', { jobId: resource.id });
@@ -1570,11 +1575,13 @@ export class SchedulingService implements JobService {
             ownerAttributes.push(
               {
                 id: urns.ownerIndicatoryEntity,
-                value: urns.user
+                value: urns.user,
+                attribute: []
               },
               {
                 id: urns.ownerInstance,
-                value: subject.id
+                value: subject.id,
+                attribute: []
               });
             resource.data.meta.owner = ownerAttributes;
             resource.meta = { owner: ownerAttributes };
@@ -1586,11 +1593,13 @@ export class SchedulingService implements JobService {
             ownerAttributes.push(
               {
                 id: urns.ownerIndicatoryEntity,
-                value: urns.user
+                value: urns.user,
+                attribute: []
               },
               {
                 id: urns.ownerInstance,
-                value: subject.id
+                value: subject.id,
+                attribute: []
               });
           }
           resource.data.meta.owner = ownerAttributes;

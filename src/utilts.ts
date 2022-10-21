@@ -1,66 +1,69 @@
 import {
-  AuthZAction, Decision, PolicySetRQ, accessRequest, Subject, DecisionResponse, Operation, PolicySetRQResponse
+  AuthZAction, accessRequest, DecisionResponse, Operation, PolicySetRQResponse
 } from '@restorecommerce/acs-client';
 import * as _ from 'lodash';
 import { createServiceConfig } from '@restorecommerce/service-config';
 import { createLogger } from '@restorecommerce/logger';
-import { GrpcClient } from '@restorecommerce/grpc-client';
+import { createChannel, createClient } from '@restorecommerce/grpc-client';
+import { ServiceClient as UserServiceClient, ServiceDefinition as UserServiceDefinition } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/user';
+import { Response_Decision } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/access_control';
+import { Subject } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/auth';
 
-export interface HierarchicalScope {
-  id: string;
-  role?: string;
-  children?: HierarchicalScope[];
-}
+// export interface HierarchicalScope {
+//   id: string;
+//   role?: string;
+//   children?: HierarchicalScope[];
+// }
 
-export interface Response {
-  payload: any;
-  count: number;
-  status?: {
-    code: number;
-    message: string;
-  };
-}
+// export interface Response {
+//   payload: any;
+//   count: number;
+//   status?: {
+//     code: number;
+//     message: string;
+//   };
+// }
 
-export enum FilterOperation {
-  eq = 0,
-  lt = 1,
-  lte = 2,
-  gt = 3,
-  gte = 4,
-  isEmpty = 5,
-  iLike = 6,
-  in = 7,
-  neq = 8
-}
+// export enum FilterOperation {
+//   eq = 0,
+//   lt = 1,
+//   lte = 2,
+//   gt = 3,
+//   gte = 4,
+//   isEmpty = 5,
+//   iLike = 6,
+//   in = 7,
+//   neq = 8
+// }
 
-export enum FilterValueType {
-  STRING = 0,
-  NUMBER = 1,
-  BOOLEAN = 2,
-  DATE = 3,
-  ARRAY = 4
-}
+// export enum FilterValueType {
+//   STRING = 0,
+//   NUMBER = 1,
+//   BOOLEAN = 2,
+//   DATE = 3,
+//   ARRAY = 4
+// }
 
-export enum OperatorType {
-  and = 0,
-  or = 1
-}
+// export enum OperatorType {
+//   and = 0,
+//   or = 1
+// }
 
-export interface Filter {
-  field: string;
-  operation: FilterOperation;
-  value: string;
-  type?: FilterValueType;
-  filters?: FilterOp[];
-}
+// export interface Filter {
+//   field: string;
+//   operation: FilterOperation;
+//   value: string;
+//   type?: FilterValueType;
+//   filters?: FilterOp[];
+// }
 
-export interface FilterOp {
-  filter?: Filter[];
-  operator?: OperatorType;
-}
+// export interface FilterOp {
+//   filter?: Filter[];
+//   operator?: OperatorType;
+// }
 
 // Create a ids client instance
-let idsClientInstance;
+let idsClientInstance: UserServiceClient;
 const getUserServiceClient = async () => {
   if (!idsClientInstance) {
     const cfg = createServiceConfig(process.cwd());
@@ -73,8 +76,10 @@ const getUserServiceClient = async () => {
     };
     const logger = createLogger(loggerCfg);
     if (grpcIDSConfig) {
-      const idsClient = new GrpcClient(grpcIDSConfig, logger);
-      idsClientInstance = idsClient.user;
+      idsClientInstance = createClient({
+        ...grpcIDSConfig,
+        logger
+      }, UserServiceDefinition, createChannel(grpcIDSConfig.address));
     }
   }
   return idsClientInstance;
@@ -138,7 +143,7 @@ export async function checkAccessRequest(ctx: GQLClientContext, resource: Resour
     result = await accessRequest(subject, resource, action, ctx, operation);
   } catch (err) {
     return {
-      decision: Decision.DENY,
+      decision: Response_Decision.DENY,
       operation_status: {
         code: err.code || 500,
         message: err.details || err.message,
