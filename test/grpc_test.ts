@@ -21,6 +21,8 @@ import {
 } from './utils';
 import { updateConfig } from '@restorecommerce/acs-client';
 import * as _ from 'lodash';
+import { DeleteRequest } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/resource_base';
+import { createClient as RedisCreateClient, RedisClientType } from 'redis';
 
 /**
  * NOTE: Running instances of Redis and Kafka are required to run the tests.
@@ -30,6 +32,8 @@ const JOB_EVENTS_TOPIC = 'io.restorecommerce.jobs';
 
 let logger: Logger;
 let subject;
+let redisClient: RedisClientType;
+let tokenRedisClient: RedisClientType;
 // mainOrg -> orgA -> orgB -> orgC
 const acsSubject = {
   id: 'admin_user_id',
@@ -47,6 +51,8 @@ const acsSubject = {
       }]
     }
   ],
+  token: 'admin_token',
+  tokens: [{ token: 'admin_token', expires_in: 0 }],
   hierarchical_scopes: [
     {
       id: 'mainOrg',
@@ -144,9 +150,64 @@ const startGrpcMockServer = async (methodWithOutput: MethodWithOutput[]) => {
   }
 };
 
+const IDS_PROTO_PATH = 'test/protos/io/restorecommerce/user.proto';
+const IDS_PKG_NAME = 'io.restorecommerce.user';
+const IDS_SERVICE_NAME = 'Service';
+
+// const pkgDefIDS: grpc.GrpcObject = grpc.loadPackageDefinition(
+//   proto_loader.loadSync(IDS_PROTO_PATH, {
+//     includeDirs: ['test/protos'],
+//     keepCase: true,
+//     longs: String,
+//     enums: String,
+//     defaults: true,
+//     oneofs: true
+//   })
+// );
+
+// const protoIDS: any = ProtoUtils.getProtoFromPkgDefinition(
+//   IDS_PKG_NAME,
+//   pkgDefIDS
+// );
+
+const mockServerIDS = new GrpcMockServer('localhost:50051');
+
+// Mock server for ids - findByToken
+const startIDSGrpcMockServer = async (methodWithOutput: MethodWithOutput[]) => {
+  // create mock implementation based on the method name and output
+  const implementations = {
+    findByToken: (call: any, callback: any) => {
+      if (call.request.token === 'admin_token') {
+        // admin user
+        callback(null, { payload: acsSubject, status: { code: 200, message: 'success' } });
+      }
+    }
+  };
+  try {
+    mockServerIDS.addService(IDS_PROTO_PATH, IDS_PKG_NAME, IDS_SERVICE_NAME, implementations, {
+      includeDirs: ['node_modules/@restorecommerce/protos/'],
+      keepCase: true,
+      longs: String,
+      enums: String,
+      defaults: true,
+      oneofs: true
+    });
+    await mockServerIDS.start();
+    logger.info('Mock IDS Server started on port 50051');
+  } catch (err) {
+    logger.error('Error starting mock IDS server', err);
+  }
+};
+
+
 const stopGrpcMockServer = async () => {
   await mockServer.stop();
   logger.info('Mock ACS Server closed successfully');
+};
+
+const stopIDSGrpcMockServer = async () => {
+  await mockServerIDS.stop();
+  logger.info('Mock IDS Server closed successfully');
 };
 
 describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
@@ -180,6 +241,34 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
     jobPolicySetRQ.policy_sets[0].policies[0].rules = [permitJobRule];
     await startGrpcMockServer([{ method: 'WhatIsAllowed', output: jobPolicySetRQ },
     { method: 'IsAllowed', output: { decision: 'PERMIT' } }]);
+
+    // start mock ids-srv needed for findByToken response and return subject
+    await startIDSGrpcMockServer([{ method: 'findByToken', output: acsSubject }]);
+
+    // set redis client
+    // since its not possible to mock findByToken as it is same service, storing the token value with subject
+    // HR scopes resolved to db-subject redis store and token to findByToken redis store
+    const redisConfig = cfg.get('redis');
+    redisConfig.database = cfg.get('redis:db-indexes:db-subject') || 0;
+    redisClient = RedisCreateClient(redisConfig);
+    redisClient.on('error', (err) => logger.error('Redis Client Error', err));
+    await redisClient.connect();
+
+    // for findByToken
+    redisConfig.database = cfg.get('redis:db-indexes:db-findByToken') || 0;
+    tokenRedisClient = RedisCreateClient(redisConfig);
+    tokenRedisClient.on('error', (err) => logger.error('Redis client error in token cache store', err));
+    await tokenRedisClient.connect();
+
+    // store hrScopesKey and subjectKey to Redis index `db-subject`
+    const hrScopeskey = `cache:${subject.id}:${subject.token}:hrScopes`;
+    const subjectKey = `cache:${subject.id}:subject`;
+    await redisClient.set(subjectKey, JSON.stringify(acsSubject));
+    await redisClient.set(hrScopeskey, JSON.stringify(acsSubject.hierarchical_scopes));
+
+    // store user with tokens and role associations to Redis index `db-findByToken`
+    await tokenRedisClient.set('admin-token', JSON.stringify(acsSubject));
+
     const schedulingClientCfg = cfg.get('client:schedulingClient');
     if (schedulingClientCfg) {
       grpcSchedulingSrv = createClient({
@@ -187,7 +276,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
         logger
       }, SchedulingServiceDefinition, createChannel(schedulingClientCfg.address));
     }
-    const toDelete = (await grpcSchedulingSrv.read({ subject }, {})).total_count;
+    const toDelete = (await grpcSchedulingSrv.read(JobReadRequest.fromPartial({ subject }), {})).total_count;
     const offset = await jobEvents.$offset(-1);
 
     await grpcSchedulingSrv.delete({ collection: true });
@@ -196,7 +285,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
       await jobEvents.$wait(offset + toDelete - 1);
     }
 
-    payloadShouldBeEmpty(await grpcSchedulingSrv.read({ subject }, {}));
+    payloadShouldBeEmpty(await grpcSchedulingSrv.read(JobReadRequest.fromPartial({ subject }), {}));
   });
   beforeEach(async () => {
     for (let event of ['jobsCreated', 'jobsDeleted']) {
@@ -210,6 +299,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
   });
   after(async () => {
     await stopGrpcMockServer();
+    await stopIDSGrpcMockServer();
     await jobEvents.removeAllListeners('queuedJob');
     await jobEvents.removeAllListeners('jobsCreated');
     await jobEvents.removeAllListeners('jobsDeleted');
@@ -268,7 +358,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
 
       // Simulate timeout
       await new Promise((resolve) => setTimeout(resolve, 100));
-      const result = await grpcSchedulingSrv.read({ subject });
+      const result = await grpcSchedulingSrv.read(JobReadRequest.fromPartial({ subject }));
       payloadShouldBeEmpty(result);
       createResponse.operation_status.code.should.equal(200);
       createResponse.operation_status.message.should.equal('success');
@@ -321,7 +411,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
 
       await jobEvents.$wait(offset + 2); // jobsCreated, queuedJob (jobDone is sent from test)
 
-      const result = await grpcSchedulingSrv.read({ subject }, {});
+      const result = await grpcSchedulingSrv.read(JobReadRequest.fromPartial({ subject }), {});
       payloadShouldBeEmpty(result);
     });
   });
@@ -338,7 +428,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
         // Sleep for jobDone to get processed
         await new Promise(resolve => setTimeout(resolve, 100));
 
-        let result = await grpcSchedulingSrv.read({ subject }, {});
+        let result = await grpcSchedulingSrv.read(JobReadRequest.fromPartial({ subject }), {});
         should.exist(result.items);
         result.items.length.should.equal(1);
         result.items[0].payload.type.should.equal('test-job');
@@ -436,15 +526,15 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
       createdJob.operation_status.message.should.equal('success');
     });
     it('should delete a recurring job based on provided id and throw an error on read operation', async () => {
-      const deletedJob = await grpcSchedulingSrv.delete({
+      const deletedJob = await grpcSchedulingSrv.delete(DeleteRequest.fromPartial({
         ids: ['test-job-id'], subject
-      }, {});
+      }), {});
       deletedJob.status[0].id.should.equal('test-job-id');
       deletedJob.status[0].code.should.equal(200);
       deletedJob.status[0].message.should.equal('success');
       deletedJob.operation_status.code.should.equal(200);
       deletedJob.operation_status.message.should.equal('success');
-      const result = await grpcSchedulingSrv.read({ filter: { job_ids: ['test-job-id'] }, subject }, {});
+      const result = await grpcSchedulingSrv.read(JobReadRequest.fromPartial({ filter: { job_ids: ['test-job-id'] }, subject }), {});
       result.items[0].status.id.should.equal('test-job-id');
       result.items[0].status.code.should.equal(404);
       result.items[0].status.message.should.equal('Job ID test-job-id not found in any of the queues');
@@ -522,10 +612,10 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
       result.operation_status.code.should.equal(200);
       result.operation_status.message.should.equal('success');
 
-      const result_id_type = await grpcSchedulingSrv.read({
+      const result_id_type = await grpcSchedulingSrv.read(JobReadRequest.fromPartial({
         filter: { type: 'test-job', job_ids: [result.items[0].payload.id] },
         subject
-      }, {});
+      }), {});
       should.exist(result_id_type);
       should.exist(result_id_type.items);
       result_id_type.items.should.be.length(1);
@@ -537,10 +627,10 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
       result_id_type.operation_status.code.should.equal(200);
       result_id_type.operation_status.message.should.equal('success');
 
-      const result_id = await grpcSchedulingSrv.read({
+      const result_id = await grpcSchedulingSrv.read(JobReadRequest.fromPartial({
         filter: { job_ids: [result.items[0].payload.id] },
         subject
-      }, {});
+      }), {});
       should.exist(result_id);
       should.exist(result_id.items);
       result_id.items.should.be.length(1);
@@ -551,7 +641,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
       });
     });
     it(`should update / reschedule a job ${testSuffix}`, async () => {
-      let result = await grpcSchedulingSrv.read({ subject }, {});
+      let result = await grpcSchedulingSrv.read(JobReadRequest.fromPartial({ subject }), {});
       const job = result.items[0].payload;
 
       const scheduledTime = new Date();
@@ -577,7 +667,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
       await jobEvents.$wait(offset + 1);
     });
     it(`should upsert a job ${testSuffix}`, async () => {
-      let result = await grpcSchedulingSrv.read({ subject }, {});
+      let result = await grpcSchedulingSrv.read(JobReadRequest.fromPartial({ subject }), {});
       const job = result.items[0].payload;
 
       const scheduledTime = new Date();
@@ -635,7 +725,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
         result.operation_status.message.should.equal('Access not allowed for request with subject:admin_user_id, resource:job, action:CREATE, target_scope:orgD; the response was DENY');
       });
       it(`should throw an error retreiving job properties with empty filter with invalid scope ${testSuffix}`, async () => {
-        const result = await grpcSchedulingSrv.read({ sort: JobReadRequest_SortOrder.DESCENDING, subject }, {});
+        const result = await grpcSchedulingSrv.read(JobReadRequest.fromPartial({ sort: JobReadRequest_SortOrder.DESCENDING, subject }), {});
         result.operation_status.code.should.equal(403);
         result.operation_status.message.should.equal('Access not allowed for request with subject:admin_user_id, resource:job, action:READ, target_scope:orgD; the response was DENY');
       });
@@ -650,9 +740,9 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
         result.operation_status.message.should.equal('Access not allowed for request with subject:admin_user_id, resource:job, action:MODIFY, target_scope:orgD; the response was DENY');
       });
       it(`should throw an error when upserting a job with invalid scope ${testSuffix}`, async () => {
-        const result = await grpcSchedulingSrv.upsert({
+        const result = await grpcSchedulingSrv.upsert(JobList.fromPartial({
           items: [job], subject
-        });
+        }));
         result.operation_status.code.should.equal(403);
         result.operation_status.message.should.equal('Access not allowed for request with subject:admin_user_id, resource:job, action:MODIFY, target_scope:orgD; the response was DENY');
       });
@@ -672,7 +762,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
       await grpcSchedulingSrv.delete({
         collection: true, subject
       }, {});
-      const result = await grpcSchedulingSrv.read({ subject }, {});
+      const result = await grpcSchedulingSrv.read(JobReadRequest.fromPartial({ subject }), {});
       payloadShouldBeEmpty(result);
       result.operation_status.code.should.equal(200);
       result.operation_status.message.should.equal('success');

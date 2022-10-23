@@ -649,12 +649,12 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
       }
 
       // convert enum priority back to number as its expected by bull
-      if(job?.options?.priority) {
+      if (job?.options?.priority) {
         job.options.priority = Priority[job.options.priority];
       }
 
       // if its a repeat job and tz is empty delete the key (else cron parser throws an error)
-      if(job?.options?.repeat?.tz === '' ) {
+      if (job?.options?.repeat?.tz === '') {
         delete job.options.repeat.tz;
       }
 
@@ -692,6 +692,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
           id: job.id as string,
           type: job.name,
           data: this._filterJobData(job.data, true),
+          options: this._filterJobOptions(job.opts) as any,
           when
         },
         status: {
@@ -1556,7 +1557,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
           try {
             result = await this.read(JobReadRequest.fromPartial({
               filter: {
-                job_ids: resource.id
+                job_ids: [resource.id]
               },
               subject
             }), {});
@@ -1565,7 +1566,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
               this.logger.debug('New job should be created', { jobId: resource.id });
               result = { items: [] };
             } else {
-              this.logger.error(`Error reading job with resource ID ${resource.id}`, err);
+              this.logger.error(`Error reading job with resource ID ${resource.id}`, { code: err.code, message: err.message, stack: err.stack });
             }
           }
           // update owner info

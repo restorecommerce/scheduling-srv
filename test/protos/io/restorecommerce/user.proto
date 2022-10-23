@@ -1,0 +1,75 @@
+syntax = "proto3";
+
+package io.restorecommerce.user;
+
+/**
+ * The microservice for the user resource.
+ */
+service Service {
+  rpc FindByToken (FindByTokenRequest) returns (UserResponse);
+}
+
+message FindByTokenRequest {
+  string token = 1;
+}
+
+message Attribute {
+  string id = 1;
+  string value = 2;
+}
+
+message RoleAssociation {
+  string role = 1;  // role ID
+  repeated Attribute attributes = 2;  // useful attributes for RBAC/ABAC like organizational scope
+  string id = 3; // identifier for role_association
+}
+
+message Tokens {
+  string name = 1; // token name
+  double expires_in = 2; // expiration date for token
+  string token = 3; // token
+  repeated string scopes = 4; // identifier for role_association
+  string type = 5; // type of token eg: access_token, refresh_token
+  bool interactive = 6;
+  double last_login = 7;
+}
+
+message Status {
+  string id = 1;
+  uint32 code = 2;
+  string message = 3;
+}
+
+message UserResponse {
+  User payload = 1;
+  Status status = 2;
+}
+
+
+/**
+ * A User resource.
+ */
+message User {
+  string id = 1; /// User ID, unique, key
+  string name = 3; // The name of the user, can be used for login
+  string first_name = 4;
+  string last_name = 5;
+  string email = 6; /// Email address, can be used for login
+  string new_email = 7; /// New email address; set by `requestEmailChange` and overrides actual email upon `confirmEmailChange`
+  bool active = 8; /// If the user was activated via the activation process
+  string activation_code = 9; /// Activation code used in the activation process
+  string password = 10; /// Raw password, not stored
+  string password_hash = 11; /// Encrypted password, stored
+  repeated RoleAssociation role_associations = 12; // A user can have multiple roles and different attributes coupled with each role
+  string timezone_id = 13;	// timezone_id specifications
+  string locale_id = 14;	// locale specifications
+  string default_scope = 15; // default hierarchical scope
+  bool unauthenticated = 16; // true in case in case of `register`; set to false after activation
+  bool guest = 17; /// Is the user a guest. A guest is a automatically generated user which can later be turned in a non-guest user.
+  bool invite = 20; // For user invitation
+  string invited_by_user_name = 21; // user who is inviting
+  string invited_by_user_first_name = 22; // First name of user inviting
+  string invited_by_user_last_name = 23; // Last name of user inviting
+  repeated Tokens tokens = 24;
+  double last_access = 25;
+}
