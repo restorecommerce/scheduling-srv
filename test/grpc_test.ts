@@ -154,22 +154,6 @@ const IDS_PROTO_PATH = 'test/protos/io/restorecommerce/user.proto';
 const IDS_PKG_NAME = 'io.restorecommerce.user';
 const IDS_SERVICE_NAME = 'Service';
 
-// const pkgDefIDS: grpc.GrpcObject = grpc.loadPackageDefinition(
-//   proto_loader.loadSync(IDS_PROTO_PATH, {
-//     includeDirs: ['test/protos'],
-//     keepCase: true,
-//     longs: String,
-//     enums: String,
-//     defaults: true,
-//     oneofs: true
-//   })
-// );
-
-// const protoIDS: any = ProtoUtils.getProtoFromPkgDefinition(
-//   IDS_PKG_NAME,
-//   pkgDefIDS
-// );
-
 const mockServerIDS = new GrpcMockServer('localhost:50051');
 
 // Mock server for ids - findByToken

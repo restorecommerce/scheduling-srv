@@ -18,7 +18,7 @@ import {
   permitJobRule,
   validateJobDonePayload
 } from './utils';
-import { Priority } from "../lib/types";
+import { createClient as RedisCreateClient, RedisClientType } from 'redis';
 import { Logger } from 'winston';
 import { updateConfig } from '@restorecommerce/acs-client';
 import { JobOptions_Priority, Backoff_Type, JobReadRequest } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/job';
@@ -33,10 +33,14 @@ const JOB_EVENTS_TOPIC = 'io.restorecommerce.jobs';
 let logger: Logger;
 let cfg;
 let subject;
+let redisClient: RedisClientType;
+let tokenRedisClient: RedisClientType;
 // mainOrg -> orgA -> orgB -> orgC
 const acsSubject = {
   id: 'admin_user_id',
   scope: 'orgC',
+  token: 'admin_token',
+  tokens: [{ token: 'admin_token', expires_in: 0 }],
   role_associations: [
     {
       role: 'admin-r-id',
@@ -133,9 +137,47 @@ const startGrpcMockServer = async (methodWithOutput: MethodWithOutput[]) => {
   }
 };
 
+const IDS_PROTO_PATH = 'test/protos/io/restorecommerce/user.proto';
+const IDS_PKG_NAME = 'io.restorecommerce.user';
+const IDS_SERVICE_NAME = 'Service';
+
+const mockServerIDS = new GrpcMockServer('localhost:50051');
+
+// Mock server for ids - findByToken
+const startIDSGrpcMockServer = async (methodWithOutput: MethodWithOutput[]) => {
+  // create mock implementation based on the method name and output
+  const implementations = {
+    findByToken: (call: any, callback: any) => {
+      if (call.request.token === 'admin_token') {
+        // admin user
+        callback(null, { payload: acsSubject, status: { code: 200, message: 'success' } });
+      }
+    }
+  };
+  try {
+    mockServerIDS.addService(IDS_PROTO_PATH, IDS_PKG_NAME, IDS_SERVICE_NAME, implementations, {
+      includeDirs: ['node_modules/@restorecommerce/protos/'],
+      keepCase: true,
+      longs: String,
+      enums: String,
+      defaults: true,
+      oneofs: true
+    });
+    await mockServerIDS.start();
+    logger.info('Mock IDS Server started on port 50051');
+  } catch (err) {
+    logger.error('Error starting mock IDS server', err);
+  }
+};
+
 const stopGrpcMockServer = async () => {
   await mockServer.stop();
   logger.info('Mock ACS Server closed successfully');
+};
+
+const stopIDSGrpcMockServer = async () => {
+  await mockServerIDS.stop();
+  logger.info('Mock IDS Server closed successfully');
 };
 
 describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
@@ -161,6 +203,33 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
     await startGrpcMockServer([{ method: 'WhatIsAllowed', output: jobPolicySetRQ },
     { method: 'IsAllowed', output: { decision: 'PERMIT' } }]);
     jobTopic = await worker.events.topic(JOB_EVENTS_TOPIC);
+
+    // start mock ids-srv needed for findByToken response and return subject
+    await startIDSGrpcMockServer([{ method: 'findByToken', output: acsSubject }]);
+
+    // set redis client
+    // since its not possible to mock findByToken as it is same service, storing the token value with subject
+    // HR scopes resolved to db-subject redis store and token to findByToken redis store
+    const redisConfig = cfg.get('redis');
+    redisConfig.database = cfg.get('redis:db-indexes:db-subject') || 0;
+    redisClient = RedisCreateClient(redisConfig);
+    redisClient.on('error', (err) => logger.error('Redis Client Error', err));
+    await redisClient.connect();
+
+    // for findByToken
+    redisConfig.database = cfg.get('redis:db-indexes:db-findByToken') || 0;
+    tokenRedisClient = RedisCreateClient(redisConfig);
+    tokenRedisClient.on('error', (err) => logger.error('Redis client error in token cache store', err));
+    await tokenRedisClient.connect();
+
+    // store hrScopesKey and subjectKey to Redis index `db-subject`
+    const hrScopeskey = `cache:${acsSubject.id}:${acsSubject.token}:hrScopes`;
+    const subjectKey = `cache:${acsSubject.id}:subject`;
+    await redisClient.set(subjectKey, JSON.stringify(acsSubject));
+    await redisClient.set(hrScopeskey, JSON.stringify(acsSubject.hierarchical_scopes));
+
+    // store user with tokens and role associations to Redis index `db-findByToken`
+    await tokenRedisClient.set('admin-token', JSON.stringify(acsSubject));
 
     if (acsEnv && acsEnv.toLowerCase() === 'true') {
       subject = acsSubject;
@@ -196,6 +265,7 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
   });
   after(async () => {
     await stopGrpcMockServer();
+    await stopIDSGrpcMockServer();
     await jobTopic.removeAllListeners('queuedJob');
     await jobTopic.removeAllListeners('jobsCreated');
     await jobTopic.removeAllListeners('jobsDeleted');
