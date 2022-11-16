@@ -37,7 +37,7 @@
     "uuid": "^9.0.0"
   },
   "devDependencies": {
-    "@alenon/grpc-mock-server": "^3.0.13",
+    "@alenon/grpc-mock-server": "^3.0.14",
     "@grpc/proto-loader": "^0.7.3",
     "@restorecommerce/grpc-client": "^1.0.3",
     "@types/bull": "^4.10.0",
