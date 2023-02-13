@@ -1,10 +1,8 @@
-FROM node:18.2.0-stretch
+FROM node:18.14.0-stretch
+ENV NO_UPDATE_NOTIFIER=true
 
 ENV HOME=/home/node
 ENV APP_HOME=/home/node/scheduling-srv
-ENV NO_UPDATE_NOTIFIER=true
-
-RUN npm install -g npm
 
 ## SETTING UP THE APP ##
 RUN mkdir $APP_HOME
