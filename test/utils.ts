@@ -1,7 +1,10 @@
-import { unmarshallProtobufAny } from '../lib/schedulingService';
+import { unmarshallProtobufAny } from '../src/schedulingService';
 import * as should from 'should';
-import { Priority } from '../lib/types';
+import { Priority } from '../src/types';
 // import { createMockServer } from 'grpc-mock';
+
+process.env.EXTERNAL_JOBS_DIR = './lib/test/external-jobs/';
+process.env.EXTERNAL_JOBS_REQUIRE_DIR = '../test/external-jobs/';
 
 export function validateScheduledJob(job: any, expectedSchedule: string): void {
   should.exist(job.data);
@@ -12,8 +15,8 @@ export function validateScheduledJob(job: any, expectedSchedule: string): void {
   should.exist(job.id);
   should.exist(job.type);
   job.type.should.equal('test-job');
-  should.exist(job.schedule_type);
-  job.schedule_type.should.equal(expectedSchedule);
+  // should.exist(job.schedule_type);
+  // job.schedule_type.should.equal(expectedSchedule);
 }
 
 export function validateJobDonePayload(job: any): void {

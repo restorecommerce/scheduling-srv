@@ -1,14 +1,13 @@
-import { JobOptions } from 'bull';
-// import { Subject } from '@restorecommerce/acs-client';
+import { JobsOptions } from 'bullmq';
 
 import { Data } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/job';
 
 export enum Priority {
-  NORMAL = 0,
-  LOW = 10,
-  MEDIUM = -5,
-  HIGH = -10,
-  CRITICAL = -15,
+  NORMAL = 100,
+  LOW = 1000,
+  MEDIUM = 50,
+  HIGH = 25,
+  CRITICAL = 1,
 }
 
 // export enum Backoffs {
@@ -20,7 +19,7 @@ export interface FilterOpts {
   id: number | string;
   type?: string;
   data?: Data;
-  opts?: JobOptions;
+  opts?: JobsOptions;
   name?: string;
 }
 
@@ -28,7 +27,7 @@ export interface KafkaOpts {
   id: number | string;
   type?: string;
   data?: Data;
-  options?: JobOptions;
+  options?: JobsOptions;
   when?: string;
 }
 
@@ -60,8 +59,8 @@ export interface JobType {
   name?: string;
   data?: Data;
   when?: string;
-  options?: JobOptions;
-  opts?: JobOptions;
+  options?: JobsOptions;
+  opts?: JobsOptions;
 }
 
 // export interface ExtendedJobOptions extends JobOptions {
@@ -76,7 +75,7 @@ export interface JobType {
 
 export interface NewJob {
   type: string;
-  options: JobOptions;
+  options: JobsOptions;
   when?: string;
   data: Data;
   id?: string; // mapped to jobId of bull

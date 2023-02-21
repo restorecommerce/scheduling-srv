@@ -151,7 +151,7 @@
     ],
     "board":  {
       "port": 3000,
-      "path": "/admin/queue s"
+      "path": "/admin/queues"
     }
   },
   "queue": [
@@ -167,6 +167,21 @@
     },
     {
       "name": "test-job",
+      "concurrency": 50,
+      "default": false,
+      "runMissedScheduled": true,
+      "rateLimiting": {
+        "enabled": false,
+        "max": 1,
+        "duration": 3000
+      },
+      "advancedSettings": {
+        "lockDuration":  300000,
+        "lockRenewTime": 150000
+      }
+    },
+    {
+      "name": "external-job",
       "concurrency": 50,
       "default": false,
       "runMissedScheduled": true,

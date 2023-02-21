@@ -20,6 +20,7 @@ import { ServerReflectionService } from 'nice-grpc-server-reflection';
 import { BindConfig } from '@restorecommerce/chassis-srv/lib/microservice/transport/provider/grpc';
 import { HealthDefinition } from '@restorecommerce/rc-grpc-clients/dist/generated-server/grpc/health/v1/health';
 import { DeleteRequest, protoMetadata as resourceBaseMeta } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/resource_base';
+import { _filterKafkaJob, runWorker } from './utilts';
 
 const express = require('express');
 const JOBS_CREATE_EVENT = 'createJobs';
@@ -271,7 +272,7 @@ export class Worker {
 
       if (eventName === JOBS_CREATE_EVENT) {
         // protobuf.js appends unnecessary properties to object
-        msg.items = _.map(msg.items, schedulingService._filterKafkaJob.bind(schedulingService));
+        msg.items = _.map(msg.items, _filterKafkaJob.bind(schedulingService));
         // to disableAC and enable scheduling jobs emitted via kafka event 'createJobs'
         await schedulingService.create(JobList.fromPartial({ items: msg.items, subject: msg.subject }), {}).catch(
           (err) => {
@@ -279,7 +280,7 @@ export class Worker {
           });
       } else if (eventName === JOBS_MODIFY_EVENT) {
         msg.items = msg.items.map((job) => {
-          return schedulingService._filterKafkaJob(job);
+          return _filterKafkaJob(job);
         });
         await schedulingService.update(JobList.fromPartial({ items: msg.items, subject: msg.subject }), {}).catch(
           (err) => {
@@ -335,7 +336,8 @@ export class Worker {
     // Hook any external jobs
     let externalJobFiles;
     try {
-      externalJobFiles = fs.readdirSync('./lib/external-jobs');
+      console.log('checking', process.env.EXTERNAL_JOBS_DIR || './lib/external-jobs');
+      externalJobFiles = fs.readdirSync(process.env.EXTERNAL_JOBS_DIR || './lib/external-jobs');
     } catch (err) {
       if (err.message.includes('no such file or directory')) {
         this.logger.info('No files for external job processors found');
@@ -346,7 +348,12 @@ export class Worker {
     if (externalJobFiles && externalJobFiles.length > 0) {
       externalJobFiles.forEach((externalFile) => {
         if (externalFile.endsWith('.js')) {
-          (async () => require('./external-jobs/' + externalFile).default(cfg))().catch(err => {
+          let require_dir = './external-jobs';
+          if (process.env.EXTERNAL_JOBS_REQUIRE_DIR) {
+            require_dir = process.env.EXTERNAL_JOBS_REQUIRE_DIR;
+          }
+          console.log('executing', require_dir);
+          (async () => require(require_dir + externalFile).default(cfg, logger, events, runWorker))().catch(err => {
             this.logger.error(`Error scheduling external job ${externalFile}`, { err: err.message });
           });
         }

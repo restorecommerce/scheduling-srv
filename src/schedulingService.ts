@@ -8,24 +8,18 @@ import {
   Backoff_Type, JobOptions_Priority, JobReadRequest, JobReadRequest_SortOrder
 } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/job';
 import { createClient, RedisClientType } from 'redis';
-import Bull, { Job, JobId, JobOptions } from 'bull';
-// import {
-//   CreateCall, DeleteCall, Data, NewJob, JobService, ReadCall, UpdateCall,
-//   SortOrder, JobListResponse, Priority, Backoffs, JobType, JobFailedType, JobDoneType,
-//   FilterOpts, KafkaOpts, DeleteResponse
-// } from './types';
-import { NewJob, JobType, Priority, KafkaOpts, FilterOpts } from './types';
+import { NewJob, Priority } from './types';
 import { parseExpression } from 'cron-parser';
 import * as crypto from 'crypto';
-import { checkAccessRequest } from './utilts';
+import { _filterJobData, _filterJobOptions, _filterQueuedJob, checkAccessRequest } from './utilts';
 import * as uuid from 'uuid';
 import { Logger } from 'winston';
 import { Response_Decision } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/access_control';
-import { Subject } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/auth';
 import { Attribute } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/attribute';
 import { DeleteRequest, DeleteResponse } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/resource_base';
+import { Queue, QueueOptions, Job, JobsOptions, Worker } from 'bullmq';
+import { parseInt } from 'lodash';
 
-const Queue = require('bull');
 const JOB_DONE_EVENT = 'jobDone';
 const JOB_FAILED_EVENT = 'jobFailed';
 const DEFAULT_CLEANUP_COMPLETED_JOBS = 604800000; // 7 days in miliseconds
@@ -63,7 +57,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
   logger: Logger;
 
   queuesConfigList: any;
-  queuesList: Bull.Queue[];
+  queuesList: Queue[];
   defaultQueueName: string;
 
   redisClient: RedisClientType<any, any>;
@@ -77,7 +71,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
 
 
   constructor(jobEvents: kafkaClient.Topic,
-    redisConfig: any, logger: any, redisClient: RedisClientType<any, any>,
+    private redisConfig: any, logger: any, redisClient: RedisClientType<any, any>,
     bullOptions: any, cfg: any, authZ: ACSAuthZ) {
     this.jobEvents = jobEvents;
     this.resourceEventsEnabled = true;
@@ -123,39 +117,42 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
 
     // Create Queues
     for (let queueCfg of queuesCfg) {
-      let queueOptions: Bull.QueueOptions;
+      let queueOptions: QueueOptions;
       const prefix = queueCfg.name;
       const rateLimiting = queueCfg.rateLimiting;
       const advancedSettings = queueCfg.advancedSettings;
 
+      queueOptions = {
+        connection: {
+          ...redisConfig,
+        }
+      };
+
       // Create Queue Configuration - Add Rate Limiting if enabled
       if (!_.isEmpty(rateLimiting) && rateLimiting.enabled == true) {
         this.logger.info(`Queue: ${queueCfg.name} - Rate limiting is ENABLED.`);
-        queueOptions = {
-          redis: {
-            ...redisConfig,
-            keyPrefix: prefix
-          },
-          limiter: {
-            max: rateLimiting.max,
-            duration: rateLimiting.duration
-          }
-        };
-      } else {
-        queueOptions = {
-          redis: {
-            ...redisConfig,
-            keyPrefix: prefix
-          }
-        };
       }
 
       if (!_.isEmpty(advancedSettings)) {
-        queueOptions.settings = advancedSettings;
+        queueOptions.settings = {
+          ...advancedSettings,
+        };
       }
-      // Add Queue Objects
-      const redisURL = (queueOptions.redis as any).url;
-      let queue = new Queue(prefix, redisURL, queueOptions);
+
+      const redisURL = new URL((queueOptions.connection as any).url);
+
+      if ('keyPrefix' in queueOptions.connection) {
+        delete queueOptions.connection.keyPrefix;
+      }
+
+      let queue = new Queue(prefix, {
+        ...queueOptions,
+        connection: {
+          ...queueOptions.connection as any,
+          host: redisURL.hostname,
+          port: parseInt(redisURL.port)
+        }
+      });
       this.queuesList.push(queue);
 
       // Add Queue Configurations
@@ -191,9 +188,9 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
 
         if (eventName === JOB_FAILED_EVENT) {
           logger.error(`job@${job.type}#${job.id} failed with error #${job.error}`,
-            that._filterQueuedJob<JobFailed>(job));
+            _filterQueuedJob<JobFailed>(job));
         } else if (eventName === JOB_DONE_EVENT) {
-          logger.verbose(`job#${job.id} done`, that._filterQueuedJob<JobDone>(job));
+          logger.verbose(`job#${job.id} done`, _filterQueuedJob<JobDone>(job));
         }
 
         logger.info('Received Job event', { event: eventName });
@@ -201,26 +198,6 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
         const jobData: any = await queue.getJob(job.id).catch(error => {
           that.logger.error('Error retrieving job ${job.id} from queue', error);
         });
-
-        if (jobData) {
-          if (eventName === JOB_DONE_EVENT) {
-            try {
-              let moveJobResponse = await (jobData as Job).moveToCompleted('succeeded', true, true);
-              this.logger.debug('Job moved to completed state response', moveJobResponse);
-            } catch (err) {
-              this.logger.error('Error moving the job to completed state', { name: jobData.name });
-            }
-          } else if (eventName === JOB_FAILED_EVENT) {
-            try {
-              let moveJobResponse = await (jobData as Job).moveToFailed({ message: msg.error }, true);
-              this.logger.debug('Job moved to failed state response', moveJobResponse);
-            } catch (err) {
-              this.logger.error('Error moving the job to failed state', { name: jobData.name });
-            }
-          }
-        } else {
-          this.logger.error('Job does not exist to move to completed state', job);
-        }
 
         if (jobData && job.delete_scheduled) {
           await queue.removeRepeatable(jobData.name, jobData.opts.repeat);
@@ -230,88 +207,17 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
 
     // Initialize Event Listeners for each Queue
     for (let queue of this.queuesList) {
-      queue.on('schedule error', (error) => {
-        logger.error('kue-scheduler', error);
+      queue.on('error', (error) => {
+        logger.error('queue error', error);
       });
-      queue.on('schedule success', (job) => {
-        logger.verbose(`job@${job.type}#${job.id} scheduled`, that._filterQueuedJob<Job>(job));
+      queue.on('waiting', (job) => {
+        logger.verbose(`job#${job.id} scheduled`, job);
       });
-      queue.on('already scheduled', (job) => {
-        logger.warn(`job@${job.type}#${job.id} already scheduled`, that._filterQueuedJob<Job>(job));
+      queue.on('removed', (job) => {
+        logger.verbose(`job#${job.id} removed`, job);
       });
-      queue.on('scheduler unknown job expiry key', (message) => {
-        logger.warn('scheduler unknown job expiry key', message);
-      });
-      queue.on('waiting', (jobId) => {
-        logger.verbose(`job#${jobId} scheduled`, jobId);
-      });
-    }
-
-    // Initialize Job Processing Function for each Queue
-    // For the Default Queue the process name is defined as "*"
-    // For the other Queues the process name is defined as the name of the Queue
-    for (let queueCfg of this.queuesConfigList) {
-      let queue = _.find(this.queuesList, { name: queueCfg.name });
-      let queueName = queueCfg.name;
-      let concurrency = queueCfg.concurrency;
-
-      let processName: string;
-      if (queueName == this.defaultQueueName) {
-        processName = '*';
-      } else {
-        processName = queueCfg.name;
-      }
-
-      queue.process(processName, concurrency, async (job) => {
-
-        const filteredJob = that._filterQueuedJob<JobType>(job as any);
-        // For recurring job add time so if service goes down we can fire jobs
-        // for the missed schedules comparing the last run time
-        let lastRunTime;
-        if (filteredJob.opts && filteredJob.opts.repeat &&
-          ((filteredJob.opts.repeat as Bull.EveryRepeatOptions).every ||
-            (filteredJob.opts.repeat as Bull.CronRepeatOptions).cron)) {
-          if (filteredJob.data) {
-            // adding time to payload data for recurring jobs
-            const dateTime = new Date();
-            lastRunTime = JSON.stringify({ time: dateTime });
-            const bufObj = Buffer.from(JSON.stringify({ time: dateTime }));
-            if (filteredJob.data.payload) {
-              if (filteredJob.data.payload.value) {
-                let jobBufferObj = JSON.parse(filteredJob.data.payload.value.toString());
-                if (!jobBufferObj) {
-                  jobBufferObj = {};
-                }
-                const jobTimeObj = Object.assign(jobBufferObj, { time: dateTime });
-                // set last run time on DB index 7 with jobType identifier
-                await this.redisClient.set(filteredJob.name, lastRunTime);
-                filteredJob.data.payload.value = Buffer.from(JSON.stringify(jobTimeObj));
-              } else {
-                await this.redisClient.set(filteredJob.name, lastRunTime);
-                filteredJob.data.payload = { value: bufObj, type_url: '' };
-              }
-            } else {
-              await this.redisClient.set(filteredJob.name, lastRunTime);
-              filteredJob.data = {
-                subject_id: filteredJob.data.subject_id,
-                payload: { value: bufObj, type_url: '' }
-              };
-            }
-          }
-        }
-
-        await that.jobEvents.emit('queuedJob', {
-          id: filteredJob.id,
-          type: filteredJob.name,
-          data: filteredJob.data,
-          schedule_type: filteredJob.opts.repeat ? 'RECCUR' : 'ONCE',
-        }).catch((error) => {
-          that.logger.error(`Error while processing job ${filteredJob.id} in queue: ${error}`);
-        });
-
-        that.logger.verbose(`job@${filteredJob.name}#${filteredJob.id} queued`, filteredJob);
-      }).catch(err => {
-        this.logger.error('Error scheduling job', err);
+      queue.on('progress', (job) => {
+        logger.verbose(`job#${job.id} progress`, job);
       });
     }
 
@@ -328,12 +234,12 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
     // for jobs created via Kafka currently there are no acs checks
     this.disableAC();
     const createDispatch = [];
-    let result: any[] = [];
+    let result: Job[] = [];
     let thiz = this;
 
     // Get the jobs
     for (let queueCfg of this.queuesConfigList) {
-      // If enabled in the config, or the config is missing,
+      // If enabled in the config, or the config is missing,b
       // Reschedule the missed jobs, else skip.
       let queue = _.find(this.queuesList, { name: queueCfg.name });
       let runMissedScheduled = queueCfg.runMissedScheduled;
@@ -364,14 +270,14 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
         // convert redis string value to object and get actual time value
         lastRunTime = JSON.parse(lastRunTime);
         if (job.opts && job.opts.repeat &&
-          (job.opts.repeat as Bull.CronRepeatOptions).cron) {
+          (job.opts.repeat as any).cron) {
           let options = {
             currentDate: new Date(lastRunTime.time),
             endDate: new Date(),
             iterator: true
           };
           const intervalTime =
-            parseExpression((job.opts.repeat as Bull.CronRepeatOptions).cron, options);
+            parseExpression((job.opts.repeat as any).cron, options);
           while (intervalTime.hasNext()) {
             let nextInterval: any = intervalTime.next();
             const nextIntervalTime = nextInterval.value.toString();
@@ -451,7 +357,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
       throw new errors.InvalidArgument('No job data specified.');
     }
 
-    job.data = this._filterJobData(job.data, false);
+    job.data = _filterJobData(job.data, false);
 
     return job;
   }
@@ -569,7 +475,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
       return { items: [], total_count: 0, operation_status: acsResponse.operation_status };
     }
 
-    let jobs = [];
+    let jobs: NewJob[] = [];
     for (let job of request.items) {
       try {
         jobs.push(this._validateJob(job as any));
@@ -645,12 +551,12 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
       }
 
       if (job?.data?.payload?.value) {
-        job.data.payload.value = job.data.payload.value.toString();
+        job.data.payload.value = job.data.payload.value.toString() as any;
       }
 
-      // convert enum priority back to number as its expected by bull
+      // convert enum priority back to number as it's expected by bull
       if (job?.options?.priority) {
-        job.options.priority = Priority[job.options.priority];
+        job.options.priority = typeof job.options.priority === 'number' ? job.options.priority : Priority[job.options.priority] as unknown as number;
       }
 
       // if its a repeat job and tz is empty delete the key (else cron parser throws an error)
@@ -662,19 +568,19 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
         ...job.options
       };
 
-      if (bullOptions.timeout === 1) {
+      if ((bullOptions as any).timeout === 1) {
         delete bullOptions['timeout'];
       }
 
       // Match the Job Type with the Queue Name and add the Job to this Queue.
       // If there is no match, add the Job to the Default Queue
       let queue = _.find(this.queuesList, { name: job.type });
-      let defaultQueue = _.find(this.queuesList, { name: this.defaultQueueName });
       if (_.isEmpty(queue)) {
-        queue = defaultQueue;
+        queue = _.find(this.queuesList, { name: this.defaultQueueName });
       }
-      result.push(await queue.add(job.type, job.data, bullOptions));
+      const submittedJob = await queue.add(job.type, job.data, bullOptions);
       this.logger.verbose(`job@${job.type} created`, job);
+      result.push(submittedJob);
     }
 
     for (let job of result) {
@@ -691,8 +597,8 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
         payload: {
           id: job.id as string,
           type: job.name,
-          data: this._filterJobData(job.data, true),
-          options: this._filterJobOptions(job.opts) as any,
+          data: _filterJobData(job.data, true),
+          options: _filterJobOptions(job.opts) as any,
           when
         },
         status: {
@@ -706,8 +612,8 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
       items: result.map(job => ({
         id: job.id,
         type: job.name,
-        data: this._filterJobData(job.data, true),
-        options: this._filterJobOptions(job.opts)
+        data: _filterJobData(job.data, true),
+        options: _filterJobOptions(job.opts)
       })),
       total_count: result.length
     };
@@ -841,7 +747,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
       if (jobIDs.length > 0) {
         // jobIDsCopy should contain the jobIDs duplicate values
         // after the for loop ends
-        let jobIDsCopy: JobId[] = [];
+        let jobIDsCopy: string[] = [];
         for (let jobID of jobIDs) {
           const jobIdData = await this.getRedisValue(jobID as string);
           if (jobIdData && jobIdData.repeatKey) {
@@ -971,8 +877,8 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
         payload: {
           id: job.id as string,
           type: job.name,
-          data: this._filterJobData(job.data, true),
-          options: this._filterJobOptions(job.opts) as any,
+          data: _filterJobData(job.data, true),
+          options: _filterJobOptions(job.opts) as any,
           when
         },
         status: {
@@ -1000,7 +906,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
   }
 
   // delete a job by its job instance after processing 'jobDone' / 'jobFailed'
-  async _deleteJobInstance(jobId: JobId, queue: Bull.Queue): Promise<void> {
+  async _deleteJobInstance(jobId: string, queue: Queue): Promise<void> {
     return this._removeBullJob(jobId, queue);
   }
 
@@ -1085,7 +991,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
 
       for (let queue of this.queuesList) {
         for (let jobDataKey of request.ids) {
-          let callback: Promise<void>;
+          let callback: Promise<boolean>;
           const jobIdData = await this.getRedisValue(jobDataKey as string);
           if (jobIdData && jobIdData.repeatKey) {
             const jobs = await queue.getRepeatableJobs();
@@ -1122,8 +1028,11 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
                     code: err.code,
                     message: err.message
                   });
+                  return false;
                 }
+                return true;
               }
+              return false;
             });
           }
 
@@ -1169,8 +1078,8 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
   async cleanupJobs(ttlAfterFinished) {
     for (let queue of this.queuesList) {
       try {
-        await queue.clean(ttlAfterFinished, COMPLETED_JOB_STATE);
-        await queue.clean(ttlAfterFinished, FAILED_JOB_STATE);
+        await queue.clean(ttlAfterFinished, 0, COMPLETED_JOB_STATE);
+        await queue.clean(ttlAfterFinished, 0, FAILED_JOB_STATE);
       } catch (err) {
         this.logger.error('Error cleaning up jobs', err);
       }
@@ -1397,76 +1306,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
     });
   }
 
-  _filterQueuedJob<T extends FilterOpts>(job: T): Pick<T, 'id' | 'type' | 'data' | 'opts' | 'name'> {
-    if (job && !job.type) {
-      (job as any).type = (job as any).name;
-    }
-    const picked: any = _.pick(job, [
-      'id', 'type', 'data', 'opts', 'name'
-    ]);
-
-    if (picked.data) {
-      picked.data = this._filterJobData(picked.data, false);
-      if (picked.data.payload && picked.data.payload.value) {
-        picked.data.payload.value = Buffer.from(picked.data.payload.value);
-      }
-    }
-
-    return picked as any;
-  }
-
-  _filterKafkaJob<T extends KafkaOpts>(job: T): Pick<T, 'id' | 'type' | 'data' | 'options' | 'when'> {
-    const picked: any = _.pick(job, [
-      'id', 'type', 'data', 'options', 'when'
-    ]);
-
-    if (picked.data && picked.data.payload && picked.data.payload.value) {
-      // Re-marshal because protobuf messes up toJSON
-      picked.data.payload = marshallProtobufAny(unmarshallProtobufAny(picked.data.payload));
-    }
-
-    return picked as any;
-  }
-
-  _filterJobData(data: Data, encode: boolean): Pick<Data, 'meta' | 'payload' | 'subject_id'> {
-    const picked = _.pick(data, [
-      'meta', 'payload', 'subject_id'
-    ]);
-
-    if (encode) {
-      if (picked.payload && picked.payload.value && typeof picked.payload.value === 'string') {
-        (picked as any).payload = marshallProtobufAny(unmarshallProtobufAny(picked.payload));
-      }
-    }
-
-    return picked as any;
-  }
-
-  _filterJobOptions(data: JobOptions): Pick<JobOptions, 'priority' | 'attempts' | 'backoff' | 'repeat' | 'timeout' | 'jobId' | 'removeOnComplete'> {
-    let picked = _.pick(data, [
-      'priority', 'attempts', 'backoff', 'repeat', 'timeout', 'jobId', 'removeOnComplete'
-    ]);
-
-    if (typeof picked.priority === 'number') {
-      picked.priority = Priority[picked.priority] as any;
-    }
-
-    if (typeof picked.backoff === 'object') {
-      if (!picked.backoff.type) {
-        picked.backoff.type = 'FIXED';
-      } else {
-        picked.backoff.type = picked.backoff.type.toUpperCase();
-      }
-    }
-    // remove key if it exists in repeat
-    if (picked && picked.repeat && (picked.repeat as any).key) {
-      delete (picked.repeat as any).key;
-    }
-
-    return picked;
-  }
-
-  async _removeBullJob(jobInstID: JobId, queue: Bull.Queue): Promise<void> {
+  async _removeBullJob(jobInstID: string, queue: Queue): Promise<void> {
     return queue.getJob(jobInstID).then(job => {
       if (job) {
         return job.remove();

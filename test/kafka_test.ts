@@ -2,8 +2,8 @@ import * as _ from 'lodash';
 import * as mocha from 'mocha';
 import * as should from 'should';
 
-import { SchedulingService, marshallProtobufAny } from '../lib/schedulingService';
-import { Worker } from '../lib/worker';
+import { SchedulingService, marshallProtobufAny } from '../src/schedulingService';
+import { Worker } from '../src/worker';
 
 import { Topic } from '@restorecommerce/kafka-client';
 import { createServiceConfig } from '@restorecommerce/service-config';
@@ -22,6 +22,7 @@ import { createClient as RedisCreateClient, RedisClientType } from 'redis';
 import { Logger } from 'winston';
 import { updateConfig } from '@restorecommerce/acs-client';
 import { JobOptions_Priority, Backoff_Type, JobReadRequest } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/job';
+import { runWorker } from '../src/utilts';
 
 /**
  * NOTE: Running instances of Redis and Kafka are required to run the tests.
@@ -81,13 +82,13 @@ if (acsEnv && acsEnv.toLocaleLowerCase() === 'true') {
 }
 
 interface MethodWithOutput {
-  method: string,
-  output: any
+  method: string;
+  output: any;
 };
 
-const PROTO_PATH: string = 'io/restorecommerce/access_control.proto';
-const PKG_NAME: string = 'io.restorecommerce.access_control';
-const SERVICE_NAME: string = 'Service';
+const PROTO_PATH = 'io/restorecommerce/access_control.proto';
+const PKG_NAME = 'io.restorecommerce.access_control';
+const SERVICE_NAME = 'Service';
 const pkgDef: grpc.GrpcObject = grpc.loadPackageDefinition(
   proto_loader.loadSync(PROTO_PATH, {
     includeDirs: ['node_modules/@restorecommerce/protos'],
@@ -201,7 +202,7 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
     // start mock acs-srv - needed for read operation since acs-client makes a req to acs-srv
     // to get applicable policies although acs-lookup is disabled
     await startGrpcMockServer([{ method: 'WhatIsAllowed', output: jobPolicySetRQ },
-    { method: 'IsAllowed', output: { decision: 'PERMIT' } }]);
+      { method: 'IsAllowed', output: { decision: 'PERMIT' } }]);
     jobTopic = await worker.events.topic(JOB_EVENTS_TOPIC);
 
     // start mock ids-srv needed for findByToken response and return subject
@@ -263,27 +264,27 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
     await jobTopic.removeAllListeners('jobsCreated');
     await jobTopic.removeAllListeners('jobsDeleted');
   });
-  after(async () => {
+  after(async function (): Promise<any> {
+    this.timeout(20000);
     await stopGrpcMockServer();
     await stopIDSGrpcMockServer();
     await jobTopic.removeAllListeners('queuedJob');
     await jobTopic.removeAllListeners('jobsCreated');
     await jobTopic.removeAllListeners('jobsDeleted');
-    // await worker.schedulingService.clear();
-    // await worker.stop();
+    await worker.schedulingService.clear();
+    await worker.stop();
   });
   describe('create a one-time job', function postJob(): void {
     this.timeout(15000);
     it('should create a new job and execute it immediately', async () => {
-      await jobTopic.on('queuedJob', async (job, context, configRet, eventNameRet) => {
+      const w = await runWorker('test-job', 1, cfg, logger, worker.events, async (job) => {
         validateScheduledJob(job, 'ONCE');
 
-        const { id, type, schedule_type } = job;
-        await jobTopic.emit('jobDone', {
-          id, type, schedule_type, result: marshallProtobufAny({
+        return {
+          result: marshallProtobufAny({
             testValue: 'test-value'
           })
-        });
+        };
       });
 
       // validate message emitted on jobDone event.
@@ -315,8 +316,8 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
       const offset = await jobTopic.$offset(-1);
       await jobTopic.emit('createJobs', { items: [job], subject });
 
-      // createJobs, queuedJob, jobDone
-      await jobTopic.$wait(offset + 3);
+      // createJobs, jobDone
+      await jobTopic.$wait(offset + 2);
       // Simulate timeout
       await new Promise((resolve) => setTimeout(resolve, 100));
 
@@ -329,13 +330,12 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
       should.exist(result.operation_status);
       result.operation_status.code.should.equal(200);
       result.operation_status.message.should.equal('success');
+
+      await w.pause();
     });
     it('should create a new job and execute it at a scheduled time', async () => {
-      await jobTopic.on('queuedJob', async (job, context, configRet, eventNameRet) => {
+      const w = await runWorker('test-job', 1, cfg, logger, worker.events, async (job) => {
         validateScheduledJob(job, 'ONCE');
-
-        const { id, type, schedule_type } = job;
-        await jobTopic.emit('jobDone', { id, type, schedule_type });
       });
 
       const data = {
@@ -380,14 +380,16 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
       result.operation_status.code.should.equal(200);
       result.operation_status.message.should.equal('success');
 
-      // jobsCreated, queuedJob, jobDone
-      await jobTopic.$wait(offset + 3);
+      // jobsCreated, jobDone
+      await jobTopic.$wait(offset + 2);
 
       schedulingService.disableAC();
       result = await schedulingService.read(JobReadRequest.fromPartial({ subject }), {});
       payloadShouldBeEmpty(result);
       result.operation_status.code.should.equal(200);
       result.operation_status.message.should.equal('success');
+
+      await w.pause();
     });
   });
 
@@ -395,32 +397,22 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
     this.timeout(15000);
     it('should create a recurring job and delete it after some executions', async () => {
       let jobExecs = 0;
-      await jobTopic.on('queuedJob', async (job, context, configRet, eventNameRet) => {
+      const w = await runWorker('test-job', 1, cfg, logger, worker.events, async (job) => {
         validateScheduledJob(job, 'RECCUR');
-
-        const { id, type, schedule_type } = job;
-        await jobTopic.emit('jobDone', { id, type, schedule_type, delete_scheduled: ++jobExecs === 3 });
-
-        // Sleep for jobDone to get processed
-        await new Promise(resolve => setTimeout(resolve, 100));
 
         schedulingService.disableAC();
         let result = await schedulingService.read(JobReadRequest.fromPartial({ subject }), {});
         should.exist(result.items);
-        result.items.length.should.equal(1);
+        result.items.length.should.equal(2);
         result.items[0].payload.type.should.equal('test-job');
         result.items[0].status.code.should.equal(200);
         result.items[0].status.message.should.equal('success');
         result.operation_status.code.should.equal(200);
         result.operation_status.message.should.equal('success');
 
-        if (jobExecs == 3) {
-          payloadShouldBeEmpty(result);
-          result.operation_status.code.should.equal(200);
-          result.operation_status.message.should.equal('success');
-        } else {
-          result.total_count.should.be.equal(1);
-        }
+        return {
+          delete_scheduled: ++jobExecs === 3
+        };
       });
 
       const data = {
@@ -462,12 +454,14 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
       createResponse.operation_status.code.should.equal(200);
       createResponse.operation_status.message.should.equal('success');
 
-      // wait for 3 'queuedJob', 3 'jobDone', 1 'createJobs'
+      // wait for 3 'queuedJob', 1 'createJobs'
       // wait for '1 jobsCreated'
-      await jobTopic.$wait(offset + 7);
+      await jobTopic.$wait(offset + 4);
 
       // Sleep for jobDone to get processed
       await new Promise(resolve => setTimeout(resolve, 100));
+
+      await w.pause();
     });
   });
 
@@ -518,7 +512,7 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
         job.status.code.should.equal(200);
         job.status.message.should.equal('success');
       });
-      result.total_count.should.be.equal(4);
+      result.total_count.should.be.equal(5);
       result.operation_status.code.should.equal(200);
       result.operation_status.message.should.equal('success');
     });

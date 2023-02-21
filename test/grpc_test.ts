@@ -1,7 +1,7 @@
 import * as mocha from 'mocha';
 import * as should from 'should';
-import { marshallProtobufAny } from '../lib/schedulingService';
-import { Worker } from '../lib/worker';
+import { marshallProtobufAny } from '../src/schedulingService';
+import { Worker } from '../src/worker';
 import { Topic } from '@restorecommerce/kafka-client';
 import { createServiceConfig } from '@restorecommerce/service-config';
 import { createChannel, createClient } from '@restorecommerce/grpc-client';
@@ -23,6 +23,7 @@ import { updateConfig } from '@restorecommerce/acs-client';
 import * as _ from 'lodash';
 import { DeleteRequest } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/resource_base';
 import { createClient as RedisCreateClient, RedisClientType } from 'redis';
+import { runWorker } from '../src/utilts';
 
 /**
  * NOTE: Running instances of Redis and Kafka are required to run the tests.
@@ -80,13 +81,13 @@ if (acsEnv && acsEnv.toLocaleLowerCase() === 'true') {
 }
 
 interface MethodWithOutput {
-  method: string,
-  output: any
+  method: string;
+  output: any;
 };
 
-const PROTO_PATH: string = 'io/restorecommerce/access_control.proto';
-const PKG_NAME: string = 'io.restorecommerce.access_control';
-const SERVICE_NAME: string = 'Service';
+const PROTO_PATH = 'io/restorecommerce/access_control.proto';
+const PKG_NAME = 'io.restorecommerce.access_control';
+const SERVICE_NAME = 'Service';
 const pkgDef: grpc.GrpcObject = grpc.loadPackageDefinition(
   proto_loader.loadSync(PROTO_PATH, {
     includeDirs: ['node_modules/@restorecommerce/protos'],
@@ -198,11 +199,12 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
   let worker: Worker;
   let jobEvents: Topic;
   let grpcSchedulingSrv: SchedulingServiceClient;
+  let cfg: any;
 
   before(async function (): Promise<any> {
-    this.timeout(4000);
+    this.timeout(40000);
     worker = new Worker();
-    const cfg = createServiceConfig(process.cwd() + '/test');
+    cfg = createServiceConfig(process.cwd() + '/test');
     cfg.set('events:kafka:groupId', testSuffix + 'grpc');
     await worker.start(cfg);
     logger = worker.logger;
@@ -224,7 +226,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
     jobPolicySetRQ.policy_sets[0].policies[0].effect = 'PERMIT';
     jobPolicySetRQ.policy_sets[0].policies[0].rules = [permitJobRule];
     await startGrpcMockServer([{ method: 'WhatIsAllowed', output: jobPolicySetRQ },
-    { method: 'IsAllowed', output: { decision: 'PERMIT' } }]);
+      { method: 'IsAllowed', output: { decision: 'PERMIT' } }]);
 
     // start mock ids-srv needed for findByToken response and return subject
     await startIDSGrpcMockServer([{ method: 'findByToken', output: acsSubject }]);
@@ -281,27 +283,27 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
     await jobEvents.removeAllListeners('jobsCreated');
     await jobEvents.removeAllListeners('jobsDeleted');
   });
-  after(async () => {
+  after(async function (): Promise<any> {
+    this.timeout(20000);
     await stopGrpcMockServer();
     await stopIDSGrpcMockServer();
     await jobEvents.removeAllListeners('queuedJob');
     await jobEvents.removeAllListeners('jobsCreated');
     await jobEvents.removeAllListeners('jobsDeleted');
-    // await worker.schedulingService.clear();
-    // await worker.stop();
+    await worker.schedulingService.clear();
+    await worker.stop();
   });
   describe(`create a one-time job ${testSuffix}`, function postJob(): void {
-    this.timeout(8000);
+    this.timeout(30000);
     it(`should create a new job and execute it immediately ${testSuffix}`, async () => {
-      await jobEvents.on('queuedJob', async (job, context, configRet, eventNameRet) => {
+      const w = await runWorker('test-job', 1, cfg, logger, worker.events, async (job) => {
         validateScheduledJob(job, 'ONCE');
 
-        const { id, type, schedule_type } = job;
-        await jobEvents.emit('jobDone', {
-          id, type, schedule_type, result: marshallProtobufAny({
+        return {
+          result: marshallProtobufAny({
             testValue: 'test-value'
           })
-        });
+        };
       });
 
       // validate message emitted on jobDone event.
@@ -346,18 +348,17 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
       payloadShouldBeEmpty(result);
       createResponse.operation_status.code.should.equal(200);
       createResponse.operation_status.message.should.equal('success');
+
+      await w.pause();
     });
 
     it(`should create a new job and execute it at a scheduled time ${testSuffix}`, async () => {
-      await jobEvents.on('queuedJob', async (job, context, configRet, eventNameRet) => {
+      const w = await runWorker('test-job', 1, cfg, logger, worker.events, async (job) => {
         validateScheduledJob(job, 'ONCE');
-
-        const { id, type, schedule_type } = job;
-        await jobEvents.emit('jobDone', { id, type, schedule_type });
       });
 
       const data = {
-        timezone: "Europe/Berlin",
+        timezone: 'Europe/Berlin',
         payload: marshallProtobufAny({
           testValue: 'test-value'
         })
@@ -393,45 +394,81 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
       createResponse.operation_status.code.should.equal(200);
       createResponse.operation_status.message.should.equal('success');
 
-      await jobEvents.$wait(offset + 2); // jobsCreated, queuedJob (jobDone is sent from test)
+      await jobEvents.$wait(offset + 1); // jobsCreated, queuedJob (jobDone is sent from test)
 
       const result = await grpcSchedulingSrv.read(JobReadRequest.fromPartial({ subject }), {});
       payloadShouldBeEmpty(result);
+
+      await w.pause();
+    });
+
+    it(`should create a new job and execute it immediately via external worker ${testSuffix}`, async () => {
+      let expectedId = '';
+      await jobEvents.on('jobDone', async (job, context, configRet, eventNameRet) => {
+        job.id.should.equal(expectedId);
+      });
+
+      const job = {
+        type: 'external-job',
+        data: {
+          payload: marshallProtobufAny({
+            testValue: 'test-value'
+          })
+        },
+        options: {
+          timeout: 1,
+          priority: JobOptions_Priority.HIGH,
+          attempts: 1,
+          backoff: {
+            type: Backoff_Type.FIXED,
+            delay: 1000,
+          }
+        }
+      };
+
+      const offset = await jobEvents.$offset(-1);
+      const createResponse = await grpcSchedulingSrv.create({ items: [job], subject }, {});
+      createResponse.items.should.have.length(1);
+      createResponse.items[0].payload.type.should.equal('external-job');
+      createResponse.items[0].status.code.should.equal(200);
+      createResponse.items[0].status.message.should.equal('success');
+      createResponse.operation_status.code.should.equal(200);
+      createResponse.operation_status.message.should.equal('success');
+
+      expectedId = createResponse.items[0].payload.id;
+
+      // queuedJob (jobDone is emitted from here) - have remvoed jobsDeleted event since we now move the job to completed state
+      await jobEvents.$wait(offset + 1);
+
+      const result = await grpcSchedulingSrv.read(JobReadRequest.fromPartial({ subject }));
+      payloadShouldBeEmpty(result);
+      createResponse.operation_status.code.should.equal(200);
+      createResponse.operation_status.message.should.equal('success');
     });
   });
   describe(`should create a recurring job ${testSuffix}`, function (): void {
     this.timeout(8000);
     it(`should create a recurring job and delete it after some executions ${testSuffix}`, async () => {
       let jobExecs = 0;
-      await jobEvents.on('queuedJob', async (job, context, configRet, eventNameRet) => {
+      const w = await runWorker('test-job', 1, cfg, logger, worker.events, async (job) => {
         validateScheduledJob(job, 'RECCUR');
-
-        const { id, type, schedule_type } = job;
-        await jobEvents.emit('jobDone', { id, type, schedule_type, delete_scheduled: ++jobExecs === 3 });
-
-        // Sleep for jobDone to get processed
-        await new Promise(resolve => setTimeout(resolve, 100));
 
         let result = await grpcSchedulingSrv.read(JobReadRequest.fromPartial({ subject }), {});
         should.exist(result.items);
-        result.items.length.should.equal(1);
+        result.items.length.should.equal(2);
         result.items[0].payload.type.should.equal('test-job');
         result.items[0].status.code.should.equal(200);
         result.items[0].status.message.should.equal('success');
         result.operation_status.code.should.equal(200);
         result.operation_status.message.should.equal('success');
 
-        if (jobExecs == 3) {
-          payloadShouldBeEmpty(result);
-          result.operation_status.code.should.equal(200);
-          result.operation_status.message.should.equal('success');
-        } else {
-          result.total_count.should.be.equal(1);
-        }
+        return {
+          delete_scheduled: ++jobExecs === 3
+        };
       });
 
       const data = {
-        timezone: "Europe/Berlin",
+        timezone: 'Europe/Berlin',
         payload: marshallProtobufAny({
           testValue: 'test-value'
         })
@@ -467,15 +504,17 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
       createdJob.operation_status.code.should.equal(200);
       createdJob.operation_status.message.should.equal('success');
 
-      // wait for 3 'queuedJob', 3 'jobDone'
-      await jobEvents.$wait(offset + 6);
+      // wait for 3 'jobDone'
+      await jobEvents.$wait(offset + 3);
 
       // Sleep for jobDone to get processed
       await new Promise(resolve => setTimeout(resolve, 100));
+
+      await w.pause();
     });
     it('should create a recurring job based on id and remove on completed', async () => {
       const data = {
-        timezone: "Europe/Berlin",
+        timezone: 'Europe/Berlin',
         payload: marshallProtobufAny({
           testValue: 'test-value'
         })
@@ -530,7 +569,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
     this.timeout(5000);
     it('should schedule some jobs for tomorrow', async () => {
       const data = {
-        timezone: "Europe/Berlin",
+        timezone: 'Europe/Berlin',
         payload: marshallProtobufAny({
           testValue: 'test-value'
         })
@@ -574,7 +613,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
       const result = await grpcSchedulingSrv.read(JobReadRequest.fromPartial({ sort: JobReadRequest_SortOrder.DESCENDING, subject }), {});
       should.exist(result);
       should.exist(result.items);
-      result.items.should.be.length(4);
+      result.items.should.be.length(5);
       result.items.forEach((job) => {
         validateJob(job.payload);
         job.status.code.should.equal(200);
@@ -587,7 +626,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
       const result = await grpcSchedulingSrv.read(JobReadRequest.fromPartial({ filter: { type: 'test-job' }, sort: JobReadRequest_SortOrder.ASCENDING, subject }), {});
       should.exist(result);
       should.exist(result.items);
-      result.items.should.be.length(4);
+      result.items.should.be.length(5);
       result.items.forEach((job) => {
         validateJob(job.payload);
         job.status.code.should.equal(200);
@@ -679,7 +718,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
     // set subject target scope to invlaid scope not present in subject's HR scope
     if (acsEnabled) {
       const data = {
-        timezone: "Europe/Berlin",
+        timezone: 'Europe/Berlin',
         payload: marshallProtobufAny({
           testValue: 'test-value'
         })

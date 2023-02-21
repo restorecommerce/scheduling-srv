@@ -5,9 +5,22 @@ import * as _ from 'lodash';
 import { createServiceConfig } from '@restorecommerce/service-config';
 import { createLogger } from '@restorecommerce/logger';
 import { createChannel, createClient } from '@restorecommerce/grpc-client';
-import { ServiceClient as UserServiceClient, ServiceDefinition as UserServiceDefinition } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/user';
-import { Response_Decision } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/access_control';
+import {
+  ServiceClient as UserServiceClient,
+  ServiceDefinition as UserServiceDefinition
+} from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/user';
+import {
+  Response_Decision
+} from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/access_control';
 import { Subject } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/auth';
+import { JobsOptions, Worker } from 'bullmq';
+import { Processor } from 'bullmq/dist/types/interfaces/worker-options';
+import { FilterOpts, JobType, KafkaOpts, Priority } from './types';
+import { parseInt } from 'lodash';
+import { Data } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/job';
+import { marshallProtobufAny, unmarshallProtobufAny } from './schedulingService';
+import { createClient as createRedisClient } from 'redis';
+import { Events } from '@restorecommerce/kafka-client';
 
 // export interface HierarchicalScope {
 //   id: string;
@@ -151,4 +164,168 @@ export async function checkAccessRequest(ctx: GQLClientContext, resource: Resour
     };
   }
   return result;
+}
+
+export function _filterJobData(data: Data, encode: boolean): Pick<Data, 'meta' | 'payload' | 'subject_id'> {
+  const picked = _.pick(data, [
+    'meta', 'payload', 'subject_id'
+  ]);
+
+  if (encode) {
+    if (picked.payload && picked.payload.value && typeof picked.payload.value === 'string') {
+      (picked as any).payload = marshallProtobufAny(unmarshallProtobufAny(picked.payload));
+    }
+  }
+
+  return picked as any;
+}
+
+
+export function _filterQueuedJob<T extends FilterOpts>(job: T): Pick<T, 'id' | 'type' | 'data' | 'opts' | 'name'> {
+  if (job && !job.type) {
+    (job as any).type = (job as any).name;
+  }
+  const picked: any = _.pick(job, [
+    'id', 'type', 'data', 'opts', 'name'
+  ]);
+
+  if (picked.data) {
+    picked.data = _filterJobData(picked.data, false);
+    if (picked.data.payload && picked.data.payload.value) {
+      picked.data.payload.value = Buffer.from(picked.data.payload.value);
+    }
+  }
+
+  return picked as any;
+}
+
+export function _filterKafkaJob<T extends KafkaOpts>(job: T): Pick<T, 'id' | 'type' | 'data' | 'options' | 'when'> {
+  const picked: any = _.pick(job, [
+    'id', 'type', 'data', 'options', 'when'
+  ]);
+
+  if (picked.data && picked.data.payload && picked.data.payload.value) {
+    // Re-marshal because protobuf messes up toJSON
+    picked.data.payload = marshallProtobufAny(unmarshallProtobufAny(picked.data.payload));
+  }
+
+  return picked as any;
+}
+
+export function _filterJobOptions(data: JobsOptions): Pick<JobsOptions, 'priority' | 'attempts' | 'backoff' | 'repeat' | 'jobId' | 'removeOnComplete'> {
+  let picked = _.pick(data, [
+    'priority', 'attempts', 'backoff', 'repeat', 'jobId', 'removeOnComplete'
+  ]);
+
+  if (typeof picked.priority === 'number') {
+    picked.priority = Priority[picked.priority] as any;
+  }
+
+  if (typeof picked.backoff === 'object') {
+    if (!picked.backoff.type) {
+      picked.backoff.type = 'FIXED';
+    } else {
+      picked.backoff.type = picked.backoff.type.toUpperCase();
+    }
+  }
+  // remove key if it exists in repeat
+  if (picked && picked.repeat && (picked.repeat as any).key) {
+    delete (picked.repeat as any).key;
+  }
+
+  return picked;
+}
+
+export async function runWorker(queue: string, concurrency: number, cfg: any, logger: any, events: Events, cb: Processor): Promise<Worker> {
+  // Get a redis connection
+  const redisConfig = cfg.get('redis');
+  // below config is used for bull queu options and it still uses db config
+  redisConfig.db = cfg.get('redis:db-indexes:db-jobStore');
+
+  const reccurTimeCfg = cfg.get('redis');
+  reccurTimeCfg.database = cfg.get('redis:db-indexes:db-reccurTime');
+  const redisClient = createRedisClient(reccurTimeCfg);
+  redisClient.on('error', (err) => logger.error('Redis client error in recurring time store', err));
+  await redisClient.connect();
+
+  if ('keyPrefix' in redisConfig) {
+    delete redisConfig.keyPrefix;
+  }
+
+  const jobEvents = await events.topic('io.restorecommerce.jobs');
+
+  const redisURL = new URL(redisConfig.url);
+  const worker = new Worker(queue, async job => {
+    const filteredJob = _filterQueuedJob<JobType>(job as any);
+    // For recurring job add time so if service goes down we can fire jobs
+    // for the missed schedules comparing the last run time
+    let lastRunTime;
+    if (filteredJob.opts && filteredJob.opts.repeat &&
+      ((filteredJob.opts.repeat as any).every ||
+        (filteredJob.opts.repeat as any).cron)) {
+      if (filteredJob.data) {
+        // adding time to payload data for recurring jobs
+        const dateTime = new Date();
+        lastRunTime = JSON.stringify({time: dateTime});
+        const bufObj = Buffer.from(JSON.stringify({time: dateTime}));
+        if (filteredJob.data.payload) {
+          if (filteredJob.data.payload.value) {
+            let jobBufferObj = JSON.parse(filteredJob.data.payload.value.toString());
+            if (!jobBufferObj) {
+              jobBufferObj = {};
+            }
+            const jobTimeObj = Object.assign(jobBufferObj, {time: dateTime});
+            // set last run time on DB index 7 with jobType identifier
+            await redisClient.set(filteredJob.name, lastRunTime);
+            filteredJob.data.payload.value = Buffer.from(JSON.stringify(jobTimeObj));
+          } else {
+            await redisClient.set(filteredJob.name, lastRunTime);
+            filteredJob.data.payload = {value: bufObj, type_url: ''};
+          }
+        } else {
+          await redisClient.set(filteredJob.name, lastRunTime);
+          filteredJob.data = {
+            subject_id: filteredJob.data.subject_id,
+            payload: {value: bufObj, type_url: ''}
+          };
+        }
+      }
+    }
+
+    logger.verbose(`job@${filteredJob.name}#${filteredJob.id} started execution`, filteredJob);
+    const start = Date.now();
+    const result = await cb(job);
+    logger.verbose(`job@${filteredJob.name}#${filteredJob.id} completed in ${Date.now() - start}ms`, filteredJob);
+
+    await jobEvents.emit('jobDone', {
+      id: job.id, type: job.name, schedule_type: job.data.schedule_type, ...result
+    });
+
+    return result;
+  }, {
+    connection: {
+      ...redisConfig,
+      host: redisURL.hostname,
+      port: parseInt(redisURL.port)
+    },
+    concurrency,
+    autorun: false
+  });
+
+  worker.on('error', err => logger.error(`worker#${queue} error`, err));
+  worker.on('closed', () => logger.verbose(`worker#${queue} closed`));
+  worker.on('progress', (j, p) => logger.debug(`worker#${queue} job#${j.id} progress`, p));
+  worker.on('failed', (j, err) => logger.error(`worker#${queue} job#${j.id} failed`, err));
+  worker.on('closing', msg => logger.verbose(`worker#${queue} closing: ${msg}`));
+  worker.on('completed', j => logger.info(`worker#${queue} job#${j.id} completed`));
+  worker.on('stalled', j => logger.warn(`worker#${queue} job#${j} stalled`));
+  worker.on('drained', () => logger.verbose(`worker#${queue} drained`));
+  worker.on('paused', () => logger.verbose(`worker#${queue} paused`));
+  worker.on('ready', () => logger.verbose(`worker#${queue} ready`));
+  worker.on('resumed', () => logger.verbose(`worker#${queue} resumed`));
+
+  worker.run().catch(err => logger.error(`worker#${queue} run error`, err));
+  await worker.waitUntilReady();
+
+  return worker;
 }
