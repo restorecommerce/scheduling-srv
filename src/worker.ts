@@ -336,7 +336,6 @@ export class Worker {
     // Hook any external jobs
     let externalJobFiles;
     try {
-      console.log('checking', process.env.EXTERNAL_JOBS_DIR || './lib/external-jobs');
       externalJobFiles = fs.readdirSync(process.env.EXTERNAL_JOBS_DIR || './lib/external-jobs');
     } catch (err) {
       if (err.message.includes('no such file or directory')) {
@@ -352,7 +351,6 @@ export class Worker {
           if (process.env.EXTERNAL_JOBS_REQUIRE_DIR) {
             require_dir = process.env.EXTERNAL_JOBS_REQUIRE_DIR;
           }
-          console.log('executing', require_dir);
           (async () => require(require_dir + externalFile).default(cfg, logger, events, runWorker))().catch(err => {
             this.logger.error(`Error scheduling external job ${externalFile}`, { err: err.message });
           });

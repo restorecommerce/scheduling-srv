@@ -301,7 +301,6 @@ export async function runWorker(queue: string, concurrency: number, cfg: any, lo
         const bufObj = Buffer.from(JSON.stringify({ time: dateTime }));
         if (filteredJob.data.payload) {
           if (filteredJob.data.payload.value) {
-            // TODO Add try catch
             let jobBufferObj;
             try {
               jobBufferObj = JSON.parse(filteredJob.data.payload.value.toString());
