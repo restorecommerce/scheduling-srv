@@ -1,15 +1,16 @@
-import { unmarshallProtobufAny } from '../src/schedulingService';
+import { unmarshallProtobufAny } from '../src/utilts';
 import * as should from 'should';
 import { Priority } from '../src/types';
+import { Logger } from 'winston';
 // import { createMockServer } from 'grpc-mock';
 
 process.env.EXTERNAL_JOBS_DIR = './lib/test/external-jobs/';
 process.env.EXTERNAL_JOBS_REQUIRE_DIR = '../test/external-jobs/';
 
-export function validateScheduledJob(job: any, expectedSchedule: string): void {
+export function validateScheduledJob(job: any, expectedSchedule: string, logger: Logger): void {
   should.exist(job.data);
   should.exist(job.data.payload);
-  const payload = unmarshallProtobufAny(job.data.payload);
+  const payload = unmarshallProtobufAny(job.data.payload, logger);
   should.exist(payload.testValue);
   payload.testValue.should.equal('test-value');
   should.exist(job.id);
@@ -19,17 +20,17 @@ export function validateScheduledJob(job: any, expectedSchedule: string): void {
   // job.schedule_type.should.equal(expectedSchedule);
 }
 
-export function validateJobDonePayload(job: any): void {
+export function validateJobDonePayload(job: any, logger: Logger): void {
   if (job && job.result) {
     should.exist(job.result);
-    const payload = unmarshallProtobufAny(job.result);
+    const payload = unmarshallProtobufAny(job.result, logger);
     payload.testValue.should.equal('test-value');
   }
 }
 
-export function validateJob(job: any): void {
+export function validateJob(job: any, logger: Logger): void {
   should.exist(job);
-  const payload = unmarshallProtobufAny(job.data.payload);
+  const payload = unmarshallProtobufAny(job.data.payload, logger);
   should.exist(payload.testValue);
   payload.testValue.should.equal('test-value');
   should.exist(job.id);

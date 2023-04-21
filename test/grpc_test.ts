@@ -1,6 +1,6 @@
 import * as mocha from 'mocha';
 import * as should from 'should';
-import { marshallProtobufAny } from '../src/schedulingService';
+import { marshallProtobufAny } from '../src/utilts';
 import { Worker } from '../src/worker';
 import { Topic } from '@restorecommerce/kafka-client';
 import { createServiceConfig } from '@restorecommerce/service-config';
@@ -297,7 +297,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
     this.timeout(30000);
     it(`should create a new job and execute it immediately ${testSuffix}`, async () => {
       const w = await runWorker('test-job', 1, cfg, logger, worker.events, async (job) => {
-        validateScheduledJob(job, 'ONCE');
+        validateScheduledJob(job, 'ONCE', logger);
 
         return {
           result: marshallProtobufAny({
@@ -308,7 +308,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
 
       // validate message emitted on jobDone event.
       await jobEvents.on('jobDone', async (job, context, configRet, eventNameRet) => {
-        validateJobDonePayload(job);
+        validateJobDonePayload(job, logger);
       });
 
       const data = {
@@ -354,7 +354,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
 
     it(`should create a new job and execute it at a scheduled time ${testSuffix}`, async () => {
       const w = await runWorker('test-job', 1, cfg, logger, worker.events, async (job) => {
-        validateScheduledJob(job, 'ONCE');
+        validateScheduledJob(job, 'ONCE', logger);
       });
 
       const data = {
@@ -451,7 +451,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
     it(`should create a recurring job and delete it after some executions ${testSuffix}`, async () => {
       let jobExecs = 0;
       const w = await runWorker('test-job', 1, cfg, logger, worker.events, async (job) => {
-        validateScheduledJob(job, 'RECCUR');
+        validateScheduledJob(job, 'RECCUR', logger);
 
         let result = await grpcSchedulingSrv.read(JobReadRequest.fromPartial({ subject }), {});
         should.exist(result.items);
@@ -615,7 +615,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
       should.exist(result.items);
       result.items.should.be.length(5);
       result.items.forEach((job) => {
-        validateJob(job.payload);
+        validateJob(job.payload, logger);
         job.status.code.should.equal(200);
         job.status.message.should.equal('success');
       });
@@ -628,7 +628,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
       should.exist(result.items);
       result.items.should.be.length(5);
       result.items.forEach((job) => {
-        validateJob(job.payload);
+        validateJob(job.payload, logger);
         job.status.code.should.equal(200);
         job.status.message.should.equal('success');
       });
@@ -643,7 +643,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
       should.exist(result_id_type.items);
       result_id_type.items.should.be.length(1);
       result_id_type.items.forEach((job) => {
-        validateJob(job.payload);
+        validateJob(job.payload, logger);
         job.status.code.should.equal(200);
         job.status.message.should.equal('success');
       });
@@ -658,7 +658,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
       should.exist(result_id.items);
       result_id.items.should.be.length(1);
       result_id.items.forEach((job) => {
-        validateJob(job.payload);
+        validateJob(job.payload, logger);
         job.status.code.should.equal(200);
         job.status.message.should.equal('success');
       });
@@ -681,7 +681,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
       result.items.should.have.length(1);
 
       const updatedJob = result.items[0];
-      validateJob(updatedJob.payload);
+      validateJob(updatedJob.payload, logger);
       updatedJob.status.code.should.equal(200);
       updatedJob.status.message.should.equal('success');
       result.operation_status.code.should.equal(200);
@@ -706,7 +706,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
       result.items.should.have.length(1);
 
       const upsertedJob = result.items[0];
-      validateJob(upsertedJob.payload);
+      validateJob(upsertedJob.payload, logger);
       upsertedJob.status.code.should.equal(200);
       upsertedJob.status.message.should.equal('success');
       result.operation_status.code.should.equal(200);

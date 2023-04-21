@@ -11,7 +11,7 @@ import { createClient, RedisClientType } from 'redis';
 import { NewJob, Priority } from './types';
 import { parseExpression } from 'cron-parser';
 import * as crypto from 'crypto';
-import { _filterJobData, _filterJobOptions, _filterQueuedJob, checkAccessRequest } from './utilts';
+import { _filterJobData, _filterJobOptions, _filterQueuedJob, checkAccessRequest, marshallProtobufAny } from './utilts';
 import * as uuid from 'uuid';
 import { Logger } from 'winston';
 import { Response_Decision } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/access_control';
@@ -26,27 +26,6 @@ const DEFAULT_CLEANUP_COMPLETED_JOBS = 604800000; // 7 days in miliseconds
 const COMPLETED_JOB_STATE = 'completed';
 const FAILED_JOB_STATE = 'failed';
 const QUEUE_CLEANUP = 'queueCleanup';
-
-// Marshall any job payload to google.protobuf.Any
-export const marshallProtobufAny = (data: any): any => {
-  const stringified = JSON.stringify(data);
-  return {
-    type_url: '',
-    value: Buffer.from(stringified)
-  };
-};
-
-// Unmarshall a job payload.
-export const unmarshallProtobufAny = (data: any): any => {
-  let unmarshalled = {};
-
-  if (!_.isEmpty(data)) {
-    const payloadValue = data.value;
-    const decoded = payloadValue.toString();
-    unmarshalled = JSON.parse(decoded);
-  }
-  return unmarshalled;
-};
 
 /**
  * A job scheduling service.
@@ -188,9 +167,9 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
 
         if (eventName === JOB_FAILED_EVENT) {
           logger.error(`job@${job.type}#${job.id} failed with error #${job.error}`,
-            _filterQueuedJob<JobFailed>(job));
+            _filterQueuedJob<JobFailed>(job, this.logger));
         } else if (eventName === JOB_DONE_EVENT) {
-          logger.verbose(`job#${job.id} done`, _filterQueuedJob<JobDone>(job));
+          logger.verbose(`job#${job.id} done`, _filterQueuedJob<JobDone>(job, this.logger));
         }
 
         logger.info('Received Job event', { event: eventName });
@@ -268,9 +247,17 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
       this.logger.info(`Last run time of ${job.name} Job was:`, lastRunTime);
       if (lastRunTime) {
         // convert redis string value to object and get actual time value
-        lastRunTime = JSON.parse(lastRunTime);
+        try {
+          lastRunTime = JSON.parse(lastRunTime);
+        } catch (error) {
+          this.logger.error('Error parsing lastRunTime', {
+            code: error.code,
+            message: error.message, stack: error.stack
+          });
+        }
+
         if (job.opts && job.opts.repeat &&
-          (job.opts.repeat as any).cron) {
+          (job.opts.repeat as any).cron && lastRunTime) {
           let options = {
             currentDate: new Date(lastRunTime.time),
             endDate: new Date(),
@@ -357,7 +344,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
       throw new errors.InvalidArgument('No job data specified.');
     }
 
-    job.data = _filterJobData(job.data, false);
+    job.data = _filterJobData(job.data, false, this.logger);
 
     return job;
   }
@@ -401,30 +388,37 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
   }
 
   /**
-   * Bull generates the repeatKey for repeatable jobs based on jobID, namd and
-   * cron settings - so below api to generate the same repeat key and store in redis
+   * Bull generates the repeatKey for repeatable jobs based on jobID, name and
+   * cron settings - so below api is to generate the same repeat key and store in redis
    * DB index and map it before making request to bull
    * @param name - job name
    * @param repeat - job repeate options
    * @param jobId - job id
    */
   async storeRepeatKey(name, options, jobId) {
-    const repeat = options.repeat;
-    const endDate = repeat.endDate
-      ? new Date(repeat.endDate).getTime() + ':'
-      : ':';
-    const tz = repeat.tz ? repeat.tz + ':' : ':';
-    const suffix = repeat.cron ? tz + repeat.cron : String(repeat.every);
-    const overrRiddentJobId = repeat.jobId ? repeat.jobId + ':' : ':';
-    const md5Key = this.md5(name + ':' + overrRiddentJobId + endDate + suffix);
-    const repeatKey = this.md5(name + jobId + ':' + md5Key);
-    this.logger.info('Repeat key generated for JobId is', { repeatKey, jobId });
-    const jobIdData = { repeatKey, options };
-    // map jobID with jobIdData - containing repeatKey and options
-    await this.repeatJobIdRedisClient.set(jobId, JSON.stringify(jobIdData));
-    // to resolve the jobId based on repeatkey
-    await this.repeatJobIdRedisClient.set(repeatKey, jobId);
-    return repeatKey;
+    try {
+      const repeat = options.repeat;
+      const endDate = repeat.endDate
+        ? new Date(repeat.endDate).getTime() + ':'
+        : ':';
+      const tz = repeat.tz ? repeat.tz + ':' : ':';
+      const suffix = repeat.cron ? tz + repeat.cron : String(repeat.every);
+      const overrRiddentJobId = repeat.jobId ? repeat.jobId + ':' : ':';
+      const md5Key = this.md5(name + ':' + overrRiddentJobId + endDate + suffix);
+      const repeatKey = this.md5(name + jobId + ':' + md5Key);
+      this.logger.info('Repeat key generated for JobId is', { repeatKey, jobId });
+      const jobIdData = { repeatKey, options };
+      // map jobID with jobIdData - containing repeatKey and options
+      await this.repeatJobIdRedisClient.set(jobId, JSON.stringify(jobIdData));
+      // to resolve the jobId based on repeatkey
+      await this.repeatJobIdRedisClient.set(repeatKey, jobId);
+      return repeatKey;
+    } catch (error) {
+      this.logger.error('Error storing repeatKey to redis', {
+        code: error.code,
+        message: error.message, stack: error.stack
+      });
+    }
   }
 
   private idGen(): string {
@@ -597,7 +591,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
         payload: {
           id: job.id as string,
           type: job.name,
-          data: _filterJobData(job.data, true),
+          data: _filterJobData(job.data, true, this.logger),
           options: _filterJobOptions(job.opts) as any,
           when
         },
@@ -612,7 +606,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
       items: result.map(job => ({
         id: job.id,
         type: job.name,
-        data: _filterJobData(job.data, true),
+        data: _filterJobData(job.data, true, this.logger),
         options: _filterJobOptions(job.opts)
       })),
       total_count: result.length
@@ -630,7 +624,18 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
     // applying filter based on custom arguments (filterByOwnerShip)
     let customArgs = (customArgsObj)?.custom_arguments;
     if (customArgs?.value) {
-      const customArgsFilter = JSON.parse(customArgs.value.toString());
+      let customArgsFilter;
+      try {
+        customArgsFilter = JSON.parse(customArgs.value.toString());
+      } catch (error) {
+        this.logger.error('Error parsing custom query arguments', {
+          code: error.code,
+          message: error.message, stack: error.stack
+        });
+      }
+      if (!customArgsFilter) {
+        return [];
+      }
       const ownerIndicatorEntity = customArgsFilter.entity;
       const ownerValues = customArgsFilter.instance;
       const ownerIndictaorEntURN = this.cfg.get('authorization:urns:ownerIndicatoryEntity');
@@ -877,7 +882,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
         payload: {
           id: job.id as string,
           type: job.name,
-          data: _filterJobData(job.data, true),
+          data: _filterJobData(job.data, true, this.logger),
           options: _filterJobOptions(job.opts) as any,
           when
         },

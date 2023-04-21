@@ -280,7 +280,7 @@ export class Worker {
           });
       } else if (eventName === JOBS_MODIFY_EVENT) {
         msg.items = msg.items.map((job) => {
-          return _filterKafkaJob(job);
+          return _filterKafkaJob(job, logger);
         });
         await schedulingService.update(JobList.fromPartial({ items: msg.items, subject: msg.subject }), {}).catch(
           (err) => {

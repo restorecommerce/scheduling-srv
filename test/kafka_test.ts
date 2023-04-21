@@ -2,7 +2,8 @@ import * as _ from 'lodash';
 import * as mocha from 'mocha';
 import * as should from 'should';
 
-import { SchedulingService, marshallProtobufAny } from '../src/schedulingService';
+import { SchedulingService } from '../src/schedulingService';
+import { marshallProtobufAny } from '../src/utilts';
 import { Worker } from '../src/worker';
 
 import { Topic } from '@restorecommerce/kafka-client';
@@ -202,7 +203,7 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
     // start mock acs-srv - needed for read operation since acs-client makes a req to acs-srv
     // to get applicable policies although acs-lookup is disabled
     await startGrpcMockServer([{ method: 'WhatIsAllowed', output: jobPolicySetRQ },
-      { method: 'IsAllowed', output: { decision: 'PERMIT' } }]);
+    { method: 'IsAllowed', output: { decision: 'PERMIT' } }]);
     jobTopic = await worker.events.topic(JOB_EVENTS_TOPIC);
 
     // start mock ids-srv needed for findByToken response and return subject
@@ -278,7 +279,7 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
     this.timeout(15000);
     it('should create a new job and execute it immediately', async () => {
       const w = await runWorker('test-job', 1, cfg, logger, worker.events, async (job) => {
-        validateScheduledJob(job, 'ONCE');
+        validateScheduledJob(job, 'ONCE', logger);
 
         return {
           result: marshallProtobufAny({
@@ -289,7 +290,7 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
 
       // validate message emitted on jobDone event.
       await jobTopic.on('jobDone', async (job, context, configRet, eventNameRet) => {
-        validateJobDonePayload(job);
+        validateJobDonePayload(job, logger);
       });
 
       const data = {
@@ -335,7 +336,7 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
     });
     it('should create a new job and execute it at a scheduled time', async () => {
       const w = await runWorker('test-job', 1, cfg, logger, worker.events, async (job) => {
-        validateScheduledJob(job, 'ONCE');
+        validateScheduledJob(job, 'ONCE', logger);
       });
 
       const data = {
@@ -398,7 +399,7 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
     it('should create a recurring job and delete it after some executions', async () => {
       let jobExecs = 0;
       const w = await runWorker('test-job', 1, cfg, logger, worker.events, async (job) => {
-        validateScheduledJob(job, 'RECCUR');
+        validateScheduledJob(job, 'RECCUR', logger);
 
         schedulingService.disableAC();
         let result = await schedulingService.read(JobReadRequest.fromPartial({ subject }), {});
@@ -536,7 +537,7 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
       should.exist(result.items);
       result.items = _.sortBy(result.items, ['id']);
       const updatedJob = _.last(result.items);
-      validateJob((updatedJob as any).payload);
+      validateJob((updatedJob as any).payload, logger);
     });
     it('should delete all remaining scheduled jobs upon request', async () => {
 

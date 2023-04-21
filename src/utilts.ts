@@ -18,9 +18,10 @@ import { Processor } from 'bullmq/dist/types/interfaces/worker-options';
 import { FilterOpts, JobType, KafkaOpts, Priority } from './types';
 import { parseInt } from 'lodash';
 import { Data } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/job';
-import { marshallProtobufAny, unmarshallProtobufAny } from './schedulingService';
+// import { marshallProtobufAny, unmarshallProtobufAny } from './schedulingService';
 import { createClient as createRedisClient } from 'redis';
 import { Events } from '@restorecommerce/kafka-client';
+import { Logger } from 'winston';
 
 // export interface HierarchicalScope {
 //   id: string;
@@ -127,6 +128,36 @@ export interface GQLClientContext {
   resources?: CtxResource[];
 }
 
+// Marshall any job payload to google.protobuf.Any
+export const marshallProtobufAny = (data: any): any => {
+  const stringified = JSON.stringify(data);
+  return {
+    type_url: '',
+    value: Buffer.from(stringified)
+  };
+};
+
+// Unmarshall a job payload.
+export const unmarshallProtobufAny = (data: any, logger: Logger): any => {
+  let unmarshalled = {};
+  try {
+    if (!_.isEmpty(data)) {
+      const payloadValue = data.value;
+      const decoded = payloadValue.toString();
+      if (!_.isEmpty(decoded)) {
+        unmarshalled = JSON.parse(decoded);
+      }
+    }
+  } catch (error) {
+    logger.error('Error unmarshalling job payload', {
+      data, code: error.code,
+      message: error.message, stack: error.stack
+    });
+  }
+
+  return unmarshalled;
+};
+
 /**
  * Perform an access request using inputs from a GQL request
  *
@@ -166,14 +197,14 @@ export async function checkAccessRequest(ctx: GQLClientContext, resource: Resour
   return result;
 }
 
-export function _filterJobData(data: Data, encode: boolean): Pick<Data, 'meta' | 'payload' | 'subject_id'> {
+export function _filterJobData(data: Data, encode: boolean, logger: Logger): Pick<Data, 'meta' | 'payload' | 'subject_id'> {
   const picked = _.pick(data, [
     'meta', 'payload', 'subject_id'
   ]);
 
   if (encode) {
     if (picked.payload && picked.payload.value && typeof picked.payload.value === 'string') {
-      (picked as any).payload = marshallProtobufAny(unmarshallProtobufAny(picked.payload));
+      (picked as any).payload = marshallProtobufAny(unmarshallProtobufAny(picked.payload, logger));
     }
   }
 
@@ -181,7 +212,7 @@ export function _filterJobData(data: Data, encode: boolean): Pick<Data, 'meta' |
 }
 
 
-export function _filterQueuedJob<T extends FilterOpts>(job: T): Pick<T, 'id' | 'type' | 'data' | 'opts' | 'name'> {
+export function _filterQueuedJob<T extends FilterOpts>(job: T, logger: Logger): Pick<T, 'id' | 'type' | 'data' | 'opts' | 'name'> {
   if (job && !job.type) {
     (job as any).type = (job as any).name;
   }
@@ -190,7 +221,7 @@ export function _filterQueuedJob<T extends FilterOpts>(job: T): Pick<T, 'id' | '
   ]);
 
   if (picked.data) {
-    picked.data = _filterJobData(picked.data, false);
+    picked.data = _filterJobData(picked.data, false, logger);
     if (picked.data.payload && picked.data.payload.value) {
       picked.data.payload.value = Buffer.from(picked.data.payload.value);
     }
@@ -199,14 +230,14 @@ export function _filterQueuedJob<T extends FilterOpts>(job: T): Pick<T, 'id' | '
   return picked as any;
 }
 
-export function _filterKafkaJob<T extends KafkaOpts>(job: T): Pick<T, 'id' | 'type' | 'data' | 'options' | 'when'> {
+export function _filterKafkaJob<T extends KafkaOpts>(job: T, logger: Logger): Pick<T, 'id' | 'type' | 'data' | 'options' | 'when'> {
   const picked: any = _.pick(job, [
     'id', 'type', 'data', 'options', 'when'
   ]);
 
   if (picked.data && picked.data.payload && picked.data.payload.value) {
     // Re-marshal because protobuf messes up toJSON
-    picked.data.payload = marshallProtobufAny(unmarshallProtobufAny(picked.data.payload));
+    picked.data.payload = marshallProtobufAny(unmarshallProtobufAny(picked.data.payload, logger));
   }
 
   return picked as any;
@@ -236,7 +267,7 @@ export function _filterJobOptions(data: JobsOptions): Pick<JobsOptions, 'priorit
   return picked;
 }
 
-export async function runWorker(queue: string, concurrency: number, cfg: any, logger: any, events: Events, cb: Processor): Promise<Worker> {
+export async function runWorker(queue: string, concurrency: number, cfg: any, logger: Logger, events: Events, cb: Processor): Promise<Worker> {
   // Get a redis connection
   const redisConfig = cfg.get('redis');
   // below config is used for bull queu options and it still uses db config
@@ -256,7 +287,7 @@ export async function runWorker(queue: string, concurrency: number, cfg: any, lo
 
   const redisURL = new URL(redisConfig.url);
   const worker = new Worker(queue, async job => {
-    const filteredJob = _filterQueuedJob<JobType>(job as any);
+    const filteredJob = _filterQueuedJob<JobType>(job as any, logger);
     // For recurring job add time so if service goes down we can fire jobs
     // for the missed schedules comparing the last run time
     let lastRunTime;
@@ -266,27 +297,37 @@ export async function runWorker(queue: string, concurrency: number, cfg: any, lo
       if (filteredJob.data) {
         // adding time to payload data for recurring jobs
         const dateTime = new Date();
-        lastRunTime = JSON.stringify({time: dateTime});
-        const bufObj = Buffer.from(JSON.stringify({time: dateTime}));
+        lastRunTime = JSON.stringify({ time: dateTime });
+        const bufObj = Buffer.from(JSON.stringify({ time: dateTime }));
         if (filteredJob.data.payload) {
           if (filteredJob.data.payload.value) {
-            let jobBufferObj = JSON.parse(filteredJob.data.payload.value.toString());
+            // TODO Add try catch
+            let jobBufferObj;
+            try {
+              jobBufferObj = JSON.parse(filteredJob.data.payload.value.toString());
+            } catch (error) {
+              logger.error('Error parsing job payload', {
+                code: error.code,
+                message: error.message, stack: error.stack
+              });
+            }
+
             if (!jobBufferObj) {
               jobBufferObj = {};
             }
-            const jobTimeObj = Object.assign(jobBufferObj, {time: dateTime});
+            const jobTimeObj = Object.assign(jobBufferObj, { time: dateTime });
             // set last run time on DB index 7 with jobType identifier
             await redisClient.set(filteredJob.name, lastRunTime);
             filteredJob.data.payload.value = Buffer.from(JSON.stringify(jobTimeObj));
           } else {
             await redisClient.set(filteredJob.name, lastRunTime);
-            filteredJob.data.payload = {value: bufObj, type_url: ''};
+            filteredJob.data.payload = { value: bufObj, type_url: '' };
           }
         } else {
           await redisClient.set(filteredJob.name, lastRunTime);
           filteredJob.data = {
             subject_id: filteredJob.data.subject_id,
-            payload: {value: bufObj, type_url: ''}
+            payload: { value: bufObj, type_url: '' }
           };
         }
       }
