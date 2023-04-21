@@ -1,3 +1,8 @@
+## 1.0.0 (April 21st, 2023)
+
+- migrate from bull to bull-mq
+- up all deps
+
 ## 0.3.2 (October 26th, 2022)
 
 - move to full typed client and server, full text search
