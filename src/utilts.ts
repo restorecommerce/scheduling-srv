@@ -14,7 +14,7 @@ import {
 } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/access_control';
 import { Subject } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/auth';
 import { JobsOptions, Worker } from 'bullmq';
-import { Processor } from 'bullmq/dist/types/interfaces/worker-options';
+import { Processor } from 'bullmq';
 import { FilterOpts, JobType, KafkaOpts, Priority } from './types';
 import { parseInt } from 'lodash';
 import { Data } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/job';
