@@ -19,7 +19,7 @@ message Request {
 }
 
 message Context {
-  Any subject = 1;
+  Any subjects = 1;
   repeated Any resources = 2;
   Any security = 3;
 }
@@ -44,9 +44,9 @@ message Response {
 * Target specified by a Rule or a Request.
 */
 message Target {
-  repeated Attribute subject = 1;
+  repeated Attribute subjects = 1;
   repeated Attribute resources = 2;
-  repeated Attribute action = 3;
+  repeated Attribute actions = 3;
 }
 
 /**
