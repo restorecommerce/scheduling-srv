@@ -89,7 +89,7 @@ interface MethodWithOutput {
 
 const PROTO_PATH = 'io/restorecommerce/access_control.proto';
 const PKG_NAME = 'io.restorecommerce.access_control';
-const SERVICE_NAME = 'Service';
+const SERVICE_NAME = 'AccessControlService';
 const pkgDef: grpc.GrpcObject = grpc.loadPackageDefinition(
   proto_loader.loadSync(PROTO_PATH, {
     includeDirs: ['node_modules/@restorecommerce/protos'],
@@ -141,7 +141,7 @@ const startGrpcMockServer = async (methodWithOutput: MethodWithOutput[]) => {
 
 const IDS_PROTO_PATH = 'test/protos/io/restorecommerce/user.proto';
 const IDS_PKG_NAME = 'io.restorecommerce.user';
-const IDS_SERVICE_NAME = 'Service';
+const IDS_SERVICE_NAME = 'UserService';
 
 const mockServerIDS = new GrpcMockServer('localhost:50051');
 

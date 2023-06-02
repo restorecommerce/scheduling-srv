@@ -5,7 +5,7 @@ package io.restorecommerce.user;
 /**
  * The microservice for the user resource.
  */
-service Service {
+service UserService {
   rpc FindByToken (FindByTokenRequest) returns (UserResponse);
 }
 

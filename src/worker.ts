@@ -11,8 +11,8 @@ import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
 import { ExpressAdapter } from '@bull-board/express';
 import { initAuthZ, ACSAuthZ, updateConfig, initializeCache } from '@restorecommerce/acs-client';
 import { createClient, RedisClientType } from 'redis';
-import { protoMetadata as schedulingMeta, ServiceDefinition as SchedulingServiceDefinition, JobList } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/job';
-import { protoMetadata as commandInterfaceMeta, ServiceDefinition as CommandInterfaceServiceDefinition } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/commandinterface';
+import { protoMetadata as schedulingMeta, JobServiceDefinition as SchedulingServiceDefinition, JobList } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/job';
+import { protoMetadata as commandInterfaceMeta, CommandInterfaceServiceDefinition } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/commandinterface';
 import {
   protoMetadata as reflectionMeta
 } from '@restorecommerce/rc-grpc-clients/dist/generated-server/grpc/reflection/v1alpha/reflection';

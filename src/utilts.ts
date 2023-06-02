@@ -6,8 +6,8 @@ import { createServiceConfig } from '@restorecommerce/service-config';
 import { createLogger } from '@restorecommerce/logger';
 import { createChannel, createClient } from '@restorecommerce/grpc-client';
 import {
-  ServiceClient as UserServiceClient,
-  ServiceDefinition as UserServiceDefinition
+  UserServiceClient,
+  UserServiceDefinition
 } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/user';
 import {
   Response_Decision
@@ -108,7 +108,7 @@ export interface Resource {
 export interface Attribute {
   id: string;
   value: string;
-  attribute: Attribute[];
+  attributes: Attribute[];
 }
 
 export interface CtxResource {
@@ -117,7 +117,7 @@ export interface CtxResource {
     created?: number;
     modified?: number;
     modified_by?: string;
-    owner: Attribute[]; // id and owner is mandatory in ctx resource other attributes are optional
+    owners: Attribute[]; // id and owner is mandatory in ctx resource other attributes are optional
   };
   [key: string]: any;
 }

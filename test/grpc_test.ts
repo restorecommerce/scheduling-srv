@@ -5,7 +5,7 @@ import { Worker } from '../src/worker';
 import { Topic } from '@restorecommerce/kafka-client';
 import { createServiceConfig } from '@restorecommerce/service-config';
 import { createChannel, createClient } from '@restorecommerce/grpc-client';
-import { ServiceClient as SchedulingServiceClient, ServiceDefinition as SchedulingServiceDefinition, JobOptions_Priority, Backoff_Type, JobReadRequest, JobReadRequest_SortOrder, JobList } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/job';
+import { JobServiceClient as SchedulingServiceClient, JobServiceDefinition as SchedulingServiceDefinition, JobOptions_Priority, Backoff_Type, JobReadRequest, JobReadRequest_SortOrder, JobList } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/job';
 import { Logger } from 'winston';
 import { GrpcMockServer, ProtoUtils } from '@alenon/grpc-mock-server';
 import * as proto_loader from '@grpc/proto-loader';
@@ -87,7 +87,7 @@ interface MethodWithOutput {
 
 const PROTO_PATH = 'io/restorecommerce/access_control.proto';
 const PKG_NAME = 'io.restorecommerce.access_control';
-const SERVICE_NAME = 'Service';
+const SERVICE_NAME = 'AccessControlService';
 const pkgDef: grpc.GrpcObject = grpc.loadPackageDefinition(
   proto_loader.loadSync(PROTO_PATH, {
     includeDirs: ['node_modules/@restorecommerce/protos'],
@@ -153,7 +153,7 @@ const startGrpcMockServer = async (methodWithOutput: MethodWithOutput[]) => {
 
 const IDS_PROTO_PATH = 'test/protos/io/restorecommerce/user.proto';
 const IDS_PKG_NAME = 'io.restorecommerce.user';
-const IDS_SERVICE_NAME = 'Service';
+const IDS_SERVICE_NAME = 'UserService';
 
 const mockServerIDS = new GrpcMockServer('localhost:50051');
 

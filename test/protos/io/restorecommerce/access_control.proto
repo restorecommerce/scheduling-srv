@@ -6,7 +6,7 @@ package io.restorecommerce.access_control;
 * Access control service interface.
 */
 
-service Service {
+service AccessControlService {
   rpc IsAllowed (Request) returns (Response);
   rpc WhatIsAllowed(Request) returns (ReverseQuery);
 }

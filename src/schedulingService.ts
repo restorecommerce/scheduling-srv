@@ -3,7 +3,7 @@ import { errors } from '@restorecommerce/chassis-srv';
 import * as kafkaClient from '@restorecommerce/kafka-client';
 import { AuthZAction, ACSAuthZ, updateConfig, DecisionResponse, Operation, PolicySetRQResponse } from '@restorecommerce/acs-client';
 import {
-  ServiceServiceImplementation as SchedulingServiceServiceImplementation,
+  JobServiceImplementation as SchedulingServiceServiceImplementation,
   JobFailed, JobDone, DeepPartial, JobList, JobListResponse, Data,
   Backoff_Type, JobOptions_Priority, JobReadRequest, JobReadRequest_SortOrder
 } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/job';
@@ -710,7 +710,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
       ctx.subject = subject;
       ctx.resources = [];
       acsResponse = await checkAccessRequest(ctx, [{ resource: 'job' }], AuthZAction.READ,
-        Operation.whatIsAllowed);
+        Operation.whatIsAllowed) as PolicySetRQResponse;
     } catch (err) {
       this.logger.error('Error occurred requesting access-control-srv:', err);
       return {
@@ -1381,12 +1381,12 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
         {
           id: urns.ownerIndicatoryEntity,
           value: urns.organization,
-          attribute: []
+          attributes: []
         },
         {
           id: urns.ownerInstance,
           value: subject.scope,
-          attribute: []
+          attributes: []
         });
     }
 
@@ -1429,12 +1429,12 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
               {
                 id: urns.ownerIndicatoryEntity,
                 value: urns.user,
-                attribute: []
+                attributes: []
               },
               {
                 id: urns.ownerInstance,
                 value: subject.id,
-                attribute: []
+                attributes: []
               });
             resource.data.meta.owner = ownerAttributes;
             resource.meta = { owner: ownerAttributes };
@@ -1447,12 +1447,12 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
               {
                 id: urns.ownerIndicatoryEntity,
                 value: urns.user,
-                attribute: []
+                attributes: []
               },
               {
                 id: urns.ownerInstance,
                 value: subject.id,
-                attribute: []
+                attributes: []
               });
           }
           resource.data.meta.owner = ownerAttributes;

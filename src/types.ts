@@ -16,7 +16,7 @@ export enum Priority {
 // }
 
 export interface FilterOpts {
-  id: number | string;
+  id?: number | string;
   type?: string;
   data?: Data;
   opts?: JobsOptions;
