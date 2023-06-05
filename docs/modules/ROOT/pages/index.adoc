@@ -58,8 +58,8 @@ This microservice exposes the following gRPC endpoints:
 [width="100%",cols="20%,16%,20%,44%",options="header",]
 |===============================================================================
 | Field | Type | Label | Description
-| id | string | required | Job resource ID, if not specified an uuid is generated.
-| type | string | required | Arbitrary job type (e.g: 'daily_email_dispatcher').
+| id | string | optional | Job resource ID, if not specified an uuid is generated.
+| type | string | optional | Arbitrary job type (e.g: 'daily_email_dispatcher').
 | data | Data | optional | Job data to persist in Redis.
 | when | string | optional | Used to define the exact time at which a single job instance is processed. Ex: "Jan 15, 2018 10:30:00". This should only be used in one-time jobs.
 |===============================================================================
@@ -116,7 +116,7 @@ This microservice exposes the following gRPC endpoints:
 [width="100%",cols="20%,16%,20%,44%",options="header",]
 |===============================================================================
 | Field | Type | Label | Description
-| delay | number | required | Time until retry in milliseconds.
+| delay | number | optional | Time until retry in milliseconds.
 | type | `io.restorecommerce.job.Backoff.Type` | optional | Calculation of the delay for retries.
 |===============================================================================
 
@@ -168,7 +168,7 @@ For the detailed protobuf message structure of `io.restorecommerce.job.ReadReque
 | Field | Type | Label | Description
 | sort  | `io.restorecommerce.job.SortOrder` | optional | sort order
 | filter| `io.restorecommerce.job.JobFilter` | optional | job filter
-| field | https://github.com/restorecommerce/protos/blob/master/io/restorecommerce/resource_base.proto[`io.restorecommerce.resourcebase.FieldFilter`] | field filter
+| fields | https://github.com/restorecommerce/protos/blob/master/io/restorecommerce/resource_base.proto[`io.restorecommerce.resourcebase.FieldFilter`] | field filter
 |subject |`io.restorecommerce.auth.Subject` |required |Subject details
 |===============================================================================
 
@@ -247,10 +247,10 @@ These operations are exposed with the same input as the gRPC endpoints
 [width="100%",cols="20%,16%,20%,44%",options="header",]
 |===============================================================================
 | Field | Type | Label | Description
-| id | number | required | Job instance ID in Redis.
-| type | string | required | Arbitrary job type (e.g: 'daily_email_dispatcher').
-| data | `io.restorecommerce.job.Data` | required | Arbitrary job type (e.g: 'daily_email_dispatcher').
-| schedule_type | string | required | Job type ex: `ONCE`, `RECURR` etc.
+| id | number | optional | Job instance ID in Redis.
+| type | string | optional | Arbitrary job type (e.g: 'daily_email_dispatcher').
+| data | `io.restorecommerce.job.Data` | optional | Arbitrary job type (e.g: 'daily_email_dispatcher').
+| schedule_type | string | optional | Job type ex: `ONCE`, `RECURR` etc.
 |===============================================================================
 
 `io.restorecommerce.job.JobDone`
@@ -258,8 +258,8 @@ These operations are exposed with the same input as the gRPC endpoints
 [width="100%",cols="20%,16%,20%,44%",options="header",]
 |===============================================================================
 | Field | Type | Label | Description
-| id | number | required | Job instance ID in Redis.
-| schedule_type | string | required | Job type ex: `ONCE`, `RECURR` etc.
+| id | number | optional | Job instance ID in Redis.
+| schedule_type | string | optional | Job type ex: `ONCE`, `RECURR` etc.
 | delete_scheduled | boolean | optional | Whether to delete this repeating job.
 | type | string | optional | Job Type (required if emitting back a message).
 | result | https://github.com/restorecommerce/protos/blob/master/google/protobuf/any.proto[`google.protobuf.Any`] | optional | Generic data type for job-specific data.
@@ -270,9 +270,9 @@ These operations are exposed with the same input as the gRPC endpoints
 [width="100%",cols="20%,16%,20%,44%",options="header",]
 |===============================================================================
 | Field | Type | Label | Description
-| id | number | required | Job instance ID in redis.
-| schedule_type | string | required | Job type ex: `ONCE`, `RECURR` etc.
-| error | string | required | Failure details.
+| id | number | optional | Job instance ID in redis.
+| schedule_type | string | optional | Job type ex: `ONCE`, `RECURR` etc.
+| error | string | optional | Failure details.
 |===============================================================================
 
 Events from the `io.restorecommerce.jobs` topic are issued whenever a CRUD operation is performed.
