@@ -134,7 +134,7 @@ This microservice exposes the following gRPC endpoints:
 
 The microservice exposes the below CRUD operations for creating or modifying Job resources.
 
-`io.restorecommerce.job.Service`
+`io.restorecommerce.job.JobService`
 
 [width="100%",cols=",,,",options="header",]
 |===============================================================================
