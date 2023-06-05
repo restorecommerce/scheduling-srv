@@ -51,9 +51,9 @@ export function payloadShouldBeEmpty(result: any): void {
 export const permitJobRule = {
   id: 'permit_rule_id',
   target: {
-    action: [],
+    actions: [],
     resources: [{ id: 'urn:restorecommerce:acs:names:model:entity', value: 'urn:restorecommerce:acs:model:job.Job' }],
-    subject: [
+    subjects: [
       {
         id: 'urn:restorecommerce:acs:names:role',
         value: 'admin-r-id'
@@ -69,9 +69,9 @@ export const permitJobRule = {
 export const denyJobRule = {
   id: 'permit_rule_id',
   target: {
-    action: [],
+    actions: [],
     resources: [{ id: 'urn:restorecommerce:acs:names:model:entity', value: 'urn:restorecommerce:acs:model:job.Job' }],
-    subject: [
+    subjects: [
       {
         id: 'urn:restorecommerce:acs:names:role',
         value: 'admin-r-id'
@@ -94,12 +94,12 @@ export const jobPolicySetRQ = {
           combining_algorithm: 'urn:oasis:names:tc:xacml:3.0:rule-combining-algorithm:permit-overrides',
           id: 'job_test_policy_id',
           target: {
-            action: [],
+            actions: [],
             resources: [{
               id: 'urn:restorecommerce:acs:names:model:entity',
               value: 'urn:restorecommerce:acs:model:job.Job'
             }],
-            subject: []
+            subjects: []
           }, effect: '',
           rules: [],
           has_rules: true
