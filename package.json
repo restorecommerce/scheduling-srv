@@ -18,7 +18,7 @@
   ],
   "dependencies": {
     "@bull-board/api": "^5.0.1",
-    "@bull-board/express": "^5.0.1",
+    "@bull-board/express": "^5.4.0",
     "@bull-board/koa": "^5.0.1",
     "@restorecommerce/acs-client": "^1.1.0",
     "@restorecommerce/chassis-srv": "^1.1.2",
