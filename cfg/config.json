@@ -21,6 +21,38 @@
     "fieldOptions": {
       "omitFields": [
         "custom_arguments"
+      ],
+      "bufferFields": [
+        {
+          "fieldPath": "returnvalue.result.value"
+        },
+        {
+          "fieldPath": "request.items.[0].data.payload"
+        },
+        {
+          "fieldPath": "items.[0].data.payload"
+        },
+        {
+          "fieldPath": "response.items.[0].payload.data.payload"
+        },
+        {
+          "fieldPath": "messages.[0].items.[0].data.payload"
+        },
+        {
+          "fieldPath": "decodedMsg.items.[0].data.payload"
+        },
+        {
+          "fieldPath": "decodedMsg.result"
+        },
+        {
+          "fieldPath": "data.payload"
+        },
+        {
+          "fieldPath": "messages.[0].result.value"
+        },
+        {
+          "fieldPath": "result.value"
+        }
       ]
     }
   },
