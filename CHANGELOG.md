@@ -1,3 +1,7 @@
+## 1.0.1 (June 20th, 2023)
+
+- up all deps
+
 ## 1.0.0 (April 21st, 2023)
 
 - migrate from bull to bull-mq
