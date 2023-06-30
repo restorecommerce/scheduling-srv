@@ -23,7 +23,7 @@
     "@restorecommerce/acs-client": "^1.1.6",
     "@restorecommerce/chassis-srv": "^1.2.2",
     "@restorecommerce/cluster-service": "^1.0.1",
-    "@restorecommerce/kafka-client": "^1.0.10",
+    "@restorecommerce/kafka-client": "^1.0.11",
     "@restorecommerce/logger": "^1.2.1",
     "@restorecommerce/rc-grpc-clients": "^3.1.2",
     "@restorecommerce/service-config": "^1.0.3",
