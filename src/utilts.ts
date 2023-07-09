@@ -18,63 +18,10 @@ import { Processor } from 'bullmq';
 import { FilterOpts, JobType, KafkaOpts, Priority } from './types';
 import { parseInt } from 'lodash';
 import { Data } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/job';
-// import { marshallProtobufAny, unmarshallProtobufAny } from './schedulingService';
+import { Attribute } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/attribute';
 import { createClient as createRedisClient } from 'redis';
 import { Events } from '@restorecommerce/kafka-client';
 import { Logger } from 'winston';
-
-// export interface HierarchicalScope {
-//   id: string;
-//   role?: string;
-//   children?: HierarchicalScope[];
-// }
-
-// export interface Response {
-//   payload: any;
-//   count: number;
-//   status?: {
-//     code: number;
-//     message: string;
-//   };
-// }
-
-// export enum FilterOperation {
-//   eq = 0,
-//   lt = 1,
-//   lte = 2,
-//   gt = 3,
-//   gte = 4,
-//   isEmpty = 5,
-//   iLike = 6,
-//   in = 7,
-//   neq = 8
-// }
-
-// export enum FilterValueType {
-//   STRING = 0,
-//   NUMBER = 1,
-//   BOOLEAN = 2,
-//   DATE = 3,
-//   ARRAY = 4
-// }
-
-// export enum OperatorType {
-//   and = 0,
-//   or = 1
-// }
-
-// export interface Filter {
-//   field: string;
-//   operation: FilterOperation;
-//   value: string;
-//   type?: FilterValueType;
-//   filters?: FilterOp[];
-// }
-
-// export interface FilterOp {
-//   filter?: Filter[];
-//   operator?: OperatorType;
-// }
 
 // Create a ids client instance
 let idsClientInstance: UserServiceClient;
@@ -103,12 +50,6 @@ export interface Resource {
   resource: string;
   id?: string | string[]; // for what is allowed operation id is not mandatory
   property?: string[];
-}
-
-export interface Attribute {
-  id: string;
-  value: string;
-  attributes: Attribute[];
 }
 
 export interface CtxResource {
@@ -291,7 +232,7 @@ export async function runWorker(queue: string, concurrency: number, cfg: any, lo
     // For recurring job add time so if service goes down we can fire jobs
     // for the missed schedules comparing the last run time
     let lastRunTime;
-    if (filteredJob.opts && filteredJob.opts.repeat &&
+    if (filteredJob?.opts?.repeat &&
       ((filteredJob.opts.repeat as any).every ||
         (filteredJob.opts.repeat as any).cron)) {
       if (filteredJob.data) {
@@ -299,8 +240,8 @@ export async function runWorker(queue: string, concurrency: number, cfg: any, lo
         const dateTime = new Date();
         lastRunTime = JSON.stringify({ time: dateTime });
         const bufObj = Buffer.from(JSON.stringify({ time: dateTime }));
-        if (filteredJob.data.payload) {
-          if (filteredJob.data.payload.value) {
+        if (filteredJob?.data?.payload) {
+          if (filteredJob?.data?.payload?.value) {
             let jobBufferObj;
             try {
               jobBufferObj = JSON.parse(filteredJob.data.payload.value.toString());

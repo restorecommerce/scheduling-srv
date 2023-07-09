@@ -48,11 +48,12 @@ const acsSubject = {
       role: 'admin-r-id',
       attributes: [{
         id: 'urn:restorecommerce:acs:names:roleScopingEntity',
-        value: 'urn:restorecommerce:acs:model:organization.Organization'
-      },
-      {
-        id: 'urn:restorecommerce:acs:names:roleScopingInstance',
-        value: 'mainOrg'
+        value: 'urn:restorecommerce:acs:model:organization.Organization',
+        attributes: [{
+          id: 'urn:restorecommerce:acs:names:roleScopingInstance',
+          value: 'mainOrg',
+          attributes: []
+        }]
       }]
     }
   ],
@@ -139,7 +140,7 @@ const startGrpcMockServer = async (methodWithOutput: MethodWithOutput[]) => {
   }
 };
 
-const IDS_PROTO_PATH = 'test/protos/io/restorecommerce/user.proto';
+const IDS_PROTO_PATH = 'io/restorecommerce/user.proto';
 const IDS_PKG_NAME = 'io.restorecommerce.user';
 const IDS_SERVICE_NAME = 'UserService';
 

@@ -17,7 +17,7 @@ import { Logger } from 'winston';
 import { Response_Decision } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/access_control';
 import { Attribute } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/attribute';
 import { DeleteRequest, DeleteResponse } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/resource_base';
-import { Queue, QueueOptions, Job, JobsOptions, Worker } from 'bullmq';
+import { Queue, QueueOptions, Job } from 'bullmq';
 import { parseInt } from 'lodash';
 
 const JOB_DONE_EVENT = 'jobDone';
@@ -534,11 +534,11 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
           created: now,
           modified: now,
           modified_by: '',
-          owner: []
+          owners: []
         };
         Object.assign(job.data, { meta: metaObj });
       }
-      // if only owner is specified in meta
+      // if only owners are specified in meta
       if (job.data.meta && (!job.data.meta.created || !job.data.meta.modified)) {
         job.data.meta.created = Date.now();
         job.data.meta.modified = Date.now();
@@ -640,23 +640,16 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
       const ownerValues = customArgsFilter.instance;
       const ownerIndictaorEntURN = this.cfg.get('authorization:urns:ownerIndicatoryEntity');
       const ownerInstanceURN = this.cfg.get('authorization:urns:ownerInstance');
-      let ownerInst;
-      let jobOwner: Attribute[] = [];
       result = result.filter(job => {
-        if (job && job.data && job.data.meta && job.data.meta.owner) {
-          jobOwner = job.data.meta.owner;
-          let match = false;
-          for (let idVal of jobOwner) {
-            if (idVal.id === ownerIndictaorEntURN && idVal.value === ownerIndicatorEntity) {
-              match = true;
+        if (job?.data?.meta?.owners?.length > 0) {
+          for (let owner of job.data.meta.owners) {
+            if (owner.id === ownerIndictaorEntURN && owner.value === ownerIndicatorEntity && owner?.attributes?.length > 0) {
+              for (let ownerInstObj of owner.attributes) {
+                if (ownerInstObj.id === ownerInstanceURN && ownerInstObj.value && ownerValues.includes(ownerInstObj.value)) {
+                  return job;
+                }
+              }
             }
-            if (match && idVal.id === ownerInstanceURN) {
-              ownerInst = idVal.value;
-              match = false;
-            }
-          }
-          if (ownerInst && ownerValues.includes(ownerInst)) {
-            return job;
           }
         }
       });
@@ -1126,7 +1119,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
    */
   async update(request: JobList, ctx: any): Promise<DeepPartial<JobListResponse>> {
     let subject = request.subject;
-    // update meta data for owner information
+    // update meta data for owners information
     await this.createMetadata(request.items, AuthZAction.MODIFY, subject);
     let acsResponse: DecisionResponse;
     try {
@@ -1364,7 +1357,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
   }
 
   /**
-   * reads meta data from DB and updates owner information in resource if action is UPDATE / DELETE
+   * reads meta data from DB and updates owners information in resource if action is UPDATE / DELETE
    * @param resources list of resources
    * @param action resource action
    * @param subject subject name
@@ -1376,17 +1369,16 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
     }
     const urns = this.cfg.get('authorization:urns');
     if (subject && subject.scope && (action === AuthZAction.CREATE || action === AuthZAction.MODIFY)) {
-      // add subject scope as default owner
+      // add subject scope as default owners
       orgOwnerAttributes.push(
         {
           id: urns.ownerIndicatoryEntity,
           value: urns.organization,
-          attributes: []
-        },
-        {
-          id: urns.ownerInstance,
-          value: subject.scope,
-          attributes: []
+          attributes: [{
+            id: urns.ownerInstance,
+            value: subject.scope,
+            attributes: []
+          }]
         });
     }
 
@@ -1414,51 +1406,49 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
               this.logger.error(`Error reading job with resource ID ${resource.id}`, { code: err.code, message: err.message, stack: err.stack });
             }
           }
-          // update owner info
+          // update owners info
           if (result?.items?.length === 1 && result?.items[0]?.payload) {
             let item = result.items[0].payload;
-            resource.data.meta.owner = item.data.meta.owner;
-            // adding meta to resource root (needed by access-contorl-srv for owner information check)
+            resource.data.meta.owners = item.data.meta.owners;
+            // adding meta to resource root (needed by access-contorl-srv for owners information check)
             // meta is inside data of resource since the data is persisted in redis using bull
-            resource.meta = { owner: item.data.meta.owner };
+            resource.meta = { owners: item.data.meta.owners };
           } else if ((!result || !result.items || !result.items[0] || !result.items[0].payload) && action === AuthZAction.MODIFY) {
             // job does not exist - create new job (ex: Upsert with action modify)
             let ownerAttributes = _.cloneDeep(orgOwnerAttributes);
-            // add user as default owner
+            // add user as default owners
             ownerAttributes.push(
               {
                 id: urns.ownerIndicatoryEntity,
                 value: urns.user,
-                attributes: []
-              },
-              {
-                id: urns.ownerInstance,
-                value: subject.id,
-                attributes: []
+                attributes: [{
+                  id: urns.ownerInstance,
+                  value: subject.id,
+                  attributes: []
+                }]
               });
-            resource.data.meta.owner = ownerAttributes;
-            resource.meta = { owner: ownerAttributes };
+            resource.data.meta.owners = ownerAttributes;
+            resource.meta = { owners: ownerAttributes };
           }
-        } else if (action === AuthZAction.CREATE && !resource.data.meta.owner) {
+        } else if (action === AuthZAction.CREATE && !resource.data.meta.owners) {
           let ownerAttributes = _.cloneDeep(orgOwnerAttributes);
-          // add user as default owner
+          // add user as default owners
           if (resource.id) {
             ownerAttributes.push(
               {
                 id: urns.ownerIndicatoryEntity,
                 value: urns.user,
-                attributes: []
-              },
-              {
-                id: urns.ownerInstance,
-                value: subject.id,
-                attributes: []
+                attributes: [{
+                  id: urns.ownerInstance,
+                  value: subject.id,
+                  attributes: []
+                }]
               });
           }
-          resource.data.meta.owner = ownerAttributes;
-          resource.meta = { owner: ownerAttributes };
-        } else if (action === AuthZAction.CREATE && resource?.data?.meta?.owner) {
-          resource.meta = { owner: resource.data.meta.owner };
+          resource.data.meta.owners = ownerAttributes;
+          resource.meta = { owners: ownerAttributes };
+        } else if (action === AuthZAction.CREATE && resource?.data?.meta?.owners) {
+          resource.meta = { owners: resource.data.meta.owners };
         }
       }
     }

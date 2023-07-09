@@ -44,11 +44,12 @@ const acsSubject = {
       role: 'admin-r-id',
       attributes: [{
         id: 'urn:restorecommerce:acs:names:roleScopingEntity',
-        value: 'urn:restorecommerce:acs:model:organization.Organization'
-      },
-      {
-        id: 'urn:restorecommerce:acs:names:roleScopingInstance',
-        value: 'mainOrg'
+        value: 'urn:restorecommerce:acs:model:organization.Organization',
+        attributes: [{
+          id: 'urn:restorecommerce:acs:names:roleScopingInstance',
+          value: 'mainOrg',
+          attributes: []
+        }]
       }]
     }
   ],
@@ -120,9 +121,9 @@ const startGrpcMockServer = async (methodWithOutput: MethodWithOutput[]) => {
         }
       }
       // Delete request with invalid scope - DENY
-      if (call?.request?.target?.subjects?.length === 3) {
+      if (call?.request?.target?.subjects?.length === 2) {
         let reqSubject = call.request.target.subjects;
-        if (reqSubject[2]?.id === 'urn:restorecommerce:acs:names:roleScopingInstance' && reqSubject[2]?.value === 'orgD') {
+        if (reqSubject[1]?.attributes[0]?.id === 'urn:restorecommerce:acs:names:roleScopingInstance' && reqSubject[1]?.attributes[0]?.value === 'orgD') {
           response = { decision: 'DENY' };
         }
       }
@@ -151,7 +152,7 @@ const startGrpcMockServer = async (methodWithOutput: MethodWithOutput[]) => {
   }
 };
 
-const IDS_PROTO_PATH = 'test/protos/io/restorecommerce/user.proto';
+const IDS_PROTO_PATH = 'io/restorecommerce/user.proto';
 const IDS_PKG_NAME = 'io.restorecommerce.user';
 const IDS_SERVICE_NAME = 'UserService';
 
