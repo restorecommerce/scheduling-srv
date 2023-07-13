@@ -26,7 +26,7 @@
     "@restorecommerce/kafka-client": "^1.0.12",
     "@restorecommerce/logger": "^1.2.1",
     "@restorecommerce/rc-grpc-clients": "^4.0.1",
-    "@restorecommerce/service-config": "^1.0.3",
+    "@restorecommerce/service-config": "^1.0.6",
     "bullmq": "^4.2.0",
     "cache-manager": "^5.2.3",
     "cache-manager-redis": "^0.6.0",
