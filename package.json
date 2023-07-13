@@ -39,7 +39,7 @@
   "devDependencies": {
     "@alenon/grpc-mock-server": "^3.0.21",
     "@grpc/proto-loader": "^0.7.6",
-    "@restorecommerce/grpc-client": "^2.0.1",
+    "@restorecommerce/grpc-client": "^2.0.2",
     "@types/lodash": "^4.14.194",
     "@types/mocha": "^10.0.1",
     "@types/node": "^20.4.1",
