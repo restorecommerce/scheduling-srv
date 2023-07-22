@@ -20,7 +20,7 @@
     "@bull-board/api": "^5.6.0",
     "@bull-board/express": "^5.6.0",
     "@bull-board/koa": "^5.6.0",
-    "@restorecommerce/acs-client": "^1.1.8",
+    "@restorecommerce/acs-client": "^1.1.12",
     "@restorecommerce/chassis-srv": "^1.2.2",
     "@restorecommerce/cluster-service": "^1.0.1",
     "@restorecommerce/kafka-client": "^1.0.12",
