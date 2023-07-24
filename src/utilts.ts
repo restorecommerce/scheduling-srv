@@ -149,6 +149,14 @@ export function _filterJobData(data: Data, encode: boolean, logger: Logger): Pic
     }
   }
 
+  if(picked?.meta?.created && typeof picked.meta.created === 'string') {
+    picked.meta.created = new Date(picked.meta.created);
+  }
+
+  if(picked?.meta?.modified && typeof picked.meta.modified === 'string') {
+    picked.meta.modified = new Date(picked.meta.modified);
+  }
+
   return picked as any;
 }
 

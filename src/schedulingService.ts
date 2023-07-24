@@ -529,7 +529,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
       }
 
       if (!job.data.meta) {
-        const now = Date.now();
+        const now = new Date();
         const metaObj = {
           created: now,
           modified: now,
@@ -540,8 +540,8 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
       }
       // if only owners are specified in meta
       if (job.data.meta && (!job.data.meta.created || !job.data.meta.modified)) {
-        job.data.meta.created = Date.now();
-        job.data.meta.modified = Date.now();
+        job.data.meta.created = new Date();
+        job.data.meta.modified = new Date();
       }
 
       if (job?.data?.payload?.value) {
