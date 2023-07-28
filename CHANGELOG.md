@@ -1,3 +1,10 @@
+## 1.0.2 (July 28th, 2023)
+
+- refactor owner and role association attributes
+- up build to use latest Dockerfile
+- refactor for handling meta created / modified time stamp field handling
+- up deps
+
 ## 1.0.1 (June 20th, 2023)
 
 - up all deps
