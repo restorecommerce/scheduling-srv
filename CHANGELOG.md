@@ -1,3 +1,7 @@
+## 1.0.3 (July 28th, 2023)
+
+- bump version to trigger build
+
 ## 1.0.2 (July 28th, 2023)
 
 - refactor owner and role association attributes
