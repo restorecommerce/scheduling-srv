@@ -178,7 +178,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
           that.logger.error('Error retrieving job ${job.id} from queue', error);
         });
 
-        if (jobData && job.delete_scheduled) {
+        if (job?.delete_scheduled) {
           await queue.removeRepeatable(jobData.name, jobData.opts.repeat);
         }
       });
@@ -256,8 +256,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
           });
         }
 
-        if (job.opts && job.opts.repeat &&
-          (job.opts.repeat as any).cron && lastRunTime) {
+        if ((job?.opts?.repeat as any)?.cron && lastRunTime) {
           let options = {
             currentDate: new Date(lastRunTime.time),
             endDate: new Date(),
@@ -449,7 +448,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
     try {
       if (!ctx) { ctx = {}; };
       ctx.subject = subject;
-      ctx.resources = request.items;
+      ctx.resources = request?.items;
       acsResponse = await checkAccessRequest(ctx, [{
         resource: 'job',
         id: request.items.map(item => item.id)
@@ -470,7 +469,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
     }
 
     let jobs: NewJob[] = [];
-    for (let job of request.items) {
+    for (let job of request?.items || []) {
       try {
         jobs.push(this._validateJob(job as any));
       } catch (err) {
@@ -495,7 +494,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
       }
 
       // map the id to jobId as needed in JobOpts for bull
-      if (job.id) {
+      if (job?.id) {
         // check if jobID already exists then map it as already exists error
         const existingJobId = await this.getRedisValue(job.id);
         if (existingJobId) {
@@ -517,7 +516,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
             continue;
           }
         }
-        if (!job.options) {
+        if (!job?.options) {
           job.options = { jobId: job.id };
         } else {
           job.options.jobId = job.id;
@@ -643,9 +642,9 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
       result = result.filter(job => {
         if (job?.data?.meta?.owners?.length > 0) {
           for (let owner of job.data.meta.owners) {
-            if (owner.id === ownerIndictaorEntURN && owner.value === ownerIndicatorEntity && owner?.attributes?.length > 0) {
+            if (owner?.id === ownerIndictaorEntURN && owner?.value === ownerIndicatorEntity && owner?.attributes?.length > 0) {
               for (let ownerInstObj of owner.attributes) {
-                if (ownerInstObj.id === ownerInstanceURN && ownerInstObj.value && ownerValues.includes(ownerInstObj.value)) {
+                if (ownerInstObj?.id === ownerInstanceURN && ownerInstObj?.value && ownerValues.includes(ownerInstObj.value)) {
                   return job;
                 }
               }
@@ -725,7 +724,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
         _.isEmpty(request.filter.type))) {
       result = await this._getJobList();
       let custom_arguments;
-      if (acsResponse?.custom_query_args && acsResponse.custom_query_args.length > 0) {
+      if (acsResponse?.custom_query_args?.length > 0) {
         custom_arguments = acsResponse.custom_query_args[0].custom_arguments;
       }
       result = this.filterByOwnerShip({ custom_arguments }, result);
@@ -748,7 +747,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
         let jobIDsCopy: string[] = [];
         for (let jobID of jobIDs) {
           const jobIdData = await this.getRedisValue(jobID as string);
-          if (jobIdData && jobIdData.repeatKey) {
+          if (jobIdData?.repeatKey) {
             const repeatKey = jobIdData.repeatKey;
             if (jobIdData?.options?.repeat?.cron && jobIdData?.options?.repeat?.every) {
               jobListResponse.items.push({
@@ -832,7 +831,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
         result = result.filter(job => job.name === typeFilterName);
       }
       let custom_arguments;
-      if (acsResponse?.custom_query_args && acsResponse.custom_query_args.length > 0) {
+      if (acsResponse?.custom_query_args?.length > 0) {
         custom_arguments = acsResponse.custom_query_args[0].custom_arguments;
       }
       result = this.filterByOwnerShip({ custom_arguments }, result);
@@ -921,8 +920,8 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
         }
       };
     }
-    const subject = request.subject;
-    const jobIDs = request.ids;
+    const subject = request?.subject;
+    const jobIDs = request?.ids;
     let resources = [];
     let action;
     if (jobIDs) {
@@ -1125,7 +1124,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
     try {
       if (!ctx) { ctx = {}; };
       ctx.subject = subject;
-      ctx.resources = request.items;
+      ctx.resources = request?.items;
       acsResponse = await checkAccessRequest(ctx,
         [{ resource: 'job', id: request.items.map(item => item.id) }],
         AuthZAction.MODIFY, Operation.isAllowed);
@@ -1150,7 +1149,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
       };
     }
 
-    const mappedJobs = request.items.reduce((obj, job) => {
+    const mappedJobs = request?.items?.reduce((obj, job) => {
       obj[job.id] = job;
       return obj;
     }, {});
@@ -1171,7 +1170,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
 
     const result = [];
 
-    jobData.items.forEach(async (job) => {
+    jobData?.items?.forEach(async (job) => {
       const mappedJob = mappedJobs[job?.payload?.id];
       // update job repeate key based on updated job repeat options
       if (job?.payload?.options?.repeat) {
@@ -1368,21 +1367,21 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
       resources = [resources];
     }
     const urns = this.cfg.get('authorization:urns');
-    if (subject && subject.scope && (action === AuthZAction.CREATE || action === AuthZAction.MODIFY)) {
+    if (subject?.scope && (action === AuthZAction.CREATE || action === AuthZAction.MODIFY)) {
       // add subject scope as default owners
       orgOwnerAttributes.push(
         {
-          id: urns.ownerIndicatoryEntity,
-          value: urns.organization,
+          id: urns?.ownerIndicatoryEntity,
+          value: urns?.organization,
           attributes: [{
-            id: urns.ownerInstance,
-            value: subject.scope,
+            id: urns?.ownerInstance,
+            value: subject?.scope,
             attributes: []
           }]
         });
     }
 
-    if (resources) {
+    if (resources?.length > 0) {
       for (let resource of resources) {
         if (!resource.data) {
           resource.data = { meta: {} };
@@ -1419,11 +1418,11 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
             // add user as default owners
             ownerAttributes.push(
               {
-                id: urns.ownerIndicatoryEntity,
-                value: urns.user,
+                id: urns?.ownerIndicatoryEntity,
+                value: urns?.user,
                 attributes: [{
-                  id: urns.ownerInstance,
-                  value: subject.id,
+                  id: urns?.ownerInstance,
+                  value: subject?.id,
                   attributes: []
                 }]
               });

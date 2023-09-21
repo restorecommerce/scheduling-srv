@@ -1,3 +1,7 @@
+## 1.1.0 (September 21st, 2023)
+
+- up protos (to set all fields optionals)
+
 ## 1.0.3 (July 28th, 2023)
 
 - bump version to trigger build

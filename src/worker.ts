@@ -149,7 +149,7 @@ class JobsCommandInterface extends chassis.CommandInterface {
     const that = this;
     return {
       jobsCreated: async function onJobsCreated(message: any, context: any): Promise<any> {
-        if (message.when) {
+        if (message?.when) {
           // If the jobSchedule time has already lapsed then do not schedule
           const jobScheduleTime = new Date(message.when).getTime();
           const currentTime = new Date().getTime();
@@ -159,7 +159,7 @@ class JobsCommandInterface extends chassis.CommandInterface {
           }
         }
 
-        if (message.now) {
+        if (message?.now) {
           that.logger.info('Skipping immediate job');
           return {};
         }

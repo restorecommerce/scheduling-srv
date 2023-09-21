@@ -42,10 +42,15 @@ export function validateJob(job: any, logger: Logger): void {
   job.options.attempts.should.equal(1);
 }
 
-export function payloadShouldBeEmpty(result: any): void {
+export function payloadShouldBeEmpty(result: any, emptyArray: boolean = true): void {
   should.exist(result);
-  should.exist(result.items);
-  result.items.should.be.length(0);
+  if (emptyArray) {
+    should.exist(result.items);
+    result.items.should.be.length(0);
+  } else {
+    // since grpc read does not return empty elements after making fields optional
+    should.not.exist(result.items);
+  }
 }
 
 export const permitJobRule = {

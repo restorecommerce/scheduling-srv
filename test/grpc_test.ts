@@ -272,7 +272,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
       await jobEvents.$wait(offset + toDelete - 1);
     }
 
-    payloadShouldBeEmpty(await grpcSchedulingSrv.read(JobReadRequest.fromPartial({ subject }), {}));
+    payloadShouldBeEmpty(await grpcSchedulingSrv.read(JobReadRequest.fromPartial({ subject }), {}), false);
   });
   beforeEach(async () => {
     for (let event of ['jobsCreated', 'jobsDeleted']) {
@@ -346,7 +346,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
       // Simulate timeout
       await new Promise((resolve) => setTimeout(resolve, 100));
       const result = await grpcSchedulingSrv.read(JobReadRequest.fromPartial({ subject }));
-      payloadShouldBeEmpty(result);
+      payloadShouldBeEmpty(result, false);
       createResponse.operation_status.code.should.equal(200);
       createResponse.operation_status.message.should.equal('success');
 
@@ -398,7 +398,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
       await jobEvents.$wait(offset + 1); // jobsCreated, queuedJob (jobDone is sent from test)
 
       const result = await grpcSchedulingSrv.read(JobReadRequest.fromPartial({ subject }), {});
-      payloadShouldBeEmpty(result);
+      payloadShouldBeEmpty(result, false);
 
       await w.pause();
     });
@@ -442,7 +442,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
       await jobEvents.$wait(offset + 1);
 
       const result = await grpcSchedulingSrv.read(JobReadRequest.fromPartial({ subject }));
-      payloadShouldBeEmpty(result);
+      payloadShouldBeEmpty(result, false);
       createResponse.operation_status.code.should.equal(200);
       createResponse.operation_status.message.should.equal('success');
     });
@@ -787,7 +787,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
         collection: true, subject
       }, {});
       const result = await grpcSchedulingSrv.read(JobReadRequest.fromPartial({ subject }), {});
-      payloadShouldBeEmpty(result);
+      payloadShouldBeEmpty(result, false);
       result.operation_status.code.should.equal(200);
       result.operation_status.message.should.equal('success');
     });

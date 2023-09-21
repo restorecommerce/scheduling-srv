@@ -113,11 +113,11 @@ export async function checkAccessRequest(ctx: GQLClientContext, resource: Resour
   let subject = ctx.subject;
   // resolve subject id using findByToken api and update subject with id
   let dbSubject;
-  if (subject && subject.token) {
+  if (subject?.token) {
     const idsClient = await getUserServiceClient();
     if (idsClient) {
       dbSubject = await idsClient.findByToken({ token: subject.token });
-      if (dbSubject && dbSubject.payload && dbSubject.payload.id) {
+      if (dbSubject?.payload?.id) {
         subject.id = dbSubject.payload.id;
       }
     }
@@ -144,7 +144,7 @@ export function _filterJobData(data: Data, encode: boolean, logger: Logger): Pic
   ]);
 
   if (encode) {
-    if (picked.payload && picked.payload.value && typeof picked.payload.value === 'string') {
+    if (picked?.payload?.value && typeof picked.payload.value === 'string') {
       (picked as any).payload = marshallProtobufAny(unmarshallProtobufAny(picked.payload, logger));
     }
   }
@@ -169,9 +169,9 @@ export function _filterQueuedJob<T extends FilterOpts>(job: T, logger: Logger): 
     'id', 'type', 'data', 'opts', 'name'
   ]);
 
-  if (picked.data) {
+  if (picked?.data) {
     picked.data = _filterJobData(picked.data, false, logger);
-    if (picked.data.payload && picked.data.payload.value) {
+    if (picked?.data?.payload?.value) {
       picked.data.payload.value = Buffer.from(picked.data.payload.value);
     }
   }
@@ -184,7 +184,7 @@ export function _filterKafkaJob<T extends KafkaOpts>(job: T, logger: Logger): Pi
     'id', 'type', 'data', 'options', 'when'
   ]);
 
-  if (picked.data && picked.data.payload && picked.data.payload.value) {
+  if (picked?.data?.payload?.value) {
     // Re-marshal because protobuf messes up toJSON
     picked.data.payload = marshallProtobufAny(unmarshallProtobufAny(picked.data.payload, logger));
   }
@@ -197,11 +197,11 @@ export function _filterJobOptions(data: JobsOptions): Pick<JobsOptions, 'priorit
     'priority', 'attempts', 'backoff', 'repeat', 'jobId', 'removeOnComplete'
   ]);
 
-  if (typeof picked.priority === 'number') {
+  if (typeof picked?.priority === 'number') {
     picked.priority = Priority[picked.priority] as any;
   }
 
-  if (typeof picked.backoff === 'object') {
+  if (typeof picked?.backoff === 'object') {
     if (!picked.backoff.type) {
       picked.backoff.type = 'FIXED';
     } else {
@@ -209,7 +209,7 @@ export function _filterJobOptions(data: JobsOptions): Pick<JobsOptions, 'priorit
     }
   }
   // remove key if it exists in repeat
-  if (picked && picked.repeat && (picked.repeat as any).key) {
+  if ((picked?.repeat as any)?.key) {
     delete (picked.repeat as any).key;
   }
 
@@ -243,7 +243,7 @@ export async function runWorker(queue: string, concurrency: number, cfg: any, lo
     if (filteredJob?.opts?.repeat &&
       ((filteredJob.opts.repeat as any).every ||
         (filteredJob.opts.repeat as any).cron)) {
-      if (filteredJob.data) {
+      if (filteredJob?.data) {
         // adding time to payload data for recurring jobs
         const dateTime = new Date();
         lastRunTime = JSON.stringify({ time: dateTime });
