@@ -40,7 +40,7 @@
     "@alenon/grpc-mock-server": "^3.1.1",
     "@grpc/proto-loader": "^0.7.10",
     "@restorecommerce/grpc-client": "^2.0.3",
-    "@types/lodash": "^4.14.198",
+    "@types/lodash": "^4.14.199",
     "@types/mocha": "^10.0.1",
     "@types/node": "^20.6.3",
     "@typescript-eslint/eslint-plugin": "^6.7.2",
