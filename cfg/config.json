@@ -183,10 +183,6 @@
     "reflection": "io-restorecommerce-scheduling-reflection",
     "health": "grpc-health-v1"
   },
-  "kue": {
-    "prefix": "scheduling-srv",
-    "restore": true
-  },
   "bull": {
     "allJobTypes": [
       "waiting",
