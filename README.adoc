@@ -1,6 +1,6 @@
 = Scheduling Service
 
-https://travis-ci.org/restorecommerce/scheduling-srv?branch=master[image:https://img.shields.io/travis/restorecommerce/scheduling-srv/master.svg?style=flat-square[Build Status]]
+https://github.com/restorecommerce/scheduling-srv/actions/workflows/build.yaml[image:https://img.shields.io/github/actions/workflow/status/restorecommerce/scheduling-srv/build.yaml?style=flat-square[Build Status]]
 https://depfu.com/repos/github/restorecommerce/scheduling-srv?branch=master[image:https://img.shields.io/depfu/dependencies/github/restorecommerce/scheduling-srv?style=flat-square[Dependencies]]
 https://coveralls.io/github/restorecommerce/scheduling-srv?branch=master[image:https://img.shields.io/coveralls/github/restorecommerce/scheduling-srv/master.svg?style=flat-square[Coverage Status]]
 
