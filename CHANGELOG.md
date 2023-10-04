@@ -1,3 +1,7 @@
+## 1.1.1 (September 4th, 2023)
+
+- up dependencies
+
 ## 1.1.0 (September 21st, 2023)
 
 - up protos (to set all fields optionals)
