@@ -23,7 +23,7 @@ import { updateConfig } from '@restorecommerce/acs-client';
 import * as _ from 'lodash';
 import { DeleteRequest } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/resource_base';
 import { createClient as RedisCreateClient, RedisClientType } from 'redis';
-import { runWorker } from '../src/utilts';
+import { runWorker } from '@restorecommerce/scs-jobs';
 
 /**
  * NOTE: Running instances of Redis and Kafka are required to run the tests.

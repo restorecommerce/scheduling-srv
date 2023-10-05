@@ -20,7 +20,8 @@ import { ServerReflectionService } from 'nice-grpc-server-reflection';
 import { BindConfig } from '@restorecommerce/chassis-srv/lib/microservice/transport/provider/grpc';
 import { HealthDefinition } from '@restorecommerce/rc-grpc-clients/dist/generated-server/grpc/health/v1/health';
 import { DeleteRequest, protoMetadata as resourceBaseMeta } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/resource_base';
-import { _filterKafkaJob, runWorker } from './utilts';
+import { _filterKafkaJob } from './utilts';
+import { runWorker } from '@restorecommerce/scs-jobs';
 
 const express = require('express');
 const JOBS_CREATE_EVENT = 'createJobs';

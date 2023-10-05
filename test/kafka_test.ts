@@ -23,7 +23,7 @@ import { createClient as RedisCreateClient, RedisClientType } from 'redis';
 import { Logger } from 'winston';
 import { updateConfig } from '@restorecommerce/acs-client';
 import { JobOptions_Priority, Backoff_Type, JobReadRequest } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/job';
-import { runWorker } from '../src/utilts';
+import { runWorker } from '@restorecommerce/scs-jobs';
 
 /**
  * NOTE: Running instances of Redis and Kafka are required to run the tests.
