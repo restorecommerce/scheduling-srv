@@ -347,7 +347,7 @@ export class Worker {
     if (externalJobFiles && externalJobFiles.length > 0) {
       externalJobFiles.forEach((externalFile) => {
         if (externalFile.endsWith('.js')) {
-          let require_dir = './external-jobs';
+          let require_dir = './external-jobs/';
           if (process.env.EXTERNAL_JOBS_REQUIRE_DIR) {
             require_dir = process.env.EXTERNAL_JOBS_REQUIRE_DIR;
           }

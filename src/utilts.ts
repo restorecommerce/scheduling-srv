@@ -235,6 +235,7 @@ export async function runWorker(queue: string, concurrency: number, cfg: any, lo
   const jobEvents = await events.topic('io.restorecommerce.jobs');
 
   const redisURL = new URL(redisConfig.url);
+  logger.info(`Registering worker for queue ${queue}`);
   const worker = new Worker(queue, async job => {
     const filteredJob = _filterQueuedJob<JobType>(job as any, logger);
     // For recurring job add time so if service goes down we can fire jobs
