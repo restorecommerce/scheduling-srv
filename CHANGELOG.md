@@ -1,3 +1,8 @@
+## 1.1.2 (September 5th, 2023)
+
+- fix external jobs dir when no env var is provided
+- use runWorker from npm package scs-jobs
+
 ## 1.1.1 (September 4th, 2023)
 
 - up dependencies
