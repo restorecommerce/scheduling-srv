@@ -354,12 +354,12 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
    * @param opts
    */
   getNextMillis(millis, opts) {
-    if (opts.every) {
+    if (opts?.every) {
       return Math.floor(millis / opts.every) * opts.every + opts.every;
     }
 
     const currentDate =
-      opts.startDate && new Date(opts.startDate) > new Date(millis)
+      opts?.startDate && new Date(opts.startDate) > new Date(millis)
         ? new Date(opts.startDate)
         : new Date(millis);
     const interval = parseExpression(
@@ -387,31 +387,20 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
   }
 
   /**
-   * Bull generates the repeatKey for repeatable jobs based on jobID, name and
-   * cron settings - so below api is to generate the same repeat key and store in redis
-   * DB index and map it before making request to bull
+   * store the mapping from repeateKey to external interface SCS job Id, and
+   * also the mapping other way around i.e. from SCS job Id to repeatKey (needed for read operations)
    * @param name - job name
    * @param repeat - job repeate options
    * @param jobId - job id
    */
-  async storeRepeatKey(name, options, jobId) {
+  async storeRepeatKey(repeatId, scsJobId, options) {
     try {
-      const repeat = options.repeat;
-      const endDate = repeat.endDate
-        ? new Date(repeat.endDate).getTime() + ':'
-        : ':';
-      const tz = repeat.tz ? repeat.tz + ':' : ':';
-      const suffix = repeat.cron ? tz + repeat.cron : String(repeat.every);
-      const overrRiddentJobId = repeat.jobId ? repeat.jobId + ':' : ':';
-      const md5Key = this.md5(name + ':' + overrRiddentJobId + endDate + suffix);
-      const repeatKey = this.md5(name + jobId + ':' + md5Key);
-      this.logger.info('Repeat key generated for JobId is', { repeatKey, jobId });
-      const jobIdData = { repeatKey, options };
-      // map jobID with jobIdData - containing repeatKey and options
-      await this.repeatJobIdRedisClient.set(jobId, JSON.stringify(jobIdData));
-      // to resolve the jobId based on repeatkey
-      await this.repeatJobIdRedisClient.set(repeatKey, jobId);
-      return repeatKey;
+      if (repeatId && scsJobId) {
+        this.logger.info('Repeat key mapped to external SCS JobId', { repeatId, scsJobId });
+        await this.repeatJobIdRedisClient.set(repeatId, scsJobId);
+        const jobIdData = { repeatId, options };
+        await this.repeatJobIdRedisClient.set(scsJobId, JSON.stringify(jobIdData));
+      }
     } catch (error) {
       this.logger.error('Error storing repeatKey to redis', {
         code: error.code,
@@ -523,7 +512,6 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
         }
         if (job?.options?.repeat) {
           (job as any).options.repeat.jobId = job.id;
-          await this.storeRepeatKey(job.type, job.options, job.id);
         }
       }
 
@@ -572,6 +560,13 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
         queue = _.find(this.queuesList, { name: this.defaultQueueName });
       }
       const submittedJob = await queue.add(job.type, job.data, bullOptions);
+      if (submittedJob?.id?.startsWith('repeat:')) {
+        const repeatJobId = submittedJob?.id?.split(':')[1];
+        await this.storeRepeatKey(repeatJobId, job.id, job.options);
+      } else if (submittedJob?.id) {
+        // future job with when
+        await this.storeRepeatKey(submittedJob.id, job.id, job.options);
+      }
       this.logger.verbose(`job@${job.type} created`, job);
       result.push(submittedJob);
     }
@@ -670,7 +665,9 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
   async getRedisValue(key: string): Promise<any> {
     let redisValue;
     try {
-      redisValue = await this.repeatJobIdRedisClient.get(key);
+      if (key) {
+        redisValue = await this.repeatJobIdRedisClient.get(key);
+      }
       if (redisValue) {
         return JSON.parse(redisValue);
       } else {
@@ -747,8 +744,9 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
         let jobIDsCopy: string[] = [];
         for (let jobID of jobIDs) {
           const jobIdData = await this.getRedisValue(jobID as string);
-          if (jobIdData?.repeatKey) {
-            const repeatKey = jobIdData.repeatKey;
+          // future jobs scheduled with `when` will have same repeatId as external SCS jobID
+          if (jobIdData?.repeatId && (jobIdData.repeatId != jobID)) {
+            const repeatId = jobIdData.repeatId;
             if (jobIdData?.options?.repeat?.cron && jobIdData?.options?.repeat?.every) {
               jobListResponse.items.push({
                 status: {
@@ -760,9 +758,9 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
               continue;
             }
             const nextMillis = this.getNextMillis(Date.now(), jobIdData.options.repeat);
-            this.logger.debug('Repeatable job identifier', { id: jobID, repeatId: `repeat:${repeatKey}:${nextMillis}` });
+            this.logger.debug('Repeatable job identifier', { id: jobID, repeatId: `repeat:${repeatId}:${nextMillis}` });
             // map the repeatKey with nextmilis for bull repeatable jobID
-            jobID = `repeat:${repeatKey}:${nextMillis}`;
+            jobID = `repeat:${repeatId}:${nextMillis}`;
           }
           for (let queue of this.queuesList) {
             await new Promise((resolve, reject) => {
@@ -984,13 +982,14 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
         this.logger.debug('Could not delete repeatable job keys');
       }
     } else if ('ids' in request) {
-      this.logger.verbose('Deleting jobs by their IDs', request.ids);
+      this.logger.verbose('Deleting jobs by their IDs', { id: request.ids });
 
       for (let queue of this.queuesList) {
         for (let jobDataKey of request.ids) {
           let callback: Promise<boolean>;
           const jobIdData = await this.getRedisValue(jobDataKey as string);
-          if (jobIdData && jobIdData.repeatKey) {
+          // future jobs scheduled with `when` will have same repeatId as external SCS jobID
+          if (jobIdData && jobIdData.repeatId && (jobIdData.repeatId != jobDataKey)) {
             const jobs = await queue.getRepeatableJobs();
             for (let job of jobs) {
               if (job.id === jobDataKey) {
@@ -1002,7 +1001,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
                   message: 'success'
                 });
                 await this.deleteRedisKey(jobDataKey as string);
-                await this.deleteRedisKey(jobIdData.repeatKey);
+                await this.deleteRedisKey(jobIdData.repeatId);
                 break;
               }
             }
@@ -1011,6 +1010,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
               if (jobData) {
                 try {
                   await this._removeBullJob(jobData.id, queue);
+                  await this.deleteRedisKey(jobData.id);
                   deleteResponse.status.push({
                     id: jobData.id.toString(),
                     code: 200,
@@ -1172,10 +1172,6 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
 
     jobData?.items?.forEach(async (job) => {
       const mappedJob = mappedJobs[job?.payload?.id];
-      // update job repeate key based on updated job repeat options
-      if (job?.payload?.options?.repeat) {
-        await this.storeRepeatKey(job?.payload?.type, job?.payload?.options, job?.payload?.id);
-      }
       let endJob = {
         id: mappedJob.id,
         type: mappedJob.type,
@@ -1239,8 +1235,9 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
       let origJobId = _.cloneDeep(eachJob.id);
       for (let queue of this.queuesList) {
         const jobIdData = await this.getRedisValue(eachJob.id as string);
-        if (jobIdData && jobIdData.repeatKey) {
-          const repeatKey = jobIdData.repeatKey;
+        // future jobs scheduled with `when` will have same repeatId as external SCS jobID
+        if (jobIdData?.repeatId && (jobIdData.repeatId != origJobId)) {
+          const repeatId = jobIdData.repeatId;
           if (jobIdData?.options?.repeat?.cron && jobIdData?.options?.repeat?.every) {
             result.push({
               status: {
@@ -1252,9 +1249,9 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
             continue;
           }
           const nextMillis = this.getNextMillis(Date.now(), jobIdData.options.repeat);
-          this.logger.debug('Repeatable job identifier', { id: eachJob.id, repeatId: `repeat:${repeatKey}:${nextMillis}` });
+          this.logger.debug('Repeatable job identifier', { id: eachJob.id, repeatId: `repeat:${repeatId}:${nextMillis}` });
           // map the repeatKey with nextmilis for bull repeatable jobID
-          eachJob.id = `repeat:${repeatKey}:${nextMillis}`;
+          eachJob.id = `repeat:${repeatId}:${nextMillis}`;
         }
         const jobInst = await queue.getJob(eachJob.id);
         if (jobInst) {
@@ -1388,7 +1385,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
         } else if (!resource.data.meta) {
           resource.data.meta = {};
         }
-        if (action === AuthZAction.MODIFY || action === AuthZAction.DELETE) {
+        if (resource?.id && (action === AuthZAction.MODIFY || action === AuthZAction.DELETE)) {
           let result;
           try {
             result = await this.read(JobReadRequest.fromPartial({
@@ -1429,7 +1426,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
             resource.data.meta.owners = ownerAttributes;
             resource.meta = { owners: ownerAttributes };
           }
-        } else if (action === AuthZAction.CREATE && !resource.data.meta.owners) {
+        } else if ((action === AuthZAction.CREATE || !resource.id) && !resource.data.meta.owners) {
           let ownerAttributes = _.cloneDeep(orgOwnerAttributes);
           // add user as default owners
           if (resource.id) {
