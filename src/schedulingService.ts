@@ -774,6 +774,10 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
             await new Promise((resolve, reject) => {
               // getJob returns job or null
               queue.getJob(jobID).then(job => {
+                if (job?.opts?.repeat?.pattern) {
+                  (job.opts.repeat as any).cron = job.opts.repeat.pattern;
+                  delete job.opts.repeat.pattern;
+                }
                 resolve(job);
                 if (!_.isEmpty(job)) {
                   result.push(job);
@@ -816,6 +820,12 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
           let jobsList: any[] = [];
           for (let queue of this.queuesList) {
             const getJobsResult = await queue.getJobs(this.bullOptions['activeAndFutureJobTypes']);
+            getJobsResult.forEach((job) => {
+              if (job?.opts?.repeat?.pattern) {
+                (job.opts.repeat as any).cron = job.opts.repeat.pattern;
+                delete job.opts.repeat.pattern;
+              }
+            });
             jobsList = jobsList.concat(getJobsResult);
           }
           result = jobsList;
@@ -903,6 +913,12 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
     let jobsList: any[] = [];
     for (let queue of this.queuesList) {
       const getJobsResult = await queue.getJobs(this.bullOptions['activeAndFutureJobTypes']);
+      getJobsResult.forEach((job) => {
+        if (job?.opts?.repeat?.pattern) {
+          (job.opts.repeat as any).cron = job.opts.repeat.pattern;
+          delete job.opts.repeat.pattern;
+        }
+      });
       jobsList = jobsList.concat(getJobsResult);
     }
     return jobsList;
