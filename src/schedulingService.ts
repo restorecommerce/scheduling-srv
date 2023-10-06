@@ -235,12 +235,14 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
     for (let job of result) {
       // get the last run time for the job, we store the last run time only
       // for recurring jobs
-      try {
-        lastRunTime = await this.redisClient.get(job.name);
-      } catch (err) {
-        this.logger.error(
-          'Error occurred reading the last run time for job type:',
-          { name: job.name, err });
+      if (job?.name) {
+        try {
+          lastRunTime = await this.redisClient.get(job.name);
+        } catch (err) {
+          this.logger.error(
+            'Error occurred reading the last run time for job type:',
+            { name: job.name, err });
+        }
       }
       // we store lastRunTime only for recurring jobs and if it exists check
       // cron interval and schedule immediate jobs for missed intervals
@@ -256,15 +258,20 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
           });
         }
 
-        if ((job?.opts?.repeat as any)?.cron && lastRunTime) {
+        if ((job?.opts?.repeat as any)?.pattern && lastRunTime?.time) {
           let options = {
             currentDate: new Date(lastRunTime.time),
             endDate: new Date(),
             iterator: true
           };
-          const intervalTime =
-            parseExpression((job.opts.repeat as any).cron, options);
-          while (intervalTime.hasNext()) {
+          let intervalTime;
+          try {
+            intervalTime =
+              parseExpression((job.opts.repeat as any).pattern, options);
+          } catch (error) {
+            this.logger.error('Error parsing cron expression running missed schedules', { code: error.code, message: error.message, stack: error.stack });
+          }
+          while (intervalTime?.hasNext()) {
             let nextInterval: any = intervalTime.next();
             const nextIntervalTime = nextInterval.value.toString();
             // schedule it as one time job for now or immediately
@@ -274,12 +281,13 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
               })
             };
             const currentTime = new Date();
+            const when = new Date(currentTime.setSeconds(currentTime.getSeconds() + 2)).toISOString();
             const immediateJob: any = {
               type: job.name,
               data,
               // give a delay of 2 sec between each job
               // to avoid time out of queued jobs
-              when: currentTime.setSeconds(currentTime.getSeconds() + 2).toString(),
+              when,
               options: {}
             };
             createDispatch.push(thiz.create({
