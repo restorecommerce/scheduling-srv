@@ -19,8 +19,11 @@
       "prettyPrint": true
     },
     "fieldOptions": {
-      "omitFields": [
-        "custom_arguments"
+      "maskFields": [
+        "password",
+        "request.password",
+        "request.token",
+        "items.[0].password"
       ],
       "bufferFields": [
         {
@@ -53,6 +56,26 @@
         {
           "fieldPath": "result.value"
         }
+      ],
+      "omitFields": [
+        "context",
+        "custom_arguments",
+        "subject.token",
+        "token",
+        "tokens",
+        "items.[0].tokens",
+        "messages.[0].tokens",
+        "request.items.[0].tokens",
+        "response.payload.token",
+        "response.payload.tokens",
+        "request.subject.token",
+        "request.subject.tokens",
+        "users.items.[0].payload.tokens",
+        "response.items.[0].payload.tokens",
+        "messages.[0].subject.token",
+        "messages.[0].subject.tokens",
+        "items.[0].subject.token",
+        "decodedMsg.subject.token"
       ]
     }
   },

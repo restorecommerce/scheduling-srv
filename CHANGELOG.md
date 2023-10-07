@@ -1,3 +1,7 @@
+## 1.2.0 (October 7th, 2023)
+
+- up node and deps
+
 ## 1.1.2 (September 5th, 2023)
 
 - fix external jobs dir when no env var is provided
