@@ -28,7 +28,7 @@
     "@restorecommerce/rc-grpc-clients": "^5.1.3",
     "@restorecommerce/scs-jobs": "^0.1.1",
     "@restorecommerce/service-config": "^1.0.7",
-    "bullmq": "^4.12.2",
+    "bullmq": "^4.12.5",
     "cache-manager": "^5.2.4",
     "cache-manager-redis": "^0.6.0",
     "cron-parser": "^4.9.0",
