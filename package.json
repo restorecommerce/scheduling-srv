@@ -17,7 +17,7 @@
     "scheduling"
   ],
   "dependencies": {
-    "@bull-board/api": "^5.8.4",
+    "@bull-board/api": "^5.9.1",
     "@bull-board/express": "^5.8.4",
     "@bull-board/koa": "^5.8.4",
     "@restorecommerce/acs-client": "^1.1.20",
