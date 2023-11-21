@@ -38,11 +38,13 @@ let subject;
 let redisClient: RedisClientType;
 let tokenRedisClient: RedisClientType;
 // mainOrg -> orgA -> orgB -> orgC
+let expires_in = new Date();
+expires_in.setDate(expires_in.getDate() + 1);
 const acsSubject = {
   id: 'admin_user_id',
   scope: 'orgC',
   token: 'admin_token',
-  tokens: [{ token: 'admin_token', expires_in: 0 }],
+  tokens: [{ token: 'admin_token', expires_in }],
   role_associations: [
     {
       role: 'admin-r-id',

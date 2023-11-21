@@ -239,9 +239,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
         try {
           lastRunTime = await this.redisClient.get(job.name);
         } catch (err) {
-          this.logger.error(
-            'Error occurred reading the last run time for job type:',
-            { name: job.name, err });
+          this.logger.error('Error reading the last run time for job type:', { name: job.name, code: err.code, message: err.message, stack: err.stack });
         }
       }
       // we store lastRunTime only for recurring jobs and if it exists check
@@ -451,7 +449,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
         id: request.items.map(item => item.id)
       }], AuthZAction.CREATE, Operation.isAllowed);
     } catch (err) {
-      this.logger.error('Error occurred requesting access-control-srv:', err);
+      this.logger.error('Error requesting access-control-srv for create meta data', { code: err.code, message: err.message, stack: err.stack });
       return {
         items: [],
         total_count: 0,
@@ -664,9 +662,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
       await this.repeatJobIdRedisClient.del(key);
       this.logger.debug('Redis Key deleted successfully used for mapping repeatable jobID', { key });
     } catch (err) {
-      this.logger.error(
-        'Error occurred deleting redis key',
-        { key, msg: err.message });
+      this.logger.error('Error deleting redis key', { key, msg: err.message, stack: err.stack });
     }
   }
 
@@ -685,9 +681,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
       if (err?.message?.startsWith('Unexpected token') || err.message.startsWith('Unexpected number')) {
         return redisValue;
       } else {
-        this.logger.error(
-          'Error occurred reading redis key',
-          { key, msg: err.message });
+        this.logger.error('Error reading redis key', { key, msg: err.message, stack: err.stack });
       }
     }
   }
@@ -709,7 +703,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
       acsResponse = await checkAccessRequest(ctx, [{ resource: 'job' }], AuthZAction.READ,
         Operation.whatIsAllowed) as PolicySetRQResponse;
     } catch (err) {
-      this.logger.error('Error occurred requesting access-control-srv:', err);
+      this.logger.error('Error requesting access-control-srv for read operation', { code: err.code, message: err.message, stack: err.stack });
       return {
         operation_status: {
           code: err.code,
@@ -969,7 +963,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
       acsResponse = await checkAccessRequest(ctx, [{ resource: 'job', id: jobIDs as string[] }], action,
         Operation.isAllowed);
     } catch (err) {
-      this.logger.error('Error occurred requesting access-control-srv:', err);
+      this.logger.error('Error requesting access-control-srv for delete operation', { code: err.code, message: err.message, stack: err.stack });
       return {
         operation_status: {
           code: err.code,
@@ -1153,7 +1147,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
         [{ resource: 'job', id: request.items.map(item => item.id) }],
         AuthZAction.MODIFY, Operation.isAllowed);
     } catch (err) {
-      this.logger.error('Error occurred requesting access-control-srv:', err);
+      this.logger.error('Error requesting access-control-srv for update operation', { code: err.code, message: err.message, stack: err.stack });
       return {
         operation_status: {
           code: err.code,
@@ -1236,7 +1230,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
         [{ resource: 'job', id: request.items.map(item => item.id) }],
         AuthZAction.MODIFY, Operation.isAllowed);
     } catch (err) {
-      this.logger.error('Error occurred requesting access-control-srv:', err);
+      this.logger.error('Error requesting access-control-srv for upsert operation', { code: err.code, message: err.message, stack: err.stack });
       return {
         operation_status: {
           code: err.code,

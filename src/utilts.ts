@@ -99,6 +99,9 @@ export const unmarshallProtobufAny = (data: any, logger: Logger): any => {
   return unmarshalled;
 };
 
+export async function checkAccessRequest(ctx: GQLClientContext, resource: Resource[], action: AuthZAction, operation: Operation.isAllowed): Promise<DecisionResponse>;
+export async function checkAccessRequest(ctx: GQLClientContext, resource: Resource[], action: AuthZAction, operation: Operation.whatIsAllowed): Promise<PolicySetRQResponse>;
+
 /**
  * Perform an access request using inputs from a GQL request
  *

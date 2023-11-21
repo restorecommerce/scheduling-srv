@@ -35,6 +35,8 @@ let logger: Logger;
 let subject;
 let redisClient: RedisClientType;
 let tokenRedisClient: RedisClientType;
+let expires_in = new Date();
+expires_in.setDate(expires_in.getDate() + 1);
 // mainOrg -> orgA -> orgB -> orgC
 const acsSubject = {
   id: 'admin_user_id',
@@ -54,7 +56,7 @@ const acsSubject = {
     }
   ],
   token: 'admin_token',
-  tokens: [{ token: 'admin_token', expires_in: 0 }],
+  tokens: [{ token: 'admin_token', expires_in }],
   hierarchical_scopes: [
     {
       id: 'mainOrg',
