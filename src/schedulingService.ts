@@ -561,7 +561,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
 
       // Match the Job Type with the Queue Name and add the Job to this Queue.
       // If there is no match, add the Job to the Default Queue
-      let queue = _.find(this.queuesList, { name: job.type });
+      let queue = _.find(this.queuesList, { name: job?.queue_name });
       if (_.isEmpty(queue)) {
         queue = _.find(this.queuesList, { name: this.defaultQueueName });
       }

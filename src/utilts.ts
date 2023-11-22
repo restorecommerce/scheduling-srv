@@ -184,7 +184,7 @@ export function _filterQueuedJob<T extends FilterOpts>(job: T, logger: Logger): 
 
 export function _filterKafkaJob<T extends KafkaOpts>(job: T, logger: Logger): Pick<T, 'id' | 'type' | 'data' | 'options' | 'when'> {
   const picked: any = _.pick(job, [
-    'id', 'type', 'data', 'options', 'when'
+    'id', 'type', 'data', 'options', 'when', 'queue_name'
   ]);
 
   if (picked?.data?.payload?.value) {

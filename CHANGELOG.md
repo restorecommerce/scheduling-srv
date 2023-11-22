@@ -1,3 +1,7 @@
+## 1.2.2 (November 22nd, 2023)
+
+- added support to specify queue_name when creating the job
+
 ## 1.2.1 (November 21st, 2023)
 
 - up deps (changed expires_in to date timestamp)

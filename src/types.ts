@@ -42,6 +42,7 @@ export interface NewJob {
   when?: string;
   data: Data;
   id?: string; // mapped to jobId of bull
+  queue_name?: string;
 }
 
 export enum SortOrder {

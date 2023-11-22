@@ -305,6 +305,7 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
 
       const job = {
         type: 'test-job',
+        queue_name: 'test-job',
         data,
         options: {
           timeout: 1,
@@ -356,6 +357,7 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
       scheduledTime.setSeconds(scheduledTime.getSeconds() + 4);
       const job = {
         type: 'test-job',
+        queue_name: 'test-job',
         data,
         when: scheduledTime.toISOString(),
         options: {
@@ -429,6 +431,7 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
 
       const job = {
         type: 'test-job',
+        queue_name: 'test-job',
         data,
         options: {
           priority: JobOptions_Priority.HIGH,
@@ -489,6 +492,7 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
       for (let i = 0; i < 4; i += 1) {
         jobs[i] = {
           type: 'test-job',
+          queue_name: 'test-job',
           data,
           when: scheduledTime.toISOString(),
           options: {

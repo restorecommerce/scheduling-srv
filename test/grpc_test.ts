@@ -322,6 +322,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
 
       const job = {
         type: 'test-job',
+        queue_name: 'test-job',
         data,
         options: {
           timeout: 1,
@@ -373,6 +374,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
       scheduledTime.setSeconds(scheduledTime.getSeconds() + 4);
       const job = {
         type: 'test-job',
+        queue_name: 'test-job',
         data,
         when: scheduledTime.toISOString(),
         options: {
@@ -413,6 +415,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
 
       const job = {
         type: 'external-job',
+        queue_name: 'external-job',
         data: {
           payload: marshallProtobufAny({
             testValue: 'test-value'
@@ -479,6 +482,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
 
       const job = {
         type: 'test-job',
+        queue_name: 'test-job',
         data,
         options: {
           priority: JobOptions_Priority.HIGH,
@@ -525,6 +529,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
       const job = {
         id: 'test-job-id',
         type: 'test-job',
+        queue_name: 'test-job',
         data,
         options: {
           priority: JobOptions_Priority.HIGH,
@@ -587,6 +592,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
       for (let i = 0; i < 4; i += 1) {
         jobs[i] = {
           type: 'test-job',
+          queue_name: 'test-job',
           data,
           when: scheduledTime.toISOString(),
           options: {
