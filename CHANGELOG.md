@@ -1,4 +1,8 @@
-## 1.2.3 (November 22nd, 2023)
+## 1.2.4 (November 23d, 2023)
+
+- fix for storing string values to redis
+
+## 1.2.3 (November 23d, 2023)
 
 - added queue name to job response
 

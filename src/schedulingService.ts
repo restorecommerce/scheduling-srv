@@ -679,7 +679,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
         return;
       }
     } catch (err) {
-      if (err?.message?.startsWith('Unexpected token') || err.message.startsWith('Unexpected number')) {
+      if (err?.message?.startsWith('Unexpected token') || err.message.startsWith('Unexpected number') || err.message.startsWith('Unexpected non-whitespace character')) {
         return redisValue;
       } else {
         this.logger.error('Error reading redis key', { key, msg: err.message, stack: err.stack });
