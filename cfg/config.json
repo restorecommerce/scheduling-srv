@@ -237,6 +237,16 @@
         "lockDuration": 300000,
         "lockRenewTime": 150000
       }
+    },
+    {
+      "name": "notificationQueue",
+      "concurrency": 5,
+      "default": true,
+      "runMissedScheduled": true,
+      "advancedSettings": {
+        "lockDuration": 300000,
+        "lockRenewTime": 150000
+      }
     }
   ],
   "authorization": {
