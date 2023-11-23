@@ -239,7 +239,17 @@
       }
     },
     {
-      "name": "notificationQueue",
+      "name": "notificationSrvQueue",
+      "concurrency": 5,
+      "default": true,
+      "runMissedScheduled": true,
+      "advancedSettings": {
+        "lockDuration": 300000,
+        "lockRenewTime": 150000
+      }
+    },
+    {
+      "name": "identitySrvQueue",
       "concurrency": 5,
       "default": true,
       "runMissedScheduled": true,
