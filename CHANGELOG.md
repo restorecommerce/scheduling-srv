@@ -1,3 +1,7 @@
+## 1.2.3 (November 22nd, 2023)
+
+- added queue name to job response
+
 ## 1.2.2 (November 22nd, 2023)
 
 - added support to specify queue_name when creating the job

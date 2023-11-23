@@ -381,6 +381,7 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
       let result = await schedulingService.read(JobReadRequest.fromPartial({ subject }), {});
       result.items.should.have.length(1);
       result.items[0].payload.type.should.equal('test-job');
+      result.items[0].payload.queue_name.should.equal('test-job');
       result.items[0].status.code.should.equal(200);
       result.items[0].status.message.should.equal('success');
       result.operation_status.code.should.equal(200);
@@ -411,6 +412,7 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
         should.exist(result.items);
         result.items.length.should.equal(2);
         result.items[0].payload.type.should.equal('test-job');
+        result.items[0].payload.queue_name.should.equal('test-job');
         result.items[0].status.code.should.equal(200);
         result.items[0].status.message.should.equal('success');
         result.operation_status.code.should.equal(200);
@@ -456,6 +458,7 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
       should.exist(createResponse.items);
       createResponse.items.length.should.equal(1);
       createResponse.items[0].payload.type.should.equal('test-job');
+      createResponse.items[0].payload.queue_name.should.equal('test-job');
       createResponse.items[0].status.code.should.equal(200);
       createResponse.items[0].status.message.should.equal('success');
       createResponse.operation_status.code.should.equal(200);

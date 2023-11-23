@@ -591,6 +591,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
         payload: {
           id: job.id as string,
           type: job.name,
+          queue_name: job?.queueName,
           data: _filterJobData(job.data, true, this.logger),
           options: _filterJobOptions(job.opts) as any,
           when
@@ -884,6 +885,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
         payload: {
           id: job.id as string,
           type: job.name,
+          queue_name: job.queueName,
           data: _filterJobData(job.data, true, this.logger),
           options: _filterJobOptions(job.opts) as any,
           when
@@ -1193,6 +1195,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
       let endJob = {
         id: mappedJob.id,
         type: mappedJob.type,
+        queue_name: job?.payload?.queue_name,
         options: {
           ...job.payload.options,
           ...(mappedJob.options ? mappedJob.options : {})

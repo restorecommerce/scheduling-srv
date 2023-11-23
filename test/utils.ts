@@ -36,6 +36,7 @@ export function validateJob(job: any, logger: Logger): void {
   should.exist(job.id);
   should.exist(job.type);
   job.type.should.equal('test-job');
+  job.queue_name.should.equal('test-job');
   should.exist(job.options.priority);
   Priority.should.hasOwnProperty(job.options.priority);
   should.exist(job.options.attempts);
