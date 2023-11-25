@@ -260,7 +260,7 @@
     }
   ],
   "authorization": {
-    "service": "scheduling-srv-acs",
+    "service": "acs-srv",
     "enabled": true,
     "enforce": true,
     "urns": {

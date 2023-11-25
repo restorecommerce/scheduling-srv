@@ -1,3 +1,7 @@
+## 1.2.5 (November 25th, 2023)
+
+- updated all dependencies (added created_by field to meta and client_id to tokens)
+
 ## 1.2.4 (November 23d, 2023)
 
 - fix for storing string values to redis
