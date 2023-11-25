@@ -536,6 +536,10 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
         job.data.meta.created = new Date();
         job.data.meta.modified = new Date();
       }
+      if (job?.data?.meta) {
+        job.data.meta.created_by = subject?.id;
+        job.data.meta.modified_by = subject?.id;
+      }
 
       if (job?.data?.payload?.value) {
         job.data.payload.value = job.data.payload.value.toString() as any;

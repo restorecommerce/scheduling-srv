@@ -1,3 +1,7 @@
+## 1.2.6 (November 25th, 2023)
+
+- added created_by and modified_by fields to store to redis job meta 
+
 ## 1.2.5 (November 25th, 2023)
 
 - updated all dependencies (added created_by field to meta and client_id to tokens)
