@@ -1,6 +1,6 @@
 {
   "name": "@restorecommerce/scheduling-srv",
-  "version": "1.2.6",
+  "version": "1.2.7",
   "description": "Restorecommerce job scheduling microservice",
   "main": "lib/start.js",
   "author": "n-fuse GmbH",
@@ -21,7 +21,7 @@
     "@bull-board/express": "^5.9.2",
     "@bull-board/koa": "^5.9.2",
     "@restorecommerce/acs-client": "^1.4.2",
-    "@restorecommerce/chassis-srv": "^1.4.3",
+    "@restorecommerce/chassis-srv": "^1.4.4",
     "@restorecommerce/cluster-service": "^1.0.1",
     "@restorecommerce/kafka-client": "^1.1.12",
     "@restorecommerce/logger": "^1.2.8",
