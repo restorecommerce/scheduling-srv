@@ -4,7 +4,7 @@ import { createLogger } from '@restorecommerce/logger';
 
 // cfg and logger
 const cfg = createServiceConfig(process.cwd());
-const loggerCfg = cfg.get('logger');
+const loggerCfg = cfg?.get('logger') || {};
 loggerCfg.esTransformer = (msg) => {
   msg.fields = JSON.stringify(msg.fields);
   return msg;
