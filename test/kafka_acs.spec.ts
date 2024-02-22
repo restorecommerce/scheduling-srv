@@ -1,11 +1,9 @@
-import * as _ from 'lodash';
-import * as mocha from 'mocha';
-import * as should from 'should';
+import * as _ from 'lodash-es';
+import should from 'should';
 
-import { SchedulingService } from '../src/schedulingService';
-import { marshallProtobufAny } from '../src/utilts';
-import { Worker } from '../src/worker';
-
+import { SchedulingService } from '../src/schedulingService.js';
+import { marshallProtobufAny } from '../src/utilts.js';
+import { Worker } from '../src/worker.js';
 import { Topic } from '@restorecommerce/kafka-client';
 import { createServiceConfig } from '@restorecommerce/service-config';
 import { GrpcMockServer, ProtoUtils } from '@alenon/grpc-mock-server';
@@ -18,11 +16,11 @@ import {
   jobPolicySetRQ,
   permitJobRule,
   validateJobDonePayload
-} from './utils';
+} from './utils.js';
 import { createClient as RedisCreateClient, RedisClientType } from 'redis';
 import { Logger } from 'winston';
 import { updateConfig } from '@restorecommerce/acs-client';
-import { JobOptions_Priority, Backoff_Type, JobReadRequest } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/job';
+import { JobOptions_Priority, Backoff_Type, JobReadRequest } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/job.js';
 import { runWorker } from '@restorecommerce/scs-jobs';
 
 /**
@@ -75,15 +73,8 @@ const acsSubject = {
     }
   ]
 };
-const acsEnv = process.env.ACS_ENABLED;
-let acsEnabled = false;
-let testSuffix = '';
-if (acsEnv && acsEnv.toLocaleLowerCase() === 'true') {
-  acsEnabled = true;
-  testSuffix = 'with ACS Enabled';
-} else {
-  testSuffix = 'with ACS Disabled';
-}
+const acsEnv = 'true';
+let testSuffix = 'with ACS Enabled';
 
 interface MethodWithOutput {
   method: string;

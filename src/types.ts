@@ -1,6 +1,6 @@
 import { JobsOptions } from 'bullmq';
 
-import { Data } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/job';
+import { Data } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/job.js';
 
 export enum Priority {
   NORMAL = 100,

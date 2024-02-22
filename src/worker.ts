@@ -1,29 +1,29 @@
-import * as _ from 'lodash';
+import * as _ from 'lodash-es';
 import * as chassis from '@restorecommerce/chassis-srv';
 import { Events, Topic, registerProtoMeta } from '@restorecommerce/kafka-client';
 import { createLogger } from '@restorecommerce/logger';
 import { Logger } from 'winston';
-import { SchedulingService } from './schedulingService';
+import { SchedulingService } from './schedulingService.js';
 import { createServiceConfig } from '@restorecommerce/service-config';
-import * as fs from 'fs';
+import * as fs from 'node:fs';
 import { createBullBoard } from '@bull-board/api';
-import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
+import { BullMQAdapter } from '@bull-board/api/bullMQAdapter.js';
 import { ExpressAdapter } from '@bull-board/express';
 import { initAuthZ, ACSAuthZ, updateConfig, initializeCache } from '@restorecommerce/acs-client';
 import { createClient, RedisClientType } from 'redis';
-import { protoMetadata as schedulingMeta, JobServiceDefinition as SchedulingServiceDefinition, JobList } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/job';
-import { protoMetadata as commandInterfaceMeta, CommandInterfaceServiceDefinition } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/commandinterface';
+import { protoMetadata as schedulingMeta, JobServiceDefinition as SchedulingServiceDefinition, JobList } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/job.js';
+import { protoMetadata as commandInterfaceMeta, CommandInterfaceServiceDefinition } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/commandinterface.js';
 import {
   protoMetadata as reflectionMeta
-} from '@restorecommerce/rc-grpc-clients/dist/generated-server/grpc/reflection/v1alpha/reflection';
+} from '@restorecommerce/rc-grpc-clients/dist/generated-server/grpc/reflection/v1alpha/reflection.js';
 import { ServerReflectionService } from 'nice-grpc-server-reflection';
-import { BindConfig } from '@restorecommerce/chassis-srv/lib/microservice/transport/provider/grpc';
-import { HealthDefinition } from '@restorecommerce/rc-grpc-clients/dist/generated-server/grpc/health/v1/health';
-import { DeleteRequest, protoMetadata as resourceBaseMeta } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/resource_base';
-import { _filterKafkaJob } from './utilts';
+import { BindConfig } from '@restorecommerce/chassis-srv/lib/microservice/transport/provider/grpc/index.js';
+import { HealthDefinition } from '@restorecommerce/rc-grpc-clients/dist/generated-server/grpc/health/v1/health.js';
+import { DeleteRequest, protoMetadata as resourceBaseMeta } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/resource_base.js';
+import { _filterKafkaJob } from './utilts.js';
 import { runWorker } from '@restorecommerce/scs-jobs';
+import express from 'express';
 
-const express = require('express');
 const JOBS_CREATE_EVENT = 'createJobs';
 const JOBS_MODIFY_EVENT = 'modifyJobs';
 const JOBS_DELETE_EVENT = 'deleteJobs';
@@ -352,7 +352,7 @@ export class Worker {
           if (process.env.EXTERNAL_JOBS_REQUIRE_DIR) {
             require_dir = process.env.EXTERNAL_JOBS_REQUIRE_DIR;
           }
-          (async () => require(require_dir + externalFile).default(cfg, logger, events, runWorker))().catch(err => {
+          (async () => (await import(require_dir + externalFile)).default(cfg, logger, events, runWorker))().catch(err => {
             this.logger.error(`Error scheduling external job ${externalFile}`, { err: err.message });
           });
         }
@@ -391,20 +391,4 @@ export class Worker {
     await this.events.stop();
     await this.offsetStore.stop();
   }
-}
-
-if (require.main === module) {
-  const worker = new Worker();
-  const cfg = createServiceConfig(process.cwd());
-  worker.start(cfg).then().catch((err) => {
-    worker.logger.error('startup error:', err);
-    process.exit(1);
-  });
-
-  process.on('SIGINT', () => {
-    worker.stop().then().catch((err) => {
-      worker.logger.error('shutdown error:', err);
-      process.exit(1);
-    });
-  });
 }

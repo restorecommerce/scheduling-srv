@@ -1,11 +1,10 @@
-import * as mocha from 'mocha';
-import * as should from 'should';
-import { marshallProtobufAny } from '../src/utilts';
-import { Worker } from '../src/worker';
+import should from 'should';
+import { marshallProtobufAny } from '../src/utilts.js';
+import { Worker } from '../src/worker.js';
 import { Topic } from '@restorecommerce/kafka-client';
 import { createServiceConfig } from '@restorecommerce/service-config';
 import { createChannel, createClient } from '@restorecommerce/grpc-client';
-import { JobServiceClient as SchedulingServiceClient, JobServiceDefinition as SchedulingServiceDefinition, JobOptions_Priority, Backoff_Type, JobReadRequest, JobReadRequest_SortOrder, JobList } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/job';
+import { JobServiceClient as SchedulingServiceClient, JobServiceDefinition as SchedulingServiceDefinition, JobOptions_Priority, Backoff_Type, JobReadRequest, JobReadRequest_SortOrder, JobList } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/job.js';
 import { Logger } from 'winston';
 import { GrpcMockServer, ProtoUtils } from '@alenon/grpc-mock-server';
 import * as proto_loader from '@grpc/proto-loader';
@@ -16,12 +15,11 @@ import {
   validateScheduledJob,
   jobPolicySetRQ,
   permitJobRule,
-  denyJobRule,
   validateJobDonePayload
-} from './utils';
+} from './utils.js';
 import { updateConfig } from '@restorecommerce/acs-client';
-import * as _ from 'lodash';
-import { DeleteRequest } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/resource_base';
+import * as _ from 'lodash-es';
+import { DeleteRequest } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/resource_base.js';
 import { createClient as RedisCreateClient, RedisClientType } from 'redis';
 import { runWorker } from '@restorecommerce/scs-jobs';
 
@@ -73,15 +71,9 @@ const acsSubject = {
     }
   ]
 };
-const acsEnv = process.env.ACS_ENABLED;
-let acsEnabled = false;
-let testSuffix = '';
-if (acsEnv && acsEnv.toLocaleLowerCase() === 'true') {
-  acsEnabled = true;
-  testSuffix = 'with ACS Enabled';
-} else {
-  testSuffix = 'with ACS Disabled';
-}
+const acsEnv = 'true';
+let acsEnabled = true;
+let testSuffix = 'with ACS Enabled';
 
 interface MethodWithOutput {
   method: string;
@@ -415,7 +407,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
 
       const job = {
         type: 'external-job',
-        queue_name: 'external-job',
+        queue_name: 'defaultQueue',
         data: {
           payload: marshallProtobufAny({
             testValue: 'test-value'

@@ -1,26 +1,22 @@
 import {
   AuthZAction, accessRequest, DecisionResponse, Operation, PolicySetRQResponse
 } from '@restorecommerce/acs-client';
-import * as _ from 'lodash';
+import * as _ from 'lodash-es';
 import { createServiceConfig } from '@restorecommerce/service-config';
 import { createLogger } from '@restorecommerce/logger';
 import { createChannel, createClient } from '@restorecommerce/grpc-client';
 import {
   UserServiceClient,
   UserServiceDefinition
-} from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/user';
+} from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/user.js';
 import {
   Response_Decision
-} from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/access_control';
-import { Subject } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/auth';
-import { JobsOptions, Worker } from 'bullmq';
-import { Processor } from 'bullmq';
-import { FilterOpts, JobType, KafkaOpts, Priority } from './types';
-import { parseInt } from 'lodash';
-import { Data } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/job';
-import { Attribute } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/attribute';
-import { createClient as createRedisClient } from 'redis';
-import { Events } from '@restorecommerce/kafka-client';
+} from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/access_control.js';
+import { Subject } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/auth.js';
+import { JobsOptions } from 'bullmq';
+import { FilterOpts, KafkaOpts, Priority } from './types.js';
+import { Data } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/job.js';
+import { Attribute } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/attribute.js';
 import { Logger } from 'winston';
 
 // Create a ids client instance

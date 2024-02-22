@@ -1,11 +1,7 @@
-import { unmarshallProtobufAny } from '../src/utilts';
-import * as should from 'should';
-import { Priority } from '../src/types';
+import { unmarshallProtobufAny } from '../src/utilts.js';
+import should from 'should';
+import { Priority } from '../src/types.js';
 import { Logger } from 'winston';
-// import { createMockServer } from 'grpc-mock';
-
-process.env.EXTERNAL_JOBS_DIR = './lib/test/external-jobs/';
-process.env.EXTERNAL_JOBS_REQUIRE_DIR = '../test/external-jobs/';
 
 export function validateScheduledJob(job: any, expectedSchedule: string, logger: Logger): void {
   should.exist(job.data);

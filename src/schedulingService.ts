@@ -1,4 +1,4 @@
-import * as _ from 'lodash';
+import * as _ from 'lodash-es';
 import { errors } from '@restorecommerce/chassis-srv';
 import * as kafkaClient from '@restorecommerce/kafka-client';
 import { AuthZAction, ACSAuthZ, updateConfig, DecisionResponse, Operation, PolicySetRQResponse } from '@restorecommerce/acs-client';
@@ -6,20 +6,20 @@ import {
   JobServiceImplementation as SchedulingServiceServiceImplementation,
   JobFailed, JobDone, DeepPartial, JobList, JobListResponse, Data,
   Backoff_Type, JobOptions_Priority, JobReadRequest, JobReadRequest_SortOrder
-} from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/job';
+} from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/job.js';
 import { createClient, RedisClientType } from 'redis';
-import { NewJob, Priority } from './types';
-import { parseExpression } from 'cron-parser';
-import * as crypto from 'crypto';
-import { _filterJobData, _filterJobOptions, _filterQueuedJob, checkAccessRequest, marshallProtobufAny } from './utilts';
+import { NewJob, Priority } from './types.js';
+import pkg from 'cron-parser';
+import * as crypto from 'node:crypto';
+import { _filterJobData, _filterJobOptions, _filterQueuedJob, checkAccessRequest, marshallProtobufAny } from './utilts.js';
 import * as uuid from 'uuid';
 import { Logger } from 'winston';
-import { Response_Decision } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/access_control';
-import { Attribute } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/attribute';
-import { DeleteRequest, DeleteResponse } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/resource_base';
+import { Response_Decision } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/access_control.js';
+import { Attribute } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/attribute.js';
+import { DeleteRequest, DeleteResponse } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/resource_base.js';
 import { Queue, QueueOptions, Job } from 'bullmq';
-import { parseInt } from 'lodash';
 
+const { parseExpression } = pkg;
 const JOB_DONE_EVENT = 'jobDone';
 const JOB_FAILED_EVENT = 'jobFailed';
 const DEFAULT_CLEANUP_COMPLETED_JOBS = 604800000; // 7 days in miliseconds
@@ -129,7 +129,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
         connection: {
           ...queueOptions.connection as any,
           host: redisURL.hostname,
-          port: parseInt(redisURL.port)
+          port: _.parseInt(redisURL.port)
         }
       });
       this.queuesList.push(queue);
