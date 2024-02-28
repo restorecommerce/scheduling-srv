@@ -307,7 +307,7 @@
     }
   },
   "queueCleanup": {
-    "ttlAfterFinished": 10000,
-    "cleanInterval": 10000
+    "ttlAfterFinished": 86400000,
+    "cleanInterval": 86400000
   }
 }

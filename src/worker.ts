@@ -371,10 +371,19 @@ export class Worker {
     createBullBoard({
       queues,
       serverAdapter,
+      options: {
+        uiBasePath: cfg.get('bull:board:path'),
+        uiConfig: {}
+      }
     });
 
+    // since node_modules is not copied for ESM bundle support bull-board static files
+    // are copied inside lib
+    const viewsPath = './lib/@bull-board/ui/dist';
     this.app = express();
     serverAdapter.setBasePath(cfg.get('bull:board:path'));
+    serverAdapter.setViewsPath(viewsPath).setStaticPath('/static', viewsPath.concat('/static'));
+
     this.app.use(cfg.get('bull:board:path'), serverAdapter.getRouter());
     this.bullBoardServer = this.app.listen(cfg.get('bull:board:port'), () => {
       logger.info(`Bull board listening on port ${cfg.get('bull:board:port')} at ${cfg.get('bull:board:path')}`);

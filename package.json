@@ -49,6 +49,7 @@
     "@typescript-eslint/eslint-plugin": "^7.1.0",
     "@typescript-eslint/parser": "^7.1.0",
     "c8": "^9.1.0",
+    "copyfiles": "^2.4.1",
     "coveralls": "^3.1.1",
     "cross-env": "^7.0.3",
     "esbuild": "^0.20.1",
@@ -75,10 +76,11 @@
     "mochadebug": "cross-env NODE_ENV=test mocha --inspect-brk --full-trace --exit --trace-warnings --exit",
     "lcov-report": "c8 report --reporter=lcov",
     "coveralls": "c8 report --reporter=text-lcov | coveralls",
-    "build:tsc": "esbuild ./src/start.ts --bundle --platform=node --outfile=lib/start.cjs --minify --tree-shaking=true --sourcemap=inline",
+    "build:es": "esbuild ./src/start.ts --bundle --platform=node --outfile=lib/start.cjs --minify --tree-shaking=true --sourcemap=inline",
     "build:jobs": "find ./src/external-jobs -maxdepth 1 -type f -exec bash -c 'esbuild {} --bundle --platform=node --outfile=lib/external-jobs/$(basename {} .ts).cjs --minify --tree-shaking=true --sourcemap=inline' \\;",
     "build:clean": "rimraf lib",
-    "build": "npm-run-all lint build:clean build:tsc build:jobs"
+    "copy:bullboard-ui-static": "npx copyfiles -u 1 \"./node_modules/@bull-board/ui/dist/**/*\" ./lib",
+    "build": "npm-run-all lint build:clean build:es build:jobs copy:bullboard-ui-static"
   },
   "engines": {
     "node": ">= 20.8.0"
