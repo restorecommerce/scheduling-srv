@@ -68,7 +68,7 @@
   },
   "scripts": {
     "start": "node lib/start.cjs",
-    "dev": "cross-env NODE_ENV=development nodemon --watch './src/**/*.ts' --exec node --loader ts-node/esm ./src/start.ts",
+    "dev": "cross-env NODE_ENV=development node lib/start.cjs",
     "test": "npm run lint && c8 --reporter=text npm run mocha",
     "test-debug": "npm run mochadebug",
     "lint": "eslint src --ext .ts",
