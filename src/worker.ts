@@ -346,15 +346,23 @@ export class Worker {
       }
     }
     if (externalJobFiles && externalJobFiles.length > 0) {
-      externalJobFiles.forEach((externalFile) => {
-        if (externalFile.endsWith('.js')) {
+      externalJobFiles.forEach(async (externalFile) => {
+        if (externalFile.endsWith('.cjs') || externalFile.endsWith('.js')) {
           let require_dir = './external-jobs/';
           if (process.env.EXTERNAL_JOBS_REQUIRE_DIR) {
             require_dir = process.env.EXTERNAL_JOBS_REQUIRE_DIR;
           }
-          (async () => (await import(require_dir + externalFile)).default(cfg, logger, events, runWorker))().catch(err => {
-            this.logger.error(`Error scheduling external job ${externalFile}`, { err: err.message });
-          });
+          // check for double default
+          let fileImport = await import(require_dir + externalFile);
+          if(fileImport?.default?.default) {
+            (async () => (await import(require_dir + externalFile)).default.default(cfg, logger, events, runWorker))().catch(err => {
+              this.logger.error(`Error scheduling external job ${externalFile}`, { err: err.message });
+            });
+          } else {
+            (async () => (await import(require_dir + externalFile)).default(cfg, logger, events, runWorker))().catch(err => {
+              this.logger.error(`Error scheduling external job ${externalFile}`, { err: err.message });
+            });
+          }
         }
       });
     }
