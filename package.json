@@ -40,6 +40,9 @@
   },
   "devDependencies": {
     "@alenon/grpc-mock-server": "^3.1.9",
+    "@commitlint/cli": "^18.4.3",
+    "@commitlint/config-conventional": "^18.4.3",
+    "@semantic-release-plus/docker": "^3.1.3",
     "@grpc/proto-loader": "^0.7.10",
     "@restorecommerce/dev": "^0.0.8",
     "@restorecommerce/grpc-client": "^2.1.1",
@@ -55,6 +58,7 @@
     "esbuild": "^0.20.1",
     "eslint": "^8.57.0",
     "eslint-plugin-prefer-arrow-functions": "^3.3.2",
+    "husky": "^8.0.0",
     "mocha": "^10.3.0",
     "nodemon": "^3.1.0",
     "npm-run-all": "^4.1.5",
@@ -80,9 +84,39 @@
     "build:jobs": "find ./src/external-jobs -maxdepth 1 -type f -exec bash -c 'esbuild {} --bundle --platform=node --outfile=lib/external-jobs/$(basename {} .ts).cjs --minify --tree-shaking=true --sourcemap=inline' \\;",
     "build:clean": "rimraf lib",
     "copy:bullboard-ui-static": "npx copyfiles -u 1 \"./node_modules/@bull-board/ui/dist/**/*\" ./lib",
-    "build": "npm-run-all lint build:clean build:es build:jobs copy:bullboard-ui-static"
+    "build": "npm-run-all lint build:clean build:es build:jobs copy:bullboard-ui-static",
+    "prepare": "node -e \"try { require('husky').install() } catch (e) {}\""
   },
   "engines": {
     "node": ">= 20.8.0"
+  },
+  "release": {
+    "branches": [
+      "master"
+    ],
+    "plugins": [
+      "@semantic-release/commit-analyzer",
+      "@semantic-release/release-notes-generator",
+      "@semantic-release/github",
+      [
+        "@semantic-release-plus/docker",
+        {
+          "name": "docker.io/restorecommerce/scheduling-srv",
+          "skipLogin": true
+        }
+      ],
+      [
+        "@semantic-release-plus/docker",
+        {
+          "name": "ghcr.io/restorecommerce/schueduling-srv",
+          "skipLogin": true
+        }
+      ]
+    ]
+  },
+  "config": {
+    "commitizen": {
+      "path": "./node_modules/cz-conventional-changelog"
+    }
   }
 }
