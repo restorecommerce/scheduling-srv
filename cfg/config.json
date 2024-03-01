@@ -229,7 +229,7 @@
   "externalJobs": [],
   "queue": [
     {
-      "name": "defaultQueue",
+      "name": "default-queue",
       "concurrency": 5,
       "default": true,
       "runMissedScheduled": true,
@@ -239,7 +239,7 @@
       }
     },
     {
-      "name": "notificationSrvQueue",
+      "name": "notification-srv-queue",
       "concurrency": 5,
       "default": true,
       "runMissedScheduled": true,
@@ -249,7 +249,7 @@
       }
     },
     {
-      "name": "identitySrvQueue",
+      "name": "identity-srv-queue",
       "concurrency": 5,
       "default": true,
       "runMissedScheduled": true,

@@ -188,7 +188,7 @@
   },
   "queue": [
     {
-      "name": "defaultQueue",
+      "name": "default-queue",
       "concurrency": 5,
       "default": true,
       "runMissedScheduled": true,

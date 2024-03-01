@@ -409,7 +409,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
 
     //   const job = {
     //     type: 'external-job',
-    //     queue_name: 'defaultQueue',
+    //     queue_name: 'default-queue',
     //     data: {
     //       payload: marshallProtobufAny({
     //         testValue: 'test-value'
