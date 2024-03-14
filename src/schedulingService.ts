@@ -63,10 +63,10 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
     const repeatJobIdCfg = cfg.get('redis');
     repeatJobIdCfg.database = cfg.get('redis:db-indexes:db-repeatJobId');
     this.repeatJobIdRedisClient = createClient(repeatJobIdCfg);
-    this.repeatJobIdRedisClient.on('error', (err) => logger.error('Redis client error in repeatable job store', err));
+    this.repeatJobIdRedisClient.on('error', (err) => logger.error('Redis client error in repeatable job store', { code: err.code, message: err.message, stack: err.stack }));
     this.repeatJobIdRedisClient.connect().then((data) => {
       logger.info('Redis client connection for repeatable job store successful');
-    }).catch(err => logger.error('Redis client error for repeatable job store', err));
+    }).catch(err => logger.error('Redis client error for repeatable job store', { code: err.code, message: err.message, stack: err.stack }));
 
     this.canceledJobs = new Set<string>();
     this.cfg = cfg;
