@@ -25,10 +25,7 @@ USER node
 ARG APP_HOME=/home/node/srv
 WORKDIR $APP_HOME
 
-COPY package.json package.json
-COPY package-lock.json package-lock.json
-
-COPY --chown=node:node . $APP_HOME
+COPY --chown=node:node ./cfg $APP_HOME/cfg
 COPY --chown=node:node --from=build $APP_HOME/lib $APP_HOME/lib
 
 EXPOSE 50051
