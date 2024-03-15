@@ -1096,11 +1096,11 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
    * Clean up queues - removes complted and failed jobs from queue
    * @param {any} job clean up job
    */
-  async cleanupJobs(ttlAfterFinished) {
+  async cleanupJobs(ttlAfterFinished: number, maxJobsToCleanLimit: number) {
     for (let queue of this.queuesList) {
       try {
-        await queue.clean(ttlAfterFinished, 0, COMPLETED_JOB_STATE);
-        await queue.clean(ttlAfterFinished, 0, FAILED_JOB_STATE);
+        await queue.clean(ttlAfterFinished, maxJobsToCleanLimit, COMPLETED_JOB_STATE);
+        await queue.clean(ttlAfterFinished, maxJobsToCleanLimit, FAILED_JOB_STATE);
       } catch (err) {
         this.logger.error('Error cleaning up jobs', err);
       }
@@ -1110,7 +1110,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
     await this.repeatJobIdRedisClient.set(QUEUE_CLEANUP, JSON.stringify(lastExecutedInterval));
   }
 
-  async setupCleanInterval(cleanInterval: number, ttlAfterFinished: number) {
+  async setupCleanInterval(cleanInterval: number, ttlAfterFinished: number, maxJobsToCleanLimit: number) {
     if (!ttlAfterFinished) {
       ttlAfterFinished = DEFAULT_CLEANUP_COMPLETED_JOBS;
     }
@@ -1128,11 +1128,11 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
       // use setTimeout and then create interval on setTimeout
       this.logger.info('Restoring previous execution interval with set timeout', { time: cleanInterval - delta });
       setTimeout(async () => {
-        await this.cleanupJobs(ttlAfterFinished);
-        setInterval(this.cleanupJobs.bind(this), cleanInterval, ttlAfterFinished);
+        await this.cleanupJobs(ttlAfterFinished, maxJobsToCleanLimit);
+        setInterval(this.cleanupJobs.bind(this), cleanInterval, ttlAfterFinished, maxJobsToCleanLimit);
       }, cleanInterval - delta);
     } else {
-      setInterval(this.cleanupJobs.bind(this), cleanInterval, ttlAfterFinished);
+      setInterval(this.cleanupJobs.bind(this), cleanInterval, ttlAfterFinished, maxJobsToCleanLimit);
       this.logger.info('Clean up job interval set successfully');
     }
   }

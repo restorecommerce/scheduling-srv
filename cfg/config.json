@@ -14,7 +14,7 @@
   "logger": {
     "console": {
       "handleExceptions": false,
-      "level": "error",
+      "level": "silly",
       "colorize": true,
       "prettyPrint": true
     },
@@ -147,7 +147,7 @@
       "configUpdateResponse": {
         "messageObject": "io.restorecommerce.commandinterface.CommandResponse"
       },
-      "setApiKeyCommand": {  
+      "setApiKeyCommand": {
         "messageObject": "io.restorecommerce.commandinterface.CommandRequest"
       },
       "setApiKeyResponse": {
@@ -308,6 +308,7 @@
   },
   "queueCleanup": {
     "ttlAfterFinished": 86400000,
-    "cleanInterval": 86400000
+    "cleanInterval": 86400000,
+    "maxJobsToCleanLimit": 10000
   }
 }

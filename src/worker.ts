@@ -258,7 +258,7 @@ export class Worker {
     // cleanup job
     const queueCleanup = cfg.get('queueCleanup');
     if (queueCleanup?.cleanInterval && typeof queueCleanup.cleanInterval === 'number') {
-      await schedulingService.setupCleanInterval(queueCleanup.cleanInterval, queueCleanup.ttlAfterFinished);
+      await schedulingService.setupCleanInterval(queueCleanup.cleanInterval, queueCleanup.ttlAfterFinished, queueCleanup.maxJobsToCleanLimit);
     }
 
     const cis = new JobsCommandInterface(server, cfg,
@@ -354,7 +354,7 @@ export class Worker {
           }
           // check for double default
           let fileImport = await import(require_dir + externalFile);
-          if(fileImport?.default?.default) {
+          if (fileImport?.default?.default) {
             (async () => (await import(require_dir + externalFile)).default.default(cfg, logger, events, runWorker))().catch(err => {
               this.logger.error(`Error scheduling external job ${externalFile}`, { err: err.message });
             });
