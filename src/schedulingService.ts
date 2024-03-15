@@ -1453,6 +1453,9 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
           }
         } else if ((action === AuthZAction.CREATE || !resource.id) && !resource.data.meta.owners) {
           let ownerAttributes = _.cloneDeep(orgOwnerAttributes);
+          if (!resource.id) {
+            resource.id = uuid.v4().replace(/-/g, '');
+          }
           // add user as default owners
           if (resource.id) {
             ownerAttributes.push(
