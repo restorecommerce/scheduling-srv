@@ -117,7 +117,7 @@ const startGrpcMockServer = async (methodWithOutput: MethodWithOutput[]) => {
       // Delete request with invalid scope - DENY
       if (call?.request?.target?.subjects?.length === 2) {
         let reqSubject = call.request.target.subjects;
-        if (reqSubject[1]?.attributes[0]?.id === 'urn:restorecommerce:acs:names:roleScopingInstance' && reqSubject[1]?.attributes[0]?.value === 'orgD') {
+        if (reqSubject[1]?.id === 'urn:restorecommerce:acs:names:roleScopingInstance' && reqSubject[1]?.value === 'orgD') {
           response = { decision: 'DENY' };
         }
       }
@@ -221,7 +221,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
     jobPolicySetRQ.policy_sets[0].policies[0].effect = 'PERMIT';
     jobPolicySetRQ.policy_sets[0].policies[0].rules = [permitJobRule];
     await startGrpcMockServer([{ method: 'WhatIsAllowed', output: jobPolicySetRQ },
-      { method: 'IsAllowed', output: { decision: 'PERMIT' } }]);
+    { method: 'IsAllowed', output: { decision: 'PERMIT' } }]);
 
     // start mock ids-srv needed for findByToken response and return subject
     await startIDSGrpcMockServer([{ method: 'findByToken', output: acsSubject }]);
