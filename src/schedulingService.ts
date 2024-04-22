@@ -627,6 +627,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
 
   private filterByOwnerShip(customArgsObj, result) {
     // applying filter based on custom arguments (filterByOwnerShip)
+    let filteredResult: Job[] = [];
     let customArgs = (customArgsObj)?.custom_arguments;
     if (customArgs?.value) {
       let customArgsFilter;
@@ -638,28 +639,34 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
           message: error.message, stack: error.stack
         });
       }
-      if (!customArgsFilter) {
+      if (customArgsFilter?.length === 0) {
         return [];
       }
-      const ownerIndicatorEntity = customArgsFilter.entity;
-      const ownerValues = customArgsFilter.instance;
-      const ownerIndictaorEntURN = this.cfg.get('authorization:urns:ownerIndicatoryEntity');
-      const ownerInstanceURN = this.cfg.get('authorization:urns:ownerInstance');
-      result = result.filter(job => {
-        if (job?.data?.meta?.owners?.length > 0) {
-          for (let owner of job.data.meta.owners) {
-            if (owner?.id === ownerIndictaorEntURN && owner?.value === ownerIndicatorEntity && owner?.attributes?.length > 0) {
-              for (let ownerInstObj of owner.attributes) {
-                if (ownerInstObj?.id === ownerInstanceURN && ownerInstObj?.value && ownerValues.includes(ownerInstObj.value)) {
-                  return job;
+      for (let customArgObj of customArgsFilter) {
+        const ownerIndicatorEntity = customArgObj?.entity;
+        const ownerValues = customArgObj?.instance;
+        const ownerIndictaorEntURN = this.cfg.get('authorization:urns:ownerIndicatoryEntity');
+        const ownerInstanceURN = this.cfg.get('authorization:urns:ownerInstance');
+        const filteredResp = result.filter(job => {
+          if (job?.data?.meta?.owners?.length > 0) {
+            for (let owner of job.data.meta.owners) {
+              if (owner?.id === ownerIndictaorEntURN && owner?.value === ownerIndicatorEntity && owner?.attributes?.length > 0) {
+                for (let ownerInstObj of owner.attributes) {
+                  if (ownerInstObj?.id === ownerInstanceURN && ownerInstObj?.value && ownerValues.includes(ownerInstObj.value)) {
+                    return job;
+                  }
                 }
               }
             }
           }
-        }
-      });
+        });
+        filteredResult = filteredResult.concat(filteredResp);
+      }
+      return filteredResult;
+    } else {
+      // no custom filters exist, return complete result set
+      return result;
     }
-    return result;
   }
 
   async deleteRedisKey(key: string): Promise<any> {
