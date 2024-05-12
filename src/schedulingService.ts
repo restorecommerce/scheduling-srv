@@ -642,6 +642,9 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
       if (customArgsFilter?.length === 0) {
         return [];
       }
+      if(!Array.isArray(customArgsFilter)) {
+        customArgsFilter = [customArgsFilter];
+      }
       for (let customArgObj of customArgsFilter) {
         const ownerIndicatorEntity = customArgObj?.entity;
         const ownerValues = customArgObj?.instance;
