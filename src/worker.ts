@@ -199,10 +199,6 @@ export class Worker {
     }
     // Create a new microservice Server
     const loggerCfg = cfg.get('logger');
-    loggerCfg.esTransformer = (msg) => {
-      msg.fields = JSON.stringify(msg.fields);
-      return msg;
-    };
     const logger = createLogger(loggerCfg);
     this.logger = logger;
     const server = new chassis.Server(cfg.get('server'), logger);

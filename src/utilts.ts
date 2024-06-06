@@ -27,10 +27,6 @@ const getUserServiceClient = async () => {
     // identity-srv client to resolve subject ID by token
     const grpcIDSConfig = cfg.get('client:user');
     const loggerCfg = cfg.get('logger');
-    loggerCfg.esTransformer = (msg) => {
-      msg.fields = JSON.stringify(msg.fields);
-      return msg;
-    };
     const logger = createLogger(loggerCfg);
     if (grpcIDSConfig) {
       idsClientInstance = createClient({
