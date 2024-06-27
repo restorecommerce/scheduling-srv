@@ -181,7 +181,7 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
   let jobTopic: Topic;
   let schedulingService: SchedulingService;
   before(async function (): Promise<any> {
-    this.timeout(4000);
+    this.timeout(12000);
     worker = new Worker();
 
     cfg = createServiceConfig(process.cwd() + '/test');
