@@ -28,7 +28,7 @@ const JOBS_CREATE_EVENT = 'createJobs';
 const JOBS_MODIFY_EVENT = 'modifyJobs';
 const JOBS_DELETE_EVENT = 'deleteJobs';
 const COMMANDS_EVENTS = ['healthCheckCommand', 'versionCommand', 'restoreCommand',
-  'resetCommand', 'configUpdateCommand', 'setApiKeyCommand', 'flushCacheCommand'];
+  'resetCommand', 'configUpdateCommand', 'flushCacheCommand'];
 
 registerProtoMeta(
   schedulingMeta,
@@ -54,12 +54,6 @@ class JobsCommandInterface extends chassis.CommandInterface {
     // Get a redis connection
     await this.schedulingService.clear();
     return {};
-  }
-
-  async setApiKey(payload: any): Promise<any> {
-    const commandResponse = await super.setApiKey(payload);
-    updateConfig(this.config);
-    return commandResponse;
   }
 
   async configUpdate(payload: any): Promise<any> {

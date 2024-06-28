@@ -147,12 +147,6 @@
       "configUpdateResponse": {
         "messageObject": "io.restorecommerce.commandinterface.CommandResponse"
       },
-      "setApiKeyCommand": {
-        "messageObject": "io.restorecommerce.commandinterface.CommandRequest"
-      },
-      "setApiKeyResponse": {
-        "messageObject": "io.restorecommerce.commandinterface.CommandResponse"
-      },
       "flushCacheCommand": {
         "messageObject": "io.restorecommerce.commandinterface.CommandRequest"
       },
@@ -168,7 +162,6 @@
             "restoreCommand",
             "resetCommand",
             "configUpdateCommand",
-            "setApiKeyCommand",
             "flushCacheCommand"
           ]
         },

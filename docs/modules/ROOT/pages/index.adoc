@@ -235,7 +235,6 @@ List of events emitted by this microservice for below topics:
 |                            | healthCheckResponse | system health check response.
 |                            | versionResponse | system version response.
 |                            |`flushCacheResponse` | flush ACS Cache response
-|                            |`setApiKeyResponse` | set API Key response
 |===============================================================================
 
 Jobs can be created, updated or deleted by issuing Kafka messages to topic `io.restorecommerce.jobs`.
