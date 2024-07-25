@@ -16,6 +16,9 @@ import { protoMetadata as commandInterfaceMeta, CommandInterfaceServiceDefinitio
 import {
   protoMetadata as reflectionMeta
 } from '@restorecommerce/rc-grpc-clients/dist/generated-server/grpc/reflection/v1alpha/reflection.js';
+import {
+  protoMetadata as renderingMeta
+} from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/rendering.js';
 import { ServerReflectionService } from 'nice-grpc-server-reflection';
 import { BindConfig } from '@restorecommerce/chassis-srv/lib/microservice/transport/provider/grpc/index.js';
 import { HealthDefinition } from '@restorecommerce/rc-grpc-clients/dist/generated-server/grpc/health/v1/health.js';
@@ -34,7 +37,8 @@ registerProtoMeta(
   schedulingMeta,
   commandInterfaceMeta,
   reflectionMeta,
-  resourceBaseMeta // needed for `deleteJobs` event - io.restorecommerce.resourcebase.DeleteRequest
+  resourceBaseMeta, // needed for `deleteJobs` event - io.restorecommerce.resourcebase.DeleteRequest
+  renderingMeta // needed for encoding and decoding of render-request messages (used for external jobs in SCS)
 );
 
 class JobsCommandInterface extends chassis.CommandInterface {
