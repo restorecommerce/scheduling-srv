@@ -74,7 +74,7 @@ class JobsCommandInterface extends chassis.CommandInterface {
     this.schedulingService.disableEvents();
     const kafkaCfg = this.config.events.kafka;
     const topicName = kafkaCfg.topics['jobs'].topic;
-    const restoreSetup = {};
+    const restoreSetup: any = {};
     if (!_.isEmpty(payload.jobs)) {
       restoreSetup[topicName] = {
         resource: 'jobs',
@@ -107,13 +107,14 @@ class JobsCommandInterface extends chassis.CommandInterface {
           }
           try {
             await listener(message, ctx, config, eventNameRet);
-          } catch (e) {
+          } catch (e: any) {
             that.logger.debug('Exception caught :', e.message);
           }
           if (ctx.offset >= targetOffset) {
-            const message = {};
-            message['topic'] = topic;
-            message['offset'] = ctx.offset;
+            const message = {
+              topic,
+              offset: ctx.offset,
+            };
             await that.commandTopic.emit('restoreResponse', {
               services: _.keys(that.service),
               payload: that.encodeMsg(message)
@@ -274,7 +275,7 @@ export class Worker {
             logger.error(`Error occurred scheduling job, ${err}`);
           });
       } else if (eventName === JOBS_MODIFY_EVENT) {
-        msg.items = msg.items.map((job) => {
+        msg.items = msg.items.map((job: any) => {
           return _filterKafkaJob(job, logger);
         });
         await schedulingService.update(JobList.fromPartial({ items: msg.items, subject: msg.subject }), {}).catch(
@@ -332,30 +333,29 @@ export class Worker {
     let externalJobFiles;
     try {
       externalJobFiles = fs.readdirSync(process.env.EXTERNAL_JOBS_DIR || './lib/external-jobs');
-    } catch (err) {
+    } catch (err: any) {
       if (err.message.includes('no such file or directory')) {
         this.logger.info('No files for external job processors found');
       } else {
         this.logger.error('Error reading external-jobs files');
       }
     }
-    if (externalJobFiles && externalJobFiles.length > 0) {
+    if (externalJobFiles?.length > 0) {
       externalJobFiles.forEach(async (externalFile) => {
-        if (externalFile.endsWith('.cjs') || externalFile.endsWith('.js')) {
-          let require_dir = './external-jobs/';
-          if (process.env.EXTERNAL_JOBS_REQUIRE_DIR) {
-            require_dir = process.env.EXTERNAL_JOBS_REQUIRE_DIR;
+        if (externalFile.endsWith('.js') || externalFile.endsWith('.cjs')) {
+          const require_dir = process.env.EXTERNAL_JOBS_REQUIRE_DIR ?? './jobs/';
+          
+          try {
+            const fileImport = await import(require_dir + externalFile);
+            // check for double default
+            if (fileImport?.default?.default) {
+              await fileImport.default.default(cfg, logger, events, runWorker);
+            } else {
+              await fileImport.default(cfg, logger, events, runWorker);
+            }
           }
-          // check for double default
-          let fileImport = await import(require_dir + externalFile);
-          if (fileImport?.default?.default) {
-            (async () => (await import(require_dir + externalFile)).default.default(cfg, logger, events, runWorker))().catch(err => {
-              this.logger.error(`Error scheduling external job ${externalFile}`, { err: err.message });
-            });
-          } else {
-            (async () => (await import(require_dir + externalFile)).default(cfg, logger, events, runWorker))().catch(err => {
-              this.logger.error(`Error scheduling external job ${externalFile}`, { err: err.message });
-            });
+          catch (err: any) {
+            this.logger.error(`Error scheduling external job ${externalFile}`, { err });
           }
         }
       });
