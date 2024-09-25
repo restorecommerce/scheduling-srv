@@ -33,4 +33,4 @@ EXPOSE 50051
 USER root
 USER node
 
-CMD [ "npm", "start" ]
+CMD [ "node", "./lib/start.cjs" ]

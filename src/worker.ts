@@ -344,7 +344,7 @@ export class Worker {
       externalJobFiles.forEach(async (externalFile) => {
         if (externalFile.endsWith('.js') || externalFile.endsWith('.cjs')) {
           const require_dir = process.env.EXTERNAL_JOBS_REQUIRE_DIR ?? './jobs/';
-          
+
           try {
             const fileImport = await import(require_dir + externalFile);
             // check for double default
