@@ -1474,7 +1474,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
                 value: urns.user,
                 attributes: [{
                   id: urns.ownerInstance,
-                  value: subject.id,
+                  value: subject?.id,
                   attributes: []
                 }]
               });
