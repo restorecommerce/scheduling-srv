@@ -83,8 +83,12 @@ class JobsCommandInterface extends chassis.CommandInterface {
       };
     }
 
-    const that = this;
-    for (let topicName in restoreSetup) {
+    const logger = this.logger;
+    const schedulingService = this.schedulingService;
+    const commandTopic = this.commandTopic;
+    const encodeMsg = this.encodeMsg;
+    const service = this.service;
+    for (const topicName in restoreSetup) {
       const topicSetup = restoreSetup[topicName];
 
       const topic = topicSetup.topic;
@@ -97,39 +101,39 @@ class JobsCommandInterface extends chassis.CommandInterface {
       const ignoreOffsets: number[] = payload[resource].ignore_offset || [];
 
       const eventNames = _.keys(eventsSetup);
-      for (let eventName of eventNames) {
+      for (const eventName of eventNames) {
         const listener = eventsSetup[eventName];
         const listenUntil = async (message: any, ctx: any,
           config: any, eventNameRet: string): Promise<any> => {
-          that.logger.debug(`received message ${ctx.offset}/${targetOffset}`, ctx);
+          logger.debug(`received message ${ctx.offset}/${targetOffset}`, ctx);
           if (_.includes(ignoreOffsets, ctx.offset)) {
             return;
           }
           try {
             await listener(message, ctx, config, eventNameRet);
           } catch (e: any) {
-            that.logger.debug('Exception caught :', e.message);
+            logger.debug('Exception caught :', e.message);
           }
           if (ctx.offset >= targetOffset) {
             const message = {
               topic,
               offset: ctx.offset,
             };
-            await that.commandTopic.emit('restoreResponse', {
-              services: _.keys(that.service),
-              payload: that.encodeMsg(message)
+            await commandTopic.emit('restoreResponse', {
+              services: _.keys(service),
+              payload: encodeMsg(message)
             });
 
-            for (let name of eventNames) {
-              that.logger.debug('Number of listeners before removing :',
+            for (const name of eventNames) {
+              logger.debug('Number of listeners before removing :',
                 topic.listenerCount(name));
               await topic.removeAllListeners(name);
-              that.logger.debug('Number of listeners after removing :',
+              logger.debug('Number of listeners after removing :',
                 topic.listenerCount(name));
             }
-            that.logger.info('restore process done');
+            logger.info('restore process done');
 
-            that.schedulingService.enableEvents();
+            schedulingService.enableEvents();
           }
         };
 
@@ -146,7 +150,8 @@ class JobsCommandInterface extends chassis.CommandInterface {
   }
 
   makeJobsRestoreSetup(): any {
-    const that = this;
+    const logger = this.logger;
+    const schedulingService = this.schedulingService;
     return {
       jobsCreated: async function onJobsCreated(message: any, context: any): Promise<any> {
         if (message?.when) {
@@ -154,17 +159,17 @@ class JobsCommandInterface extends chassis.CommandInterface {
           const jobScheduleTime = new Date(message.when).getTime();
           const currentTime = new Date().getTime();
           if (jobScheduleTime < currentTime) {
-            that.logger.info('Skipping the elapsed time job');
+            logger.info('Skipping the elapsed time job');
             return {};
           }
         }
 
         if (message?.now) {
-          that.logger.info('Skipping immediate job');
+          logger.info('Skipping immediate job');
           return {};
         }
 
-        await that.schedulingService.create(JobList.fromPartial({
+        await schedulingService.create(JobList.fromPartial({
           items: [message]
         }), {});
 
@@ -172,7 +177,7 @@ class JobsCommandInterface extends chassis.CommandInterface {
       },
       jobsDeleted: async function restoreDeleted(message: any, context: any,
         config: any, eventName: string): Promise<any> {
-        await that.schedulingService.delete(DeleteRequest.fromPartial({
+        await schedulingService.delete(DeleteRequest.fromPartial({
           ids: [message.id]
         }), {});
         return {};
@@ -295,14 +300,14 @@ export class Worker {
     };
 
     const topicTypes = _.keys(kafkaCfg.topics);
-    for (let topicType of topicTypes) {
+    for (const topicType of topicTypes) {
       const topicName = kafkaCfg.topics[topicType].topic;
       const topic = await events.topic(topicName);
       const offsetValue = await this.offsetStore.getOffset(topicName);
       logger.info('subscribing to topic with offset value', topicName, offsetValue);
       if (kafkaCfg.topics[topicType].events) {
         const eventNames = kafkaCfg.topics[topicType].events;
-        for (let eventName of eventNames) {
+        for (const eventName of eventNames) {
           await topic.on(eventName, schedulingServiceEventsListener,
             { startingOffset: offsetValue });
         }
@@ -369,7 +374,7 @@ export class Worker {
     this.server = server;
 
     const serverAdapter = new ExpressAdapter();
-    let queues: BullMQAdapter[] = this.schedulingService.queuesList.map(q => new BullMQAdapter(q));
+    const queues: BullMQAdapter[] = this.schedulingService.queuesList.map(q => new BullMQAdapter(q));
     createBullBoard({
       queues,
       serverAdapter,

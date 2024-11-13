@@ -81,7 +81,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
       throw new Error('Queue configuration not found!');
     }
     let defaultTrueExists = false;
-    for (let queueCfg of queuesCfg) {
+    for (const queueCfg of queuesCfg) {
       // Find configuration which has default=true
       if (queueCfg.default == true) {
         defaultTrueExists = true;
@@ -95,13 +95,12 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
     }
 
     // Create Queues
-    for (let queueCfg of queuesCfg) {
-      let queueOptions: QueueOptions;
+    for (const queueCfg of queuesCfg) {
       const prefix = queueCfg.name;
       const rateLimiting = queueCfg.rateLimiting;
       const advancedSettings = queueCfg.advancedSettings;
 
-      queueOptions = {
+      const queueOptions: QueueOptions = {
         connection: {
           ...redisConfig,
         }
@@ -124,7 +123,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
         delete queueOptions.connection.keyPrefix;
       }
 
-      let queue = new Queue(prefix, {
+      const queue = new Queue(prefix, {
         ...queueOptions,
         connection: {
           ...queueOptions.connection as any,
@@ -135,7 +134,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
       this.queuesList.push(queue);
 
       // Add Queue Configurations
-      let queueCfgObj = {
+      const queueCfgObj = {
         name: queueCfg.name,
         concurrency: queueCfg.concurrency,
         default: queueCfg.default,
@@ -151,16 +150,15 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
    */
   async start(): Promise<any> {
     const logger = this.logger;
-    const that = this;
     const events = [JOB_DONE_EVENT, JOB_FAILED_EVENT];
-    for (let eventName of events) {
+    for (const eventName of events) {
       // A Scheduling Service Event Listener
       await this.jobEvents.on(eventName, async (msg: any, ctx: any,
         config: any, eventName: string): Promise<any> => {
-        let job = msg;
+        const job = msg;
         // Match Job Type to Queue Name, else use Default Queue
         let queue = _.find(this.queuesList, { name: job.type });
-        let defaultQueue = _.find(this.queuesList, { name: this.defaultQueueName });
+        const defaultQueue = _.find(this.queuesList, { name: this.defaultQueueName });
         if (_.isEmpty(queue)) {
           queue = defaultQueue;
         }
@@ -175,7 +173,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
         logger.info('Received Job event', { event: eventName });
         logger.info('Job details', job);
         const jobData: any = await queue.getJob(job.id).catch(error => {
-          that.logger.error('Error retrieving job ${job.id} from queue', error);
+          logger.error('Error retrieving job ${job.id} from queue', error);
         });
 
         if (job?.delete_scheduled) {
@@ -185,7 +183,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
     }
 
     // Initialize Event Listeners for each Queue
-    for (let queue of this.queuesList) {
+    for (const queue of this.queuesList) {
       queue.on('error', (error) => {
         logger.error('queue error', error);
       });
@@ -214,25 +212,25 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
     this.disableAC();
     const createDispatch = [];
     let result: Job[] = [];
-    let thiz = this;
+    const logger = this.logger;
 
     // Get the jobs
-    for (let queueCfg of this.queuesConfigList) {
+    for (const queueCfg of this.queuesConfigList) {
       // If enabled in the config, or the config is missing,b
       // Reschedule the missed jobs, else skip.
-      let queue = _.find(this.queuesList, { name: queueCfg.name });
-      let runMissedScheduled = queueCfg.runMissedScheduled;
+      const queue = _.find(this.queuesList, { name: queueCfg.name });
+      const runMissedScheduled = queueCfg.runMissedScheduled;
       if (_.isNil(runMissedScheduled) ||
         (!_.isNil(runMissedScheduled) && runMissedScheduled == true)) {
         await queue.getJobs(this.bullOptions['activeAndFutureJobTypes']).then(jobs => {
           result = result.concat(jobs);
         }).catch(error => {
-          thiz.logger.error('Error reading jobs to reschedule the missed recurring jobs', error);
+          logger.error('Error reading jobs to reschedule the missed recurring jobs', error);
         });
       }
     }
     let lastRunTime;
-    for (let job of result) {
+    for (const job of result) {
       // get the last run time for the job, we store the last run time only
       // for recurring jobs
       if (job?.name) {
@@ -257,7 +255,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
         }
 
         if ((job?.opts?.repeat as any)?.pattern && lastRunTime?.time) {
-          let options = {
+          const options = {
             currentDate: new Date(lastRunTime.time),
             endDate: new Date(),
             iterator: true
@@ -270,7 +268,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
             this.logger.error('Error parsing cron expression running missed schedules', { code: error.code, message: error.message, stack: error.stack });
           }
           while (intervalTime?.hasNext()) {
-            let nextInterval: any = intervalTime.next();
+            const nextInterval: any = intervalTime.next();
             const nextIntervalTime = nextInterval.value.toString();
             // schedule it as one time job for now or immediately
             const data = {
@@ -425,8 +423,8 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
    * @param {any} ctx RPC context
    */
   async create(request: JobList, ctx: any): Promise<DeepPartial<JobListResponse>> {
-    let jobListResponse: JobListResponse = { items: [], operation_status: { code: 0, message: '' }, total_count: 0 };
-    let subject = request.subject;
+    const jobListResponse: JobListResponse = { items: [], operation_status: { code: 0, message: '' }, total_count: 0 };
+    const subject = request.subject;
     if (_.isNil(request) || _.isNil(request.items)) {
       return {
         items: [],
@@ -463,8 +461,8 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
       return { items: [], total_count: 0, operation_status: acsResponse.operation_status };
     }
 
-    let jobs: NewJob[] = [];
-    for (let job of request?.items || []) {
+    const jobs: NewJob[] = [];
+    for (const job of request?.items || []) {
       try {
         jobs.push(this._validateJob(job as any));
       } catch (err) {
@@ -479,10 +477,10 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
       }
     }
 
-    let result: Job[] = [];
+    const result: Job[] = [];
     // Scheduling jobs
     for (let i = 0; i < jobs.length; i += 1) {
-      let job = jobs[i];
+      const job = jobs[i];
       // if not jobID is specified generate a UUID
       if (!job.id) {
         job.id = this.idGen();
@@ -581,16 +579,16 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
       result.push(submittedJob);
     }
 
-    for (let job of result) {
-      let jobId = job.id as string;
+    for (const job of result) {
+      const jobId = job.id as string;
       if (jobId.startsWith('repeat:')) {
         const repeatKey = jobId.split(':')[1];
         job.id = await this.getRedisValue(repeatKey);
       }
     }
 
-    for (let job of result) {
-      let when = job?.opts?.delay ? new Date(job?.opts?.delay).toString() : '';
+    for (const job of result) {
+      const when = job?.opts?.delay ? new Date(job?.opts?.delay).toString() : '';
       jobListResponse.items.push({
         payload: {
           id: job.id as string,
@@ -628,7 +626,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
   private filterByOwnerShip(customArgsObj, result) {
     // applying filter based on custom arguments (filterByOwnerShip)
     let filteredResult: Job[] = [];
-    let customArgs = (customArgsObj)?.custom_arguments;
+    const customArgs = (customArgsObj)?.custom_arguments;
     if (customArgs?.value) {
       let customArgsFilter;
       try {
@@ -645,16 +643,16 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
       if(!Array.isArray(customArgsFilter)) {
         customArgsFilter = [customArgsFilter];
       }
-      for (let customArgObj of customArgsFilter) {
+      for (const customArgObj of customArgsFilter) {
         const ownerIndicatorEntity = customArgObj?.entity;
         const ownerValues = customArgObj?.instance;
         const ownerIndictaorEntURN = this.cfg.get('authorization:urns:ownerIndicatoryEntity');
         const ownerInstanceURN = this.cfg.get('authorization:urns:ownerInstance');
         const filteredResp = result.filter(job => {
           if (job?.data?.meta?.owners?.length > 0) {
-            for (let owner of job.data.meta.owners) {
+            for (const owner of job.data.meta.owners) {
               if (owner?.id === ownerIndictaorEntURN && owner?.value === ownerIndicatorEntity && owner?.attributes?.length > 0) {
-                for (let ownerInstObj of owner.attributes) {
+                for (const ownerInstObj of owner.attributes) {
                   if (ownerInstObj?.id === ownerInstanceURN && ownerInstObj?.value && ownerValues.includes(ownerInstObj.value)) {
                     return job;
                   }
@@ -708,8 +706,8 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
    * @param {any} ctx RPC context
    */
   async read(request: JobReadRequest, ctx: any): Promise<DeepPartial<JobListResponse>> {
-    let jobListResponse: JobListResponse = { items: [], operation_status: { code: 0, message: '' }, total_count: 0 };
-    let subject = request.subject;
+    const jobListResponse: JobListResponse = { items: [], operation_status: { code: 0, message: '' }, total_count: 0 };
+    const subject = request.subject;
     let acsResponse: PolicySetRQResponse;
     try {
       if (!ctx) { ctx = {}; };
@@ -743,7 +741,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
       }
       result = this.filterByOwnerShip({ custom_arguments }, result);
     } else {
-      const that = this;
+      const logger = this.logger;
       let jobIDs = request.filter.job_ids || [];
       if (!_.isArray(jobIDs)) {
         jobIDs = [jobIDs];
@@ -758,7 +756,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
       if (jobIDs.length > 0) {
         // jobIDsCopy should contain the jobIDs duplicate values
         // after the for loop ends
-        let jobIDsCopy: string[] = [];
+        const jobIDsCopy: string[] = [];
         for (let jobID of jobIDs) {
           const jobIdData = await this.getRedisValue(jobID as string);
           // future jobs scheduled with `when` will have same repeatId as external SCS jobID
@@ -779,7 +777,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
             // map the repeatKey with nextmilis for bull repeatable jobID
             jobID = `repeat:${repeatId}:${nextMillis}`;
           }
-          for (let queue of this.queuesList) {
+          for (const queue of this.queuesList) {
             await new Promise((resolve, reject) => {
               // getJob returns job or null
               queue.getJob(jobID).then(job => {
@@ -797,7 +795,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
                   }
                 }
               }).catch(err => {
-                that.logger.error(`Error reading job ${jobID}`, err);
+                logger.error(`Error reading job ${jobID}`, err);
                 if (err?.code && typeof err.code === 'string') {
                   err.code = 500;
                 }
@@ -814,7 +812,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
         }
         if (!_.isEqual(jobIDs.sort(), jobIDsCopy.sort())) {
           const jobIDsDiff = _.difference(jobIDs, jobIDsCopy);
-          for (let jobId of jobIDsDiff) {
+          for (const jobId of jobIDsDiff) {
             jobListResponse.items.push({
               status: {
                 id: jobId.toString(),
@@ -827,7 +825,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
       } else {
         try {
           let jobsList: any[] = [];
-          for (let queue of this.queuesList) {
+          for (const queue of this.queuesList) {
             const getJobsResult = await queue.getJobs(this.bullOptions['activeAndFutureJobTypes']);
             getJobsResult.forEach((job) => {
               if (job?.opts?.repeat?.pattern) {
@@ -839,7 +837,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
           }
           result = jobsList;
         } catch (err) {
-          that.logger.error('Error reading jobs', err);
+          logger.error('Error reading jobs', err);
           if (typeof err.code === 'string') {
             err.code = 500;
           }
@@ -880,8 +878,8 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
       result = _.orderBy(result, ['id'], [sort]);
     }
 
-    for (let job of result) {
-      let jobId = job.id as string;
+    for (const job of result) {
+      const jobId = job.id as string;
       if (jobId.startsWith('repeat:')) {
         const repeatKey = jobId.split(':')[1];
         // it could be possible the redis repeat key is deleted on index 8 and old completed
@@ -893,8 +891,8 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
       }
     }
 
-    for (let job of result) {
-      let when = job?.opts?.delay ? new Date(job?.opts?.delay).toString() : '';
+    for (const job of result) {
+      const when = job?.opts?.delay ? new Date(job?.opts?.delay).toString() : '';
       jobListResponse.items.push({
         payload: {
           id: job.id as string,
@@ -921,7 +919,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
 
   async _getJobList(): Promise<Job[]> {
     let jobsList: any[] = [];
-    for (let queue of this.queuesList) {
+    for (const queue of this.queuesList) {
       const getJobsResult = await queue.getJobs(this.bullOptions['activeAndFutureJobTypes']);
       getJobsResult.forEach((job) => {
         if (job?.opts?.repeat?.pattern) {
@@ -943,7 +941,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
    * Delete Job from queue.
    */
   async delete(request: DeleteRequest, ctx: any): Promise<DeepPartial<DeleteResponse>> {
-    let deleteResponse: DeleteResponse = { status: [], operation_status: { code: 0, message: '' } };
+    const deleteResponse: DeleteResponse = { status: [], operation_status: { code: 0, message: '' } };
     if (_.isEmpty(request)) {
       return {
         operation_status: {
@@ -959,7 +957,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
     if (jobIDs) {
       action = AuthZAction.DELETE;
       if (_.isArray(jobIDs)) {
-        for (let id of jobIDs) {
+        for (const id of jobIDs) {
           resources.push({ id });
         }
       } else {
@@ -996,7 +994,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
       this.logger.verbose('Deleting all jobs');
 
       await this._getJobList().then(async (jobs) => {
-        for (let job of jobs) {
+        for (const job of jobs) {
           await job.remove();
           if (this.resourceEventsEnabled) {
             dispatch.push(this.jobEvents.emit('jobsDeleted', { id: job.id }));
@@ -1018,14 +1016,14 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
     } else if ('ids' in request) {
       this.logger.verbose('Deleting jobs by their IDs', { id: request.ids });
 
-      for (let queue of this.queuesList) {
-        for (let jobDataKey of request.ids) {
+      for (const queue of this.queuesList) {
+        for (const jobDataKey of request.ids) {
           let callback: Promise<boolean>;
           const jobIdData = await this.getRedisValue(jobDataKey as string);
           // future jobs scheduled with `when` will have same repeatId as external SCS jobID
           if (jobIdData && jobIdData.repeatId && (jobIdData.repeatId != jobDataKey)) {
             const jobs = await queue.getRepeatableJobs();
-            for (let job of jobs) {
+            for (const job of jobs) {
               if (job.id === jobDataKey) {
                 this.logger.debug('Removing Repeatable job by key for jobId', { id: job.id });
                 callback = queue.removeRepeatableByKey(job.key);
@@ -1107,7 +1105,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
    * @param {any} job clean up job
    */
   async cleanupJobs(ttlAfterFinished: number, maxJobsToCleanLimit: number) {
-    for (let queue of this.queuesList) {
+    for (const queue of this.queuesList) {
       try {
         await queue.clean(ttlAfterFinished, maxJobsToCleanLimit, COMPLETED_JOB_STATE);
         await queue.clean(ttlAfterFinished, maxJobsToCleanLimit, FAILED_JOB_STATE);
@@ -1116,7 +1114,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
       }
     }
     this.logger.info('Jobs cleaned up successfully');
-    let lastExecutedInterval = { lastExecutedInterval: (new Date()).toString() };
+    const lastExecutedInterval = { lastExecutedInterval: (new Date()).toString() };
     await this.repeatJobIdRedisClient.set(QUEUE_CLEANUP, JSON.stringify(lastExecutedInterval));
   }
 
@@ -1151,7 +1149,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
    * Reschedules a job - deletes it and recreates it with a new generated ID.
    */
   async update(request: JobList, ctx: any): Promise<DeepPartial<JobListResponse>> {
-    let subject = request.subject;
+    const subject = request.subject;
     // update meta data for owners information
     await this.createMetadata(request.items, AuthZAction.MODIFY, subject);
     let acsResponse: DecisionResponse;
@@ -1206,7 +1204,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
 
     jobData?.items?.forEach(async (job) => {
       const mappedJob = mappedJobs[job?.payload?.id];
-      let endJob = {
+      const endJob = {
         id: mappedJob.id,
         type: mappedJob.type,
         queue_name: job?.payload?.queue_name,
@@ -1236,7 +1234,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
    * existing one if it already exists.
    */
   async upsert(request: JobList, ctx: any): Promise<DeepPartial<JobListResponse>> {
-    let subject = request.subject;
+    const subject = request.subject;
     await this.createMetadata(request.items, AuthZAction.MODIFY, subject);
     let acsResponse: DecisionResponse;
     try {
@@ -1265,10 +1263,10 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
 
     let result = [];
 
-    for (let eachJob of request.items) {
+    for (const eachJob of request.items) {
       let jobExists = false;
-      let origJobId = _.cloneDeep(eachJob.id);
-      for (let queue of this.queuesList) {
+      const origJobId = _.cloneDeep(eachJob.id);
+      for (const queue of this.queuesList) {
         const jobIdData = await this.getRedisValue(eachJob.id as string);
         // future jobs scheduled with `when` will have same repeatId as external SCS jobID
         if (jobIdData?.repeatId && (jobIdData.repeatId != origJobId)) {
@@ -1326,7 +1324,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
    */
   async clear(): Promise<any> {
     let allJobs: any[] = [];
-    for (let queue of this.queuesList) {
+    for (const queue of this.queuesList) {
       allJobs = allJobs.concat(await queue.getJobs(this.bullOptions['allJobTypes']));
     }
     return Promise.all(allJobs.map(async (job) => job.remove())).catch(err => {
@@ -1394,7 +1392,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
    * @param subject subject name
    */
   async createMetadata(resources: any, action: string, subject): Promise<any> {
-    let orgOwnerAttributes: Attribute[] = [];
+    const orgOwnerAttributes: Attribute[] = [];
     if (resources && !_.isArray(resources)) {
       resources = [resources];
     }
@@ -1414,7 +1412,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
     }
 
     if (resources?.length > 0) {
-      for (let resource of resources) {
+      for (const resource of resources) {
         if (!resource.data) {
           resource.data = { meta: {} };
         } else if (!resource.data.meta) {
@@ -1439,14 +1437,14 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
           }
           // update owners info
           if (result?.items?.length === 1 && result?.items[0]?.payload) {
-            let item = result.items[0].payload;
+            const item = result.items[0].payload;
             resource.data.meta.owners = item.data.meta.owners;
             // adding meta to resource root (needed by access-contorl-srv for owners information check)
             // meta is inside data of resource since the data is persisted in redis using bull
             resource.meta = { owners: item.data.meta.owners };
           } else if ((!result || !result.items || !result.items[0] || !result.items[0].payload) && action === AuthZAction.MODIFY) {
             // job does not exist - create new job (ex: Upsert with action modify)
-            let ownerAttributes = _.cloneDeep(orgOwnerAttributes);
+            const ownerAttributes = _.cloneDeep(orgOwnerAttributes);
             // add user as default owners
             ownerAttributes.push(
               {
@@ -1462,7 +1460,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
             resource.meta = { owners: ownerAttributes };
           }
         } else if ((action === AuthZAction.CREATE || !resource.id) && !resource.data.meta.owners) {
-          let ownerAttributes = _.cloneDeep(orgOwnerAttributes);
+          const ownerAttributes = _.cloneDeep(orgOwnerAttributes);
           if (!resource.id) {
             resource.id = uuid.v4().replace(/-/g, '');
           }

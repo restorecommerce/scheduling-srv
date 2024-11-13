@@ -102,10 +102,9 @@ export async function checkAccessRequest(ctx: GQLClientContext, resource: Resour
  * @param action The action to perform
  * @param operation Operation either isAllowed or whatIsAllowed
  */
-/* eslint-disable prefer-arrow-functions/prefer-arrow-functions */
 export async function checkAccessRequest(ctx: GQLClientContext, resource: Resource[], action: AuthZAction,
   operation: Operation): Promise<DecisionResponse | PolicySetRQResponse> {
-  let subject = ctx.subject;
+  const subject = ctx.subject;
   // resolve subject id using findByToken api and update subject with id
   let dbSubject;
   if (subject?.token) {
@@ -188,7 +187,7 @@ export function _filterKafkaJob<T extends KafkaOpts>(job: T, logger: Logger): Pi
 }
 
 export function _filterJobOptions(data: JobsOptions): Pick<JobsOptions, 'priority' | 'attempts' | 'backoff' | 'repeat' | 'jobId' | 'removeOnComplete'> {
-  let picked = _.pick(data, [
+  const picked = _.pick(data, [
     'priority', 'attempts', 'backoff', 'repeat', 'jobId', 'removeOnComplete'
   ]);
 
