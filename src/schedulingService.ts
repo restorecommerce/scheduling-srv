@@ -213,7 +213,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
     const createDispatch = [];
     let result: Job[] = [];
     const logger = this.logger;
-
+    const create = this.create;
     // Get the jobs
     for (const queueCfg of this.queuesConfigList) {
       // If enabled in the config, or the config is missing,b
@@ -286,7 +286,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
               when,
               options: {}
             };
-            createDispatch.push(thiz.create({
+            createDispatch.push(create({
               items: [immediateJob],
               total_count: 0,
             }, {}));
