@@ -354,9 +354,13 @@ export class Worker {
             const fileImport = await import(require_dir + externalFile);
             // check for double default
             if (fileImport?.default?.default) {
-              await fileImport.default.default(cfg, logger, events, runWorker);
+              (async () => (await import(require_dir + externalFile)).default.default(cfg, logger, events, runWorker))().catch(err => {
+                this.logger.error(`Error scheduling external job ${externalFile}`, { err: err.message });
+              });
             } else {
-              await fileImport.default(cfg, logger, events, runWorker);
+              (async () => (await import(require_dir + externalFile)).default(cfg, logger, events, runWorker))().catch(err => {
+                this.logger.error(`Error scheduling external job ${externalFile}`, { err: err.message });
+              });
             }
           }
           catch (err: any) {
