@@ -441,7 +441,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
     try {
       if (!ctx) { ctx = {}; };
       ctx.subject = subject;
-      ctx.resources = request?.items;
+      ctx.resources = request?.items?.map((data, ...job) => job);
       acsResponse = await checkAccessRequest(ctx, [{
         resource: 'job',
         id: request.items.map(item => item.id)
@@ -1156,7 +1156,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
     try {
       if (!ctx) { ctx = {}; };
       ctx.subject = subject;
-      ctx.resources = request?.items;
+      ctx.resources = request?.items?.map((data, ...obj) => obj);
       acsResponse = await checkAccessRequest(ctx,
         [{ resource: 'job', id: request.items.map(item => item.id) }],
         AuthZAction.MODIFY, Operation.isAllowed);
@@ -1240,7 +1240,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
     try {
       if (!ctx) { ctx = {}; };
       ctx.subject = subject;
-      ctx.resources = request.items;
+      ctx.resources = request?.items?.map((data, ...job) => job);;
       acsResponse = await checkAccessRequest(ctx,
         [{ resource: 'job', id: request.items.map(item => item.id) }],
         AuthZAction.MODIFY, Operation.isAllowed);

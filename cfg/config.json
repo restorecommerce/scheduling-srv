@@ -66,6 +66,7 @@
         "items.[0].tokens",
         "messages.[0].tokens",
         "request.items.[0].tokens",
+        "request.items.[0].data",
         "response.payload.token",
         "response.payload.tokens",
         "request.subject.token",
