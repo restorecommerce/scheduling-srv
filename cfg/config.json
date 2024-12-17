@@ -190,7 +190,11 @@
       {
         "name": "schedulingGRPC",
         "provider": "grpc",
-        "addr": "0.0.0.0:50054"
+        "addr": "0.0.0.0:50054",
+        "channelOptions": {
+          "grpc.max_send_message_length": 52428800,
+          "grpc.max_receive_message_length": 52428800
+        }
       }
     ]
   },
