@@ -101,7 +101,7 @@
         "messageObject": "io.restorecommerce.job.JobList"
       },
       "deleteJobs": {
-        "messageObject": "io.restorecommerce.job.Deleted"
+        "messageObject": "io.restorecommerce.resourcebase.DeleteRequest"
       },
       "jobsCreated": {
         "messageObject": "io.restorecommerce.job.JobList"
@@ -110,7 +110,7 @@
         "messageObject": "io.restorecommerce.job.JobList"
       },
       "jobsDeleted": {
-        "messageObject": "io.restorecommerce.resourcebase.DeleteRequest"
+        "messageObject": "io.restorecommerce.resourcebase.Deleted"
       },
       "jobDone": {
         "messageObject": "io.restorecommerce.job.JobDone"
@@ -225,8 +225,8 @@
     }
   },
   "externalJobs": {
-    "sourcePath": "./lib/external-jobs",
-    "importPath": "./external-jobs"
+    "sourcePath": "./lib/external-jobs/",
+    "importPath": "./external-jobs/"
   },
   "queue": [
     {

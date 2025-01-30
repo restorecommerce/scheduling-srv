@@ -6,7 +6,7 @@ import { PolicySetRQResponse } from '@restorecommerce/acs-client';
 import { Effect } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/rule.js';
 import { createServiceConfig } from '@restorecommerce/service-config';
 
-export const cfg = createServiceConfig(process.cwd() + '/test');
+export const cfg = createServiceConfig(process.cwd());
 
 export function validateScheduledJob(job: any, expectedSchedule: string, logger: Logger): void {
   should.exist(job.data);

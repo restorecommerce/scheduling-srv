@@ -81,7 +81,7 @@ export const unmarshallProtobufAny = (data: any, logger: Logger): any => {
         unmarshalled = JSON.parse(decoded);
       }
     }
-  } catch (error) {
+  } catch (error: any) {
     logger.error('Error unmarshalling job payload', {
       data, code: error.code,
       message: error.message, stack: error.stack
@@ -119,13 +119,13 @@ export async function checkAccessRequest(ctx: GQLClientContext, resource: Resour
 
   let result: DecisionResponse | PolicySetRQResponse;
   try {
-    result = await accessRequest(subject, resource, action, ctx, { operation, roleScopingEntityURN: cfg?.get('authorization:urns:roleScopingEntityURN') });
-  } catch (err) {
+    result = await accessRequest(subject, resource, action, ctx, { operation, /* roleScopingEntityURN: cfg?.get('authorization:urns:roleScopingEntityURN') */ });
+  } catch (err: any) {
     return {
       decision: Response_Decision.DENY,
       operation_status: {
-        code: err.code || 500,
-        message: err.details || err.message,
+        code: Number.isInteger(err.code) ? err.code : 500,
+        message: err.details ?? err.message,
       }
     };
   }

@@ -150,7 +150,7 @@ const startGrpcMockServer = async (methodWithOutput: MethodWithOutput[]) => {
       oneofs: true
     });
     await mockServer.start();
-    logger.info('Mock ACS Server started on port 50061');
+    logger.info(`Mock ACS Server started on ${mockServer.serverAddress}`);
   } catch (err) {
     logger.error('Error starting mock ACS server', err);
   }
@@ -183,7 +183,7 @@ const startIDSGrpcMockServer = async (methodWithOutput: MethodWithOutput[]) => {
       oneofs: true
     });
     await mockServerIDS.start();
-    logger.info('Mock IDS Server started on port 50051');
+    logger.info(`Mock IDS Server started on ${mockServerIDS.serverAddress}`);
   } catch (err) {
     logger.error('Error starting mock IDS server', err);
   }
@@ -204,7 +204,6 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
   let worker: Worker;
   let jobEvents: Topic;
   let grpcSchedulingSrv: SchedulingServiceClient;
-  let cfg: any;
 
   before(async function (): Promise<any> {
     this.timeout(40000);
@@ -285,7 +284,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
     payloadShouldBeEmpty(await grpcSchedulingSrv.read(JobReadRequest.fromPartial({ subject }), {}), false);
   });
   beforeEach(async () => {
-    for (let event of ['jobsCreated', 'jobsDeleted']) {
+    for (const event of ['jobsCreated', 'jobsDeleted']) {
       await jobEvents.on(event, () => { });
     }
   });

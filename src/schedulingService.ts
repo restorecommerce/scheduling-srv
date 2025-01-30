@@ -1,11 +1,12 @@
 import * as _ from 'lodash-es';
 import { errors } from '@restorecommerce/chassis-srv';
 import * as kafkaClient from '@restorecommerce/kafka-client';
-import { AuthZAction, ACSAuthZ, updateConfig, DecisionResponse, Operation, PolicySetRQResponse } from '@restorecommerce/acs-client';
+import { AuthZAction, ACSAuthZ, updateConfig, DecisionResponse, Operation, PolicySetRQResponse, ACSResource, CtxResource } from '@restorecommerce/acs-client';
 import {
   JobServiceImplementation as SchedulingServiceServiceImplementation,
   JobFailed, JobDone, DeepPartial, JobList, JobListResponse, Data,
-  Backoff_Type, JobOptions_Priority, JobReadRequest, JobReadRequest_SortOrder
+  Backoff_Type, JobOptions_Priority, JobReadRequest, JobReadRequest_SortOrder,
+  JobResponse
 } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/job.js';
 import { createClient, RedisClientType } from 'redis';
 import { NewJob, Priority } from './types.js';
@@ -16,8 +17,9 @@ import * as uuid from 'uuid';
 import { Logger } from 'winston';
 import { Response_Decision } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/access_control.js';
 import { Attribute } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/attribute.js';
-import { DeleteRequest, DeleteResponse } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/resource_base.js';
+import { DeleteRequest, DeleteResponse, ResourceListResponse } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/resource_base.js';
 import { Queue, QueueOptions, Job } from 'bullmq';
+import { Status } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/status.js';
 
 const { parseExpression } = pkg;
 const JOB_DONE_EVENT = 'jobDone';
@@ -49,7 +51,8 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
   repeatJobIdRedisClient: RedisClientType<any, any>;
 
 
-  constructor(jobEvents: kafkaClient.Topic,
+  constructor(
+    jobEvents: kafkaClient.Topic,
     private redisConfig: any, logger: any, redisClient: RedisClientType<any, any>,
     bullOptions: any, cfg: any, authZ: ACSAuthZ) {
     this.jobEvents = jobEvents;
@@ -63,10 +66,12 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
     const repeatJobIdCfg = cfg.get('redis');
     repeatJobIdCfg.database = cfg.get('redis:db-indexes:db-repeatJobId');
     this.repeatJobIdRedisClient = createClient(repeatJobIdCfg);
-    this.repeatJobIdRedisClient.on('error', (err) => logger.error('Redis client error in repeatable job store', { code: err.code, message: err.message, stack: err.stack }));
+    this.repeatJobIdRedisClient.on(
+      'error',
+      (err) => logger.error('Redis client error in repeatable job store', { err }));
     this.repeatJobIdRedisClient.connect().then((data) => {
       logger.info('Redis client connection for repeatable job store successful');
-    }).catch(err => logger.error('Redis client error for repeatable job store', { code: err.code, message: err.message, stack: err.stack }));
+    }).catch(err => logger.error('Redis client error for repeatable job store', { err }));
 
     this.canceledJobs = new Set<string>();
     this.cfg = cfg;
@@ -142,6 +147,26 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
       };
       this.queuesConfigList.push(queueCfgObj);
     }
+  }
+
+  private catchOperationStatus(error: any, message?: string): ResourceListResponse {
+    this.logger?.error(message ?? error?.message, error);
+    return {
+      total_count: 0,
+      operation_status: {
+        code: Number.isInteger(error?.code) ? error.code : 500,
+        message: error?.message ?? error?.msg ?? error?.details ?? message,
+      },
+    };
+  }
+
+  private catchStatus(id: string, error: any, message?: string): Status {
+    this.logger?.error(message ?? error?.message, error);
+    return {
+      id,
+      code: Number.isInteger(error?.code) ? error.code : 500,
+      message: error?.message ?? error?.msg ?? error?.details ?? message,
+    };
   }
 
   /**
@@ -236,8 +261,8 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
       if (job?.name) {
         try {
           lastRunTime = await this.redisClient.get(job.name);
-        } catch (err) {
-          this.logger.error('Error reading the last run time for job type:', { name: job.name, code: err.code, message: err.message, stack: err.stack });
+        } catch (error) {
+          this.logger.error('Error reading the last run time for job type:', { name: job.name, error });
         }
       }
       // we store lastRunTime only for recurring jobs and if it exists check
@@ -248,10 +273,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
         try {
           lastRunTime = JSON.parse(lastRunTime);
         } catch (error) {
-          this.logger.error('Error parsing lastRunTime', {
-            code: error.code,
-            message: error.message, stack: error.stack
-          });
+          this.logger.error('Error parsing lastRunTime', { error });
         }
 
         if ((job?.opts?.repeat as any)?.pattern && lastRunTime?.time) {
@@ -265,7 +287,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
             intervalTime =
               parseExpression((job.opts.repeat as any).pattern, options);
           } catch (error) {
-            this.logger.error('Error parsing cron expression running missed schedules', { code: error.code, message: error.message, stack: error.stack });
+            this.logger.error('Error parsing cron expression running missed schedules', { error });
           }
           while (intervalTime?.hasNext()) {
             const nextInterval: any = intervalTime.next();
@@ -405,10 +427,11 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
         const jobIdData = { repeatId, options };
         await this.repeatJobIdRedisClient.set(scsJobId, JSON.stringify(jobIdData));
       }
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Error storing repeatKey to redis', {
         code: error.code,
-        message: error.message, stack: error.stack
+        message: error.message,
+        stack: error.stack
       });
     }
   }
@@ -446,16 +469,8 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
         resource: 'job',
         id: request.items.map(item => item.id)
       }], AuthZAction.CREATE, Operation.isAllowed);
-    } catch (err) {
-      this.logger.error('Error requesting access-control-srv for create meta data', { code: err.code, message: err.message, stack: err.stack });
-      return {
-        items: [],
-        total_count: 0,
-        operation_status: {
-          code: err.code,
-          message: err.message
-        }
-      };
+    } catch (err: any) {
+      return this.catchOperationStatus(err, 'Error requesting access-control-srv for create meta data');
     }
     if (acsResponse.decision != Response_Decision.PERMIT) {
       return { items: [], total_count: 0, operation_status: acsResponse.operation_status };
@@ -465,7 +480,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
     for (const job of request?.items || []) {
       try {
         jobs.push(this._validateJob(job as any));
-      } catch (err) {
+      } catch (err: any) {
         this.logger.error('Error validating job', job);
         jobListResponse.items.push({
           status: {
@@ -631,7 +646,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
       let customArgsFilter;
       try {
         customArgsFilter = JSON.parse(customArgs.value.toString());
-      } catch (error) {
+      } catch (error: any) {
         this.logger.error('Error parsing custom query arguments', {
           code: error.code,
           message: error.message, stack: error.stack
@@ -674,7 +689,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
     try {
       await this.repeatJobIdRedisClient.del(key);
       this.logger.debug('Redis Key deleted successfully used for mapping repeatable jobID', { key });
-    } catch (err) {
+    } catch (err: any) {
       this.logger.error('Error deleting redis key', { key, msg: err.message, stack: err.stack });
     }
   }
@@ -690,8 +705,8 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
       } else {
         return;
       }
-    } catch (err) {
-      if (err?.message?.startsWith('Unexpected token') || err.message.startsWith('Unexpected number') || err.message.startsWith('Unexpected non-whitespace character')) {
+    } catch (err: any) {
+      if (err.message?.startsWith('Unexpected token') || err.message?.startsWith('Unexpected number') || err.message?.startsWith('Unexpected non-whitespace character')) {
         return redisValue;
       } else {
         this.logger.error('Error reading redis key', { key, msg: err.message, stack: err.stack });
@@ -715,20 +730,15 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
       ctx.resources = [];
       acsResponse = await checkAccessRequest(ctx, [{ resource: 'job' }], AuthZAction.READ,
         Operation.whatIsAllowed) as PolicySetRQResponse;
-    } catch (err) {
-      this.logger.error('Error requesting access-control-srv for read operation', { code: err.code, message: err.message, stack: err.stack });
-      return {
-        operation_status: {
-          code: err.code,
-          message: err.message
-        }
-      };
+    } catch (err: any) {
+      return this.catchOperationStatus(err, 'Error requesting access-control-srv for read operation');
     }
-    if (acsResponse.decision != Response_Decision.PERMIT) {
+    
+    if (acsResponse.decision !== Response_Decision.PERMIT) {
       return { operation_status: acsResponse.operation_status };
     }
 
-    let result: Job[] = [];
+    let result = new Array<Job>();
     if (_.isEmpty(request) || _.isEmpty(request.filter)
       && (!request.filter || !request.filter.job_ids
         || _.isEmpty(request.filter.job_ids))
@@ -795,16 +805,8 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
                   }
                 }
               }).catch(err => {
-                logger.error(`Error reading job ${jobID}`, err);
-                if (err?.code && typeof err.code === 'string') {
-                  err.code = 500;
-                }
                 jobListResponse.items.push({
-                  status: {
-                    id: jobID.toString(),
-                    code: err.code,
-                    message: err.message
-                  }
+                  status: this.catchStatus(jobID.toString(), err, `Error reading job ${jobID}`)
                 });
               });
             });
@@ -836,17 +838,8 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
             jobsList = jobsList.concat(getJobsResult);
           }
           result = jobsList;
-        } catch (err) {
-          logger.error('Error reading jobs', err);
-          if (typeof err.code === 'string') {
-            err.code = 500;
-          }
-          return {
-            operation_status: {
-              code: err.code,
-              message: err.message
-            }
-          };
+        } catch (err: any) {
+          return this.catchOperationStatus(err, 'Error reading jobs');
         }
       }
 
@@ -864,7 +857,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
 
     if (!_.isEmpty(request) && !_.isEmpty(request.sort)
       && _.includes(['ASCENDING', 'DESCENDING'], request.sort)) {
-      let sort;
+      let sort: boolean | "desc" | "asc";
       switch (request.sort) {
         case JobReadRequest_SortOrder.DESCENDING:
           sort = 'desc';
@@ -873,7 +866,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
           sort = 'asc';
           break;
         default:
-          this.logger.error(`Unknown sort option ${sort}`);
+          this.logger.error(`Unknown sort option ${request.sort}`);
       }
       result = _.orderBy(result, ['id'], [sort]);
     }
@@ -940,7 +933,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
   /**
    * Delete Job from queue.
    */
-  async delete(request: DeleteRequest, ctx: any): Promise<DeepPartial<DeleteResponse>> {
+  async delete(request: DeleteRequest, ctx: any): Promise<DeleteResponse> {
     const deleteResponse: DeleteResponse = { status: [], operation_status: { code: 0, message: '' } };
     if (_.isEmpty(request)) {
       return {
@@ -950,153 +943,147 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
         }
       };
     }
-    const subject = request?.subject;
-    const jobIDs = request?.ids;
-    let resources = [];
-    let action;
-    if (jobIDs) {
-      action = AuthZAction.DELETE;
-      if (_.isArray(jobIDs)) {
-        for (const id of jobIDs) {
-          resources.push({ id });
-        }
-      } else {
-        resources = [{ id: jobIDs }];
-      }
-      await this.createMetadata(resources, action, subject);
-    }
-    if (request.collection) {
-      action = AuthZAction.DROP;
-      resources = [{ collection: request.collection }];
-    }
-    let acsResponse: DecisionResponse;
+    
     try {
-      if (!ctx) { ctx = {}; };
-      ctx.subject = subject;
-      ctx.resources = resources;
-      acsResponse = await checkAccessRequest(ctx, [{ resource: 'job', id: jobIDs as string[] }], action,
-        Operation.isAllowed);
-    } catch (err) {
-      this.logger.error('Error requesting access-control-srv for delete operation', { code: err.code, message: err.message, stack: err.stack });
-      return {
-        operation_status: {
-          code: err.code,
-          message: err.message
-        }
-      };
-    }
-    if (acsResponse.decision != Response_Decision.PERMIT) {
-      return { operation_status: acsResponse.operation_status };
-    }
-    const dispatch = [];
-    this.logger.info('Received delete request');
-    if ('collection' in request && request.collection) {
-      this.logger.verbose('Deleting all jobs');
-
-      await this._getJobList().then(async (jobs) => {
-        for (const job of jobs) {
-          await job.remove();
-          if (this.resourceEventsEnabled) {
-            dispatch.push(this.jobEvents.emit('jobsDeleted', { id: job.id }));
+      const subject = request?.subject;
+      const jobIDs = request?.ids;
+      let resources = new Array<DeepPartial<CtxResource>>();
+      let action;
+      if (jobIDs) {
+        action = AuthZAction.DELETE;
+        if (_.isArray(jobIDs)) {
+          for (const id of jobIDs) {
+            resources.push({ id });
           }
-          deleteResponse.status.push({
-            id: job.id.toString(),
-            code: 200,
-            message: 'success'
-          });
+        } else {
+          resources = [{ id: jobIDs }];
         }
-      });
-      // FLUSH redis DB index 8 used for mapping of repeat jobIds (since req is for dropping job collection)
-      const delResp = await this.repeatJobIdRedisClient.flushDb();
-      if (delResp) {
-        this.logger.debug('Mapped keys for repeatable jobs deleted successfully');
-      } else {
-        this.logger.debug('Could not delete repeatable job keys');
+        await this.createMetadata(resources, action, subject);
       }
-    } else if ('ids' in request) {
-      this.logger.verbose('Deleting jobs by their IDs', { id: request.ids });
+      if (request.collection) {
+        action = AuthZAction.DROP;
+        resources = [{ collection: request.collection }];
+      }
+      let acsResponse: DecisionResponse;
+      try {
+        if (!ctx) { ctx = {}; };
+        ctx.subject = subject;
+        ctx.resources = resources;
+        acsResponse = await checkAccessRequest(
+          ctx, [{ resource: 'job', id: jobIDs as string[] }],
+          action,
+          Operation.isAllowed
+        );
+      } catch (err: any) {
+        return this.catchOperationStatus(err, 'Error requesting access-control-srv for delete operation');
+      }
+      if (acsResponse.decision != Response_Decision.PERMIT) {
+        return {
+          status: [], 
+          operation_status: acsResponse.operation_status
+        };
+      }
+      const dispatch = [];
+      this.logger.info('Received delete request');
+      if ('collection' in request && request.collection) {
+        this.logger.verbose('Deleting all jobs');
 
-      for (const queue of this.queuesList) {
-        for (const jobDataKey of request.ids) {
-          let callback: Promise<boolean>;
-          const jobIdData = await this.getRedisValue(jobDataKey as string);
-          // future jobs scheduled with `when` will have same repeatId as external SCS jobID
-          if (jobIdData && jobIdData.repeatId && (jobIdData.repeatId != jobDataKey)) {
-            const jobs = await queue.getRepeatableJobs();
-            for (const job of jobs) {
-              if (job.id === jobDataKey) {
-                this.logger.debug('Removing Repeatable job by key for jobId', { id: job.id });
-                callback = queue.removeRepeatableByKey(job.key);
-                deleteResponse.status.push({
-                  id: job.id,
-                  code: 200,
-                  message: 'success'
-                });
-                await this.deleteRedisKey(jobDataKey as string);
-                await this.deleteRedisKey(jobIdData.repeatId);
-                break;
-              }
+        await this._getJobList().then(async (jobs) => {
+          for (const job of jobs) {
+            await job.remove();
+            if (this.resourceEventsEnabled) {
+              dispatch.push(this.jobEvents.emit('jobsDeleted', { id: job.id }));
             }
-          } else {
-            callback = queue.getJob(jobDataKey).then(async (jobData) => {
-              if (jobData) {
-                try {
-                  await this._removeBullJob(jobData.id, queue);
-                  await this.deleteRedisKey(jobData.id);
+            deleteResponse.status.push({
+              id: job.id?.toString(),
+              code: 200,
+              message: 'success'
+            });
+          }
+        });
+        // FLUSH redis DB index 8 used for mapping of repeat jobIds (since req is for dropping job collection)
+        const delResp = await this.repeatJobIdRedisClient.flushDb();
+        if (delResp) {
+          this.logger.debug('Mapped keys for repeatable jobs deleted successfully');
+        } else {
+          this.logger.debug('Could not delete repeatable job keys');
+        }
+      } else if ('ids' in request) {
+        this.logger.verbose('Deleting jobs by their IDs', { id: request.ids });
+
+        for (const queue of this.queuesList) {
+          for (const jobDataKey of request.ids) {
+            let callback: Promise<boolean>;
+            const jobIdData = await this.getRedisValue(jobDataKey as string);
+            // future jobs scheduled with `when` will have same repeatId as external SCS jobID
+            if (jobIdData && jobIdData.repeatId && (jobIdData.repeatId != jobDataKey)) {
+              const jobs = await queue.getRepeatableJobs();
+              for (const job of jobs) {
+                if (job.id === jobDataKey) {
+                  this.logger.debug('Removing Repeatable job by key for jobId', { id: job.id });
+                  callback = queue.removeRepeatableByKey(job.key);
                   deleteResponse.status.push({
-                    id: jobData.id.toString(),
+                    id: job.id,
                     code: 200,
                     message: 'success'
                   });
-                } catch (err) {
-                  if (typeof err?.code === 'string') {
-                    err.code = 500;
-                  }
-                  deleteResponse.status.push({
-                    id: jobData.id.toString(),
-                    code: err.code,
-                    message: err.message
-                  });
-                  return false;
+                  await this.deleteRedisKey(jobDataKey as string);
+                  await this.deleteRedisKey(jobIdData.repeatId);
+                  break;
                 }
-                return true;
               }
-              return false;
-            });
-          }
-
-          // since no CB is returned for removeRepeatableByKey by bull
-          if (!callback) {
-            if (this.resourceEventsEnabled) {
-              dispatch.push(this.jobEvents.emit(
-                'jobsDeleted', { id: jobDataKey })
-              );
+            } else {
+              callback = queue.getJob(jobDataKey).then(async (jobData) => {
+                if (jobData) {
+                  try {
+                    await this._removeBullJob(jobData.id, queue);
+                    await this.deleteRedisKey(jobData.id);
+                    deleteResponse.status.push({
+                      id: jobData.id.toString(),
+                      code: 200,
+                      message: 'success'
+                    });
+                  } catch (err: any) {
+                    deleteResponse.status.push(
+                      this.catchStatus(jobData.id.toString(), err)
+                    );
+                    return false;
+                  }
+                  return true;
+                }
+                return false;
+              });
             }
-          } else {
-            callback.then(() => {
+
+            // since no CB is returned for removeRepeatableByKey by bull
+            if (!callback) {
               if (this.resourceEventsEnabled) {
                 dispatch.push(this.jobEvents.emit(
                   'jobsDeleted', { id: jobDataKey })
                 );
               }
-            }).catch(err => {
-              this.logger.error('Error deleting job', { id: jobDataKey });
-              if (typeof err?.code === 'number') {
-                err.code = 500;
-              }
-              deleteResponse.status.push({
-                id: jobDataKey.toString(),
-                code: err.code,
-                message: err.message
+            } else {
+              callback.then(() => {
+                if (this.resourceEventsEnabled) {
+                  dispatch.push(this.jobEvents.emit(
+                    'jobsDeleted', { id: jobDataKey })
+                  );
+                }
+              }).catch(err => {
+                deleteResponse.status.push(
+                  this.catchStatus(jobDataKey.toString(), err, 'Error deleting job')
+                );
               });
-            });
+            }
           }
         }
       }
-    }
 
-    await Promise.all(dispatch);
-    deleteResponse.operation_status = { code: 200, message: 'success' };
+      await Promise.all(dispatch);
+      deleteResponse.operation_status = { code: 200, message: 'success' };
+    } catch (err: any) {
+      this.catchOperationStatus(err);
+    }
     return deleteResponse;
   }
 
@@ -1160,14 +1147,8 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
       acsResponse = await checkAccessRequest(ctx,
         [{ resource: 'job', id: request.items.map(item => item.id) }],
         AuthZAction.MODIFY, Operation.isAllowed);
-    } catch (err) {
-      this.logger.error('Error requesting access-control-srv for update operation', { code: err.code, message: err.message, stack: err.stack });
-      return {
-        operation_status: {
-          code: err.code,
-          message: err.message
-        }
-      };
+    } catch (err: any) {
+      return this.catchOperationStatus('Error requesting access-control-srv for update operation', err);
     }
     if (acsResponse.decision != Response_Decision.PERMIT) {
       return { operation_status: acsResponse.operation_status };
@@ -1244,14 +1225,8 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
       acsResponse = await checkAccessRequest(ctx,
         [{ resource: 'job', id: request.items.map(item => item.id) }],
         AuthZAction.MODIFY, Operation.isAllowed);
-    } catch (err) {
-      this.logger.error('Error requesting access-control-srv for upsert operation', { code: err.code, message: err.message, stack: err.stack });
-      return {
-        operation_status: {
-          code: err.code,
-          message: err.message
-        }
-      };
+    } catch (err: any) {
+      return this.catchOperationStatus(err, 'Error requesting access-control-srv for upsert operation')
     }
 
     if (acsResponse.decision != Response_Decision.PERMIT) {
@@ -1261,8 +1236,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
       return { operation_status: { code: 400, message: 'Missing items in upsert request' } };
     }
 
-    let result = [];
-
+    const result = new Array<JobResponse>;
     for (const eachJob of request.items) {
       let jobExists = false;
       const origJobId = _.cloneDeep(eachJob.id);
@@ -1292,20 +1266,18 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
           if (eachJob.id.startsWith('repeat:')) {
             eachJob.id = origJobId;
           }
-          result = [
-            ...result,
-            ...(await this.update(JobList.fromPartial({ items: [eachJob], subject }), ctx)).items
-          ];
+          result.push(
+            ...((await this.update(JobList.fromPartial({ items: [eachJob], subject }), ctx))?.items ?? [])
+          );
           jobExists = true;
           break;
         }
       }
       if (!jobExists) {
         // new job create it
-        result = [
-          ...result,
-          ...(await this.create(JobList.fromPartial({ items: [eachJob], subject }), ctx)).items
-        ];
+        result.push(
+          ...((await this.create(JobList.fromPartial({ items: [eachJob], subject }), ctx))?.items ?? [])
+        );
       }
     }
 
@@ -1427,12 +1399,12 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
               },
               subject
             }), {});
-          } catch (err) {
-            if (err.message.startsWith('Error! Jobs not found in any of the queues') && action != AuthZAction.DELETE) {
+          } catch (error: any) {
+            if (error.message?.startsWith('Error! Jobs not found in any of the queues') && action != AuthZAction.DELETE) {
               this.logger.debug('New job should be created', { jobId: resource.id });
               result = { items: [] };
             } else {
-              this.logger.error(`Error reading job with resource ID ${resource.id}`, { code: err.code, message: err.message, stack: err.stack });
+              this.logger.error(`Error reading job with resource ID ${resource.id}`, { error });
             }
           }
           // update owners info
