@@ -143,7 +143,7 @@
       {
         "name": "schedulingGRPC",
         "provider": "grpc",
-        "addr": "localhost:50054"
+        "addr": "localhost:50154"
       }
     ]
   },
@@ -156,13 +156,13 @@
 
   "client": {
     "schedulingClient": {
-      "address": "localhost:50054"
+      "address": "localhost:50154"
     },
     "acs-srv": {
-      "address": "localhost:50061"
+      "address": "localhost:50161"
     },
     "user": {
-      "address": "localhost:50051"
+      "address": "localhost:50151"
     }
   },
   "kue-prefix": "scheduling-srv-test",

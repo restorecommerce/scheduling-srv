@@ -1,5 +1,6 @@
-import * as _ from 'lodash-es';
+import {} from 'mocha';
 import should from 'should';
+import * as _ from 'lodash-es';
 
 import { SchedulingService } from '../src/schedulingService.js';
 import { marshallProtobufAny } from '../src/utilts.js';
@@ -9,19 +10,21 @@ import { createServiceConfig } from '@restorecommerce/service-config';
 import { GrpcMockServer, ProtoUtils } from '@alenon/grpc-mock-server';
 import * as proto_loader from '@grpc/proto-loader';
 import * as grpc from '@grpc/grpc-js';
+import { createClient as RedisCreateClient, RedisClientType } from 'redis';
+import { Logger } from 'winston';
+import { updateConfig } from '@restorecommerce/acs-client';
+import { JobOptions_Priority, Backoff_Type, JobReadRequest, Job } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/job.js';
+import { runWorker } from '@restorecommerce/scs-jobs';
+import { Effect } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/rule.js';
 import {
   validateJob,
   payloadShouldBeEmpty,
   validateScheduledJob,
   jobPolicySetRQ,
   permitJobRule,
-  validateJobDonePayload
+  validateJobDonePayload,
+  cfg,
 } from './utils.js';
-import { createClient as RedisCreateClient, RedisClientType } from 'redis';
-import { Logger } from 'winston';
-import { updateConfig } from '@restorecommerce/acs-client';
-import { JobOptions_Priority, Backoff_Type, JobReadRequest } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/job.js';
-import { runWorker } from '@restorecommerce/scs-jobs';
 
 /**
  * NOTE: Running instances of Redis and Kafka are required to run the tests.
@@ -31,7 +34,6 @@ import { runWorker } from '@restorecommerce/scs-jobs';
 const JOB_EVENTS_TOPIC = 'io.restorecommerce.jobs';
 
 let logger: Logger;
-let cfg;
 let subject;
 let redisClient: RedisClientType;
 let tokenRedisClient: RedisClientType;
@@ -100,7 +102,7 @@ const proto: any = ProtoUtils.getProtoFromPkgDefinition(
   pkgDef
 );
 
-const mockServer = new GrpcMockServer('localhost:50061');
+const mockServer = new GrpcMockServer(cfg.get('client:acs-srv:address'));
 
 const startGrpcMockServer = async (methodWithOutput: MethodWithOutput[]) => {
   // create mock implementation based on the method name and output
@@ -137,7 +139,7 @@ const IDS_PROTO_PATH = 'io/restorecommerce/user.proto';
 const IDS_PKG_NAME = 'io.restorecommerce.user';
 const IDS_SERVICE_NAME = 'UserService';
 
-const mockServerIDS = new GrpcMockServer('localhost:50051');
+const mockServerIDS = new GrpcMockServer(cfg.get('client:user:address'));
 
 // Mock server for ids - findByToken
 const startIDSGrpcMockServer = async (methodWithOutput: MethodWithOutput[]) => {
@@ -184,7 +186,6 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
     this.timeout(12000);
     worker = new Worker();
 
-    cfg = createServiceConfig(process.cwd() + '/test');
     cfg.set('events:kafka:groupId', testSuffix + 'kafka');
     await worker.start(cfg);
 
@@ -192,8 +193,8 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
     logger = worker.logger;
 
     // start acs mock service
-    jobPolicySetRQ.policy_sets[0].policies[0].effect = 'PERMIT';
-    jobPolicySetRQ.policy_sets[0].policies[0].rules = [permitJobRule];
+    jobPolicySetRQ!.policy_sets![0]!.policies![0]!.effect = Effect.PERMIT;
+    jobPolicySetRQ!.policy_sets![0]!.policies![0]!.rules = [permitJobRule];
     // start mock acs-srv - needed for read operation since acs-client makes a req to acs-srv
     // to get applicable policies although acs-lookup is disabled
     await startGrpcMockServer([{ method: 'WhatIsAllowed', output: jobPolicySetRQ },
@@ -243,8 +244,8 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
 
     await jobTopic.emit('deleteJobs', { collection: true, subject });
 
-    if (toDelete > 0) {
-      await jobTopic.$wait(jobOffset + toDelete - 1);
+    if (toDelete! > 0) {
+      await jobTopic.$wait(jobOffset + toDelete! - 1);
     }
 
     payloadShouldBeEmpty(await schedulingService.read(JobReadRequest.fromPartial({ subject }), {}));
@@ -323,9 +324,9 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
       schedulingService.disableAC();
       const result = await schedulingService.read(JobReadRequest.fromPartial({ subject }), {});
       payloadShouldBeEmpty(result);
-      should.exist(result.operation_status);
-      result.operation_status.code.should.equal(200);
-      result.operation_status.message.should.equal('success');
+      should.exist(result!.operation_status);
+      result!.operation_status!.code!.should.equal(200);
+      result!.operation_status!.message!.should.equal('success');
 
       await w.pause();
     });
@@ -370,13 +371,13 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
 
       schedulingService.disableAC();
       let result = await schedulingService.read(JobReadRequest.fromPartial({ subject }), {});
-      result.items.should.have.length(1);
-      result.items[0].payload.type.should.equal('test-job');
-      result.items[0].payload.queue_name.should.equal('test-job');
-      result.items[0].status.code.should.equal(200);
-      result.items[0].status.message.should.equal('success');
-      result.operation_status.code.should.equal(200);
-      result.operation_status.message.should.equal('success');
+      result!.items!.should.have.length(1);
+      result!.items![0]!.payload!.type!.should.equal('test-job');
+      result!.items![0]!.payload!.queue_name!.should.equal('test-job');
+      result!.items![0]!.status!.code!.should.equal(200);
+      result!.items![0]!.status!.message!.should.equal('success');
+      result!.operation_status!.code!.should.equal(200);
+      result!.operation_status!.message!.should.equal('success');
 
       // jobsCreated, jobDone
       await jobTopic.$wait(offset + 2);
@@ -384,8 +385,8 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
       schedulingService.disableAC();
       result = await schedulingService.read(JobReadRequest.fromPartial({ subject }), {});
       payloadShouldBeEmpty(result);
-      result.operation_status.code.should.equal(200);
-      result.operation_status.message.should.equal('success');
+      result!.operation_status!.code!.should.equal(200);
+      result!.operation_status!.message!.should.equal('success');
 
       await w.pause();
     });
@@ -400,14 +401,14 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
 
         schedulingService.disableAC();
         let result = await schedulingService.read(JobReadRequest.fromPartial({ subject }), {});
-        should.exist(result.items);
-        result.items.length.should.equal(2);
-        result.items[0].payload.type.should.equal('test-job');
-        result.items[0].payload.queue_name.should.equal('test-job');
-        result.items[0].status.code.should.equal(200);
-        result.items[0].status.message.should.equal('success');
-        result.operation_status.code.should.equal(200);
-        result.operation_status.message.should.equal('success');
+        should.exist(result!.items);
+        result!.items!.length.should.equal(2);
+        result!.items![0]!.payload!.type!.should.equal('test-job');
+        result!.items![0]!.payload!.queue_name!.should.equal('test-job');
+        result!.items![0]!.status!.code!.should.equal(200);
+        result!.items![0]!.status!.message!.should.equal('success');
+        result!.operation_status!.code!.should.equal(200);
+        result!.operation_status!.message!.should.equal('success');
 
         return {
           delete_scheduled: ++jobExecs === 3
@@ -447,13 +448,13 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
       const createResponse = await schedulingService.read(JobReadRequest.fromPartial({ subject }), {});
       should.exist(createResponse);
       should.exist(createResponse.items);
-      createResponse.items.length.should.equal(1);
-      createResponse.items[0].payload.type.should.equal('test-job');
-      createResponse.items[0].payload.queue_name.should.equal('test-job');
-      createResponse.items[0].status.code.should.equal(200);
-      createResponse.items[0].status.message.should.equal('success');
-      createResponse.operation_status.code.should.equal(200);
-      createResponse.operation_status.message.should.equal('success');
+      createResponse.items!.length.should.equal(1);
+      createResponse.items![0]!.payload!.type!.should.equal('test-job');
+      createResponse.items![0]!.payload!.queue_name!.should.equal('test-job');
+      createResponse.items![0]!.status!.code!.should.equal(200);
+      createResponse.items![0]!.status!.message!.should.equal('success');
+      createResponse.operation_status!.code!.should.equal(200);
+      createResponse.operation_status!.message!.should.equal('success');
 
       // wait for 3 'queuedJob', 1 'createJobs'
       // wait for '1 jobsCreated'
@@ -482,7 +483,7 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
       const scheduledTime = new Date();
       scheduledTime.setDate(scheduledTime.getDate() + 1);
 
-      const jobs = [];
+      const jobs = new Array<Job>;
       for (let i = 0; i < 4; i += 1) {
         jobs[i] = {
           type: 'test-job',
@@ -508,23 +509,23 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
 
       schedulingService.disableAC();
       let result = await schedulingService.read(JobReadRequest.fromPartial({ subject }), {});
-      result.items.map(job => {
+      result!.items!.map(job => {
         should.exist(job.payload);
-        job.payload.type.should.equal('test-job');
-        job.status.code.should.equal(200);
-        job.status.message.should.equal('success');
+        job.payload!.type!.should.equal('test-job');
+        job.status!.code!.should.equal(200);
+        job.status!.message!.should.equal('success');
       });
-      result.total_count.should.be.equal(5);
-      result.operation_status.code.should.equal(200);
-      result.operation_status.message.should.equal('success');
+      result!.total_count!.should.be.equal(5);
+      result!.operation_status!.code!.should.equal(200);
+      result!.operation_status!.message!.should.equal('success');
     });
     it('should update / reschedule a job', async () => {
       schedulingService.disableAC();
       let result = await schedulingService.read(JobReadRequest.fromPartial({ subject }), {});
-      const job = result.items[0].payload;
+      const job = result!.items![0]!.payload;
       const scheduledTime = new Date();
       scheduledTime.setDate(scheduledTime.getDate() + 2); // two days from now
-      job.when = scheduledTime.toISOString();
+      job!.when = scheduledTime.toISOString();
 
       const offset = await jobTopic.$offset(-1);
       await jobTopic.emit('modifyJobs', {
@@ -535,9 +536,9 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
       schedulingService.disableAC();
       result = await schedulingService.read(JobReadRequest.fromPartial({ subject }), {});
       should.exist(result);
-      should.exist(result.items);
-      result.items = _.sortBy(result.items, ['id']);
-      const updatedJob = _.last(result.items);
+      should.exist(result!.items);
+      result!.items = _.sortBy(result!.items, ['id']);
+      const updatedJob = _.last(result!.items);
       validateJob((updatedJob as any).payload, logger);
     });
     it('should delete all remaining scheduled jobs upon request', async () => {
@@ -549,8 +550,8 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
       schedulingService.disableAC();
       const result = await schedulingService.read(JobReadRequest.fromPartial({ subject }), {});
       payloadShouldBeEmpty(result);
-      result.operation_status.code.should.equal(200);
-      result.operation_status.message.should.equal('success');
+      result!.operation_status!.code!.should.equal(200);
+      result!.operation_status!.message!.should.equal('success');
     });
   });
 });

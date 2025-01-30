@@ -2,6 +2,11 @@ import { unmarshallProtobufAny } from '../src/utilts.js';
 import should from 'should';
 import { Priority } from '../src/types.js';
 import { Logger } from 'winston';
+import { PolicySetRQResponse } from '@restorecommerce/acs-client';
+import { Effect } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/rule.js';
+import { createServiceConfig } from '@restorecommerce/service-config';
+
+export const cfg = createServiceConfig(process.cwd() + '/test');
 
 export function validateScheduledJob(job: any, expectedSchedule: string, logger: Logger): void {
   should.exist(job.data);
@@ -53,8 +58,12 @@ export function payloadShouldBeEmpty(result: any, emptyArray: boolean = true): v
 export const permitJobRule = {
   id: 'permit_rule_id',
   target: {
-    actions: [],
-    resources: [{ id: 'urn:restorecommerce:acs:names:model:entity', value: 'urn:restorecommerce:acs:model:job.Job' }],
+    resources: [
+      { 
+        id: 'urn:restorecommerce:acs:names:model:entity',
+        value: 'urn:restorecommerce:acs:model:job.Job'
+      }
+    ],
     subjects: [
       {
         id: 'urn:restorecommerce:acs:names:role',
@@ -63,15 +72,15 @@ export const permitJobRule = {
       {
         id: 'urn:restorecommerce:acs:names:roleScopingEntity',
         value: 'urn:restorecommerce:acs:model:organization.Organization'
-      }]
+      }
+    ]
   },
-  effect: 'PERMIT'
+  effect: Effect.PERMIT,
 };
 
 export const denyJobRule = {
   id: 'permit_rule_id',
   target: {
-    actions: [],
     resources: [{ id: 'urn:restorecommerce:acs:names:model:entity', value: 'urn:restorecommerce:acs:model:job.Job' }],
     subjects: [
       {
@@ -83,12 +92,12 @@ export const denyJobRule = {
         value: 'urn:restorecommerce:acs:model:organization.Organization'
       }]
   },
-  effect: 'DENY'
+  effect: Effect.DENY,
 };
 
-export const jobPolicySetRQ = {
-  policy_sets:
-    [{
+export const jobPolicySetRQ: PolicySetRQResponse = {
+  policy_sets: [
+    {
       combining_algorithm: 'urn:oasis:names:tc:xacml:3.0:rule-combining-algorithm:permit-overrides',
       id: 'job_test_policy_set_id',
       policies: [
@@ -102,11 +111,12 @@ export const jobPolicySetRQ = {
               value: 'urn:restorecommerce:acs:model:job.Job'
             }],
             subjects: []
-          }, effect: '',
+          },
           rules: [],
           has_rules: true
         }]
-    }]
+    }
+  ]
 };
 
 export interface serverRule {

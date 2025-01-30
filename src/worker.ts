@@ -1,3 +1,4 @@
+import path from 'path';
 import * as _ from 'lodash-es';
 import * as chassis from '@restorecommerce/chassis-srv';
 import { Events, Topic, registerProtoMeta } from '@restorecommerce/kafka-client';
@@ -335,9 +336,10 @@ export class Worker {
     } as BindConfig<HealthDefinition>);
 
     // Hook any external jobs
-    let externalJobFiles;
+    const externalJobDir = process.env.EXTERNAL_JOBS_DIR ?? cfg.get('externalJobs:sourcePath') ?? './lib/external-jobs';
+    let externalJobFiles: Array<string>;
     try {
-      externalJobFiles = fs.readdirSync(process.env.EXTERNAL_JOBS_DIR || './lib/external-jobs');
+      externalJobFiles = fs.readdirSync(process.env.EXTERNAL_JOBS_DIR ?? './lib/external-jobs');
     } catch (err: any) {
       if (err.message.includes('no such file or directory')) {
         this.logger.info('No files for external job processors found');
@@ -348,17 +350,17 @@ export class Worker {
     if (externalJobFiles?.length > 0) {
       externalJobFiles.forEach(async (externalFile) => {
         if (externalFile.endsWith('.js') || externalFile.endsWith('.cjs')) {
-          const require_dir = process.env.EXTERNAL_JOBS_REQUIRE_DIR ?? './jobs/';
+          const import_dir = process.env.EXTERNAL_JOBS_REQUIRE_DIR ?? cfg.get('externalJobs:importPath') ?? './external-jobs/';
 
           try {
-            const fileImport = await import(require_dir + externalFile);
+            const fileImport = await import(path.join(import_dir, externalFile));
             // check for double default
             if (fileImport?.default?.default) {
-              (async () => (await import(require_dir + externalFile)).default.default(cfg, logger, events, runWorker))().catch(err => {
+              (async () => (await import(import_dir + externalFile)).default.default(cfg, logger, events, runWorker))().catch(err => {
                 this.logger.error(`Error scheduling external job ${externalFile}`, { err: err.message });
               });
             } else {
-              (async () => (await import(require_dir + externalFile)).default(cfg, logger, events, runWorker))().catch(err => {
+              (async () => (await import(import_dir + externalFile)).default(cfg, logger, events, runWorker))().catch(err => {
                 this.logger.error(`Error scheduling external job ${externalFile}`, { err: err.message });
               });
             }

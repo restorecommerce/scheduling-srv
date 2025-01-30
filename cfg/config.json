@@ -224,7 +224,10 @@
       "path": "/admin/queues"
     }
   },
-  "externalJobs": [],
+  "externalJobs": {
+    "sourcePath": "./lib/external-jobs",
+    "importPath": "./external-jobs"
+  },
   "queue": [
     {
       "name": "default-queue",
