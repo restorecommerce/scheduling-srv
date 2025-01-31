@@ -1,12 +1,21 @@
 import * as _ from 'lodash-es';
 import { errors } from '@restorecommerce/chassis-srv';
 import * as kafkaClient from '@restorecommerce/kafka-client';
-import { AuthZAction, ACSAuthZ, updateConfig, DecisionResponse, Operation, PolicySetRQResponse, ACSResource, CtxResource } from '@restorecommerce/acs-client';
+import {
+  AuthZAction,
+  ACSAuthZ,
+  updateConfig,
+  DecisionResponse,
+  Operation,
+  PolicySetRQResponse,
+  CtxResource,
+  CustomQueryArgs
+} from '@restorecommerce/acs-client';
 import {
   JobServiceImplementation as SchedulingServiceServiceImplementation,
-  JobFailed, JobDone, DeepPartial, JobList, JobListResponse, Data,
+  JobFailed, JobDone, DeepPartial, JobList, JobListResponse,
   Backoff_Type, JobOptions_Priority, JobReadRequest, JobReadRequest_SortOrder,
-  JobResponse
+  JobResponse, Job,
 } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/job.js';
 import { createClient, RedisClientType } from 'redis';
 import { NewJob, Priority } from './types.js';
@@ -17,9 +26,15 @@ import * as uuid from 'uuid';
 import { Logger } from 'winston';
 import { Response_Decision } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/access_control.js';
 import { Attribute } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/attribute.js';
-import { DeleteRequest, DeleteResponse, ResourceListResponse } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/resource_base.js';
-import { Queue, QueueOptions, Job } from 'bullmq';
+import {
+  DeleteRequest,
+  DeleteResponse,
+  ResourceListResponse
+} from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/resource_base.js';
+import { Queue, QueueOptions, Job as BullJob } from 'bullmq';
 import { Status } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/status.js';
+import { Subject } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/auth.js';
+import { Meta } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/meta.js';
 
 const { parseExpression } = pkg;
 const JOB_DONE_EVENT = 'jobDone';
@@ -34,34 +49,26 @@ const QUEUE_CLEANUP = 'queueCleanup';
  */
 export class SchedulingService implements SchedulingServiceServiceImplementation {
 
-  jobEvents: kafkaClient.Topic;
-  logger: Logger;
-
   queuesConfigList: any;
   queuesList: Queue[];
   defaultQueueName: string;
-
-  redisClient: RedisClientType<any, any>;
   resourceEventsEnabled: boolean;
   canceledJobs: Set<string>;
-  bullOptions: any;
-  cfg: any;
-  authZ: ACSAuthZ;
   authZCheck: boolean;
   repeatJobIdRedisClient: RedisClientType<any, any>;
 
-
   constructor(
-    jobEvents: kafkaClient.Topic,
-    private redisConfig: any, logger: any, redisClient: RedisClientType<any, any>,
-    bullOptions: any, cfg: any, authZ: ACSAuthZ) {
-    this.jobEvents = jobEvents;
+    private readonly jobEvents: kafkaClient.Topic,
+    private readonly redisConfig: any,
+    private readonly logger: Logger,
+    private readonly redisClient: RedisClientType<any, any>,
+    private readonly bullOptions: any,
+    private readonly cfg: any,
+    private readonly authZ: ACSAuthZ
+  ) {
     this.resourceEventsEnabled = true;
-    this.bullOptions = bullOptions;
-    this.logger = logger;
     this.queuesList = [];
     this.queuesConfigList = [];
-    this.redisClient = redisClient;
 
     const repeatJobIdCfg = cfg.get('redis');
     repeatJobIdCfg.database = cfg.get('redis:db-indexes:db-repeatJobId');
@@ -74,7 +81,6 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
     }).catch(err => logger.error('Redis client error for repeatable job store', { err }));
 
     this.canceledJobs = new Set<string>();
-    this.cfg = cfg;
     this.authZ = authZ;
     this.authZCheck = this.cfg.get('authorization:enabled');
 
@@ -236,7 +242,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
     // for jobs created via Kafka currently there are no acs checks
     this.disableAC();
     const createDispatch = [];
-    let result: Job[] = [];
+    let result: BullJob[] = [];
     const logger = this.logger;
     const create = this.create;
     // Get the jobs
@@ -379,7 +385,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
    * @param millis
    * @param opts
    */
-  getNextMillis(millis, opts) {
+  getNextMillis(millis: number, opts: any) {
     if (opts?.every) {
       return Math.floor(millis / opts.every) * opts.every + opts.every;
     }
@@ -405,7 +411,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
     }
   }
 
-  private md5(str) {
+  private md5(str: string) {
     return crypto
       .createHash('md5')
       .update(str)
@@ -419,7 +425,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
    * @param repeat - job repeate options
    * @param jobId - job id
    */
-  async storeRepeatKey(repeatId, scsJobId, options) {
+  async storeRepeatKey(repeatId: string, scsJobId: string, options: any) {
     try {
       if (repeatId && scsJobId) {
         this.logger.info('Repeat key mapped to external SCS JobId', { repeatId, scsJobId });
@@ -492,7 +498,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
       }
     }
 
-    const result: Job[] = [];
+    const result: BullJob[] = [];
     // Scheduling jobs
     for (let i = 0; i < jobs.length; i += 1) {
       const job = jobs[i];
@@ -536,7 +542,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
 
       if (!job.data.meta) {
         const now = new Date();
-        const metaObj = {
+        const metaObj: Meta = {
           created: now,
           modified: now,
           modified_by: '',
@@ -573,7 +579,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
       };
 
       if ((bullOptions as any).timeout === 1) {
-        delete bullOptions['timeout'];
+        delete (bullOptions as any).timeout;
       }
 
       // Match the Job Type with the Queue Name and add the Job to this Queue.
@@ -638,10 +644,10 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
     return jobListResponse;
   }
 
-  private filterByOwnerShip(customArgsObj, result) {
+  private filterByOwnerShip(customArgsObj: CustomQueryArgs, result: BullJob[]): BullJob[] {
     // applying filter based on custom arguments (filterByOwnerShip)
-    let filteredResult: Job[] = [];
-    const customArgs = (customArgsObj)?.custom_arguments;
+    const filteredResult = new Array<BullJob>();
+    const customArgs = customArgsObj?.custom_arguments;
     if (customArgs?.value) {
       let customArgsFilter;
       try {
@@ -675,8 +681,8 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
               }
             }
           }
-        });
-        filteredResult = filteredResult.concat(filteredResp);
+        }) as BullJob[];
+        filteredResult.push(...filteredResp);
       }
       return filteredResult;
     } else {
@@ -738,24 +744,18 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
       return { operation_status: acsResponse.operation_status };
     }
 
-    let result = new Array<Job>();
+    let result: Array<BullJob>;
     if (_.isEmpty(request) || _.isEmpty(request.filter)
       && (!request.filter || !request.filter.job_ids
         || _.isEmpty(request.filter.job_ids))
       && (!request.filter || !request.filter.type ||
         _.isEmpty(request.filter.type))) {
       result = await this._getJobList();
-      let custom_arguments;
-      if (acsResponse?.custom_query_args?.length > 0) {
-        custom_arguments = acsResponse.custom_query_args[0].custom_arguments;
-      }
-      result = this.filterByOwnerShip({ custom_arguments }, result);
+      const custom_arguments = acsResponse.custom_query_args?.[0];
+      result = this.filterByOwnerShip(custom_arguments, result);
     } else {
-      const logger = this.logger;
-      let jobIDs = request.filter.job_ids || [];
-      if (!_.isArray(jobIDs)) {
-        jobIDs = [jobIDs];
-      }
+      result = new Array<BullJob>();
+      const jobIDs = Array.isArray(request.filter.job_ids) ?  request.filter.job_ids : [request.filter.job_ids];
       const typeFilterName = request.filter.type;
 
       // Search in all the queues and retrieve jobs after JobID
@@ -846,11 +846,8 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
       if (typeFilterName) {
         result = result.filter(job => job.name === typeFilterName);
       }
-      let custom_arguments;
-      if (acsResponse?.custom_query_args?.length > 0) {
-        custom_arguments = acsResponse.custom_query_args[0].custom_arguments;
-      }
-      result = this.filterByOwnerShip({ custom_arguments }, result);
+      const custom_arguments = acsResponse.custom_query_args?.[0]?.custom_arguments;
+      result = this.filterByOwnerShip(custom_arguments, result);
     }
 
     result = result.filter(valid => !!valid);
@@ -910,7 +907,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
     return jobListResponse;
   }
 
-  async _getJobList(): Promise<Job[]> {
+  async _getJobList(): Promise<BullJob[]> {
     let jobsList: any[] = [];
     for (const queue of this.queuesList) {
       const getJobsResult = await queue.getJobs(this.bullOptions['activeAndFutureJobTypes']);
@@ -1165,7 +1162,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
     const mappedJobs = request?.items?.reduce((obj, job) => {
       obj[job.id] = job;
       return obj;
-    }, {});
+    }, {} as Record<string, Job>);
 
     const jobData = await this.read(JobReadRequest.fromPartial(
       {
@@ -1181,7 +1178,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
       subject
     }), {});
 
-    const result = [];
+    const result = new Array<Job>();
 
     jobData?.items?.forEach(async (job) => {
       const mappedJob = mappedJobs[job?.payload?.id];
@@ -1198,7 +1195,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
       };
 
       if (endJob.when && endJob.options) {
-        delete endJob.options['delay'];
+        delete (endJob.options as any).delay;
       }
 
       result.push(endJob);
@@ -1363,7 +1360,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
    * @param action resource action
    * @param subject subject name
    */
-  async createMetadata(resources: any, action: string, subject): Promise<any> {
+  async createMetadata(resources: any, action: string, subject: Subject): Promise<any> {
     const orgOwnerAttributes: Attribute[] = [];
     if (resources && !_.isArray(resources)) {
       resources = [resources];
