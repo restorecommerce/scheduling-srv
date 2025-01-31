@@ -5,8 +5,8 @@ import { Worker } from '../src/worker.js';
 import { Topic } from '@restorecommerce/kafka-client';
 import { createChannel, createClient } from '@restorecommerce/grpc-client';
 import { 
-  JobServiceClient as SchedulingServiceClient,
   JobServiceDefinition as SchedulingServiceDefinition,
+  JobServiceClient as SchedulingServiceClient,
   JobOptions_Priority,
   Backoff_Type,
   JobReadRequest,
@@ -25,7 +25,8 @@ import {
   jobPolicySetRQ,
   permitJobRule,
   validateJobDonePayload,
-  cfg
+  cfg,
+  getSchedulingServiceClient
 } from './utils.js';
 import { updateConfig } from '@restorecommerce/acs-client';
 import * as _ from 'lodash-es';
@@ -110,9 +111,10 @@ const proto: any = ProtoUtils.getProtoFromPkgDefinition(
   pkgDef
 );
 
-const mockServer = new GrpcMockServer(cfg.get('client:acs-srv:address'));
-const startGrpcMockServer = async (methodWithOutput: MethodWithOutput[]) => {
+let mockServerACS: GrpcMockServer;
+const startACSGrpcMockServer = async (methodWithOutput: MethodWithOutput[]) => {
   // create mock implementation based on the method name and output
+  mockServerACS = new GrpcMockServer(cfg.get('client:acs-srv:address'));
   const implementations = {
     isAllowed: (call: any, callback: any) => {
       const isAllowedResponse = methodWithOutput.filter(e => e.method === 'IsAllowed');
@@ -141,7 +143,7 @@ const startGrpcMockServer = async (methodWithOutput: MethodWithOutput[]) => {
     }
   };
   try {
-    mockServer.addService(PROTO_PATH, PKG_NAME, SERVICE_NAME, implementations, {
+    mockServerACS.addService(PROTO_PATH, PKG_NAME, SERVICE_NAME, implementations, {
       includeDirs: ['node_modules/@restorecommerce/protos/'],
       keepCase: true,
       longs: String,
@@ -149,22 +151,23 @@ const startGrpcMockServer = async (methodWithOutput: MethodWithOutput[]) => {
       defaults: true,
       oneofs: true
     });
-    await mockServer.start();
-    logger.info(`Mock ACS Server started on ${mockServer.serverAddress}`);
+    await mockServerACS.start();
+    logger.info(`Mock ACS Server started on ${mockServerACS.serverAddress}`);
   } catch (err) {
     logger.error('Error starting mock ACS server', err);
   }
+  return mockServerACS;
 };
 
 const IDS_PROTO_PATH = 'io/restorecommerce/user.proto';
 const IDS_PKG_NAME = 'io.restorecommerce.user';
 const IDS_SERVICE_NAME = 'UserService';
 
-const mockServerIDS = new GrpcMockServer(cfg.get('client:user:address'));
-
 // Mock server for ids - findByToken
+let mockServerIDS: GrpcMockServer;
 const startIDSGrpcMockServer = async (methodWithOutput: MethodWithOutput[]) => {
   // create mock implementation based on the method name and output
+  mockServerIDS = new GrpcMockServer(cfg.get('client:user:address'));
   const implementations = {
     findByToken: (call: any, callback: any) => {
       if (call.request.token === 'admin_token') {
@@ -187,16 +190,17 @@ const startIDSGrpcMockServer = async (methodWithOutput: MethodWithOutput[]) => {
   } catch (err) {
     logger.error('Error starting mock IDS server', err);
   }
+  return mockServerIDS;
 };
 
 
-const stopGrpcMockServer = async () => {
-  await mockServer.stop();
+const stopACSGrpcMockServer = async () => {
+  await mockServerACS?.stop();
   logger.info('Mock ACS Server closed successfully');
 };
 
 const stopIDSGrpcMockServer = async () => {
-  await mockServerIDS.stop();
+  await mockServerIDS?.stop();
   logger.info('Mock IDS Server closed successfully');
 };
 
@@ -228,7 +232,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
     // start acs mock service with PERMIT rule
     jobPolicySetRQ.policy_sets![0]!.policies![0]!.effect = Effect.PERMIT;
     jobPolicySetRQ.policy_sets![0]!.policies![0]!.rules = [permitJobRule];
-    await startGrpcMockServer([
+    await startACSGrpcMockServer([
       {
         method: 'WhatIsAllowed',
         output: jobPolicySetRQ
@@ -265,13 +269,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
     // store user with tokens and role associations to Redis index `db-findByToken`
     await tokenRedisClient.set('admin-token', JSON.stringify(acsSubject));
 
-    const schedulingClientCfg = cfg.get('client:schedulingClient');
-    if (schedulingClientCfg) {
-      grpcSchedulingSrv = createClient({
-        ...schedulingClientCfg,
-        logger
-      }, SchedulingServiceDefinition, createChannel(schedulingClientCfg.address));
-    }
+    grpcSchedulingSrv = getSchedulingServiceClient(logger);
     const toDelete = (await grpcSchedulingSrv.read(JobReadRequest.fromPartial({ subject }), {})).total_count;
     const offset = await jobEvents.$offset(-1);
 
@@ -289,19 +287,24 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
     }
   });
   afterEach(async () => {
-    await jobEvents.removeAllListeners('queuedJob');
-    await jobEvents.removeAllListeners('jobsCreated');
-    await jobEvents.removeAllListeners('jobsDeleted');
+    await Promise.allSettled([
+      jobEvents.removeAllListeners('queuedJob'),
+      jobEvents.removeAllListeners('jobsCreated'),
+      jobEvents.removeAllListeners('jobsDeleted'),
+    ]);
   });
   after(async function (): Promise<any> {
     this.timeout(20000);
-    await stopGrpcMockServer();
-    await stopIDSGrpcMockServer();
-    await jobEvents.removeAllListeners('queuedJob');
-    await jobEvents.removeAllListeners('jobsCreated');
-    await jobEvents.removeAllListeners('jobsDeleted');
-    await worker.schedulingService.clear();
-    await worker.stop();
+    await Promise.allSettled([
+      stopACSGrpcMockServer(),
+      stopIDSGrpcMockServer(),
+      jobEvents.removeAllListeners('queuedJob'),
+      jobEvents.removeAllListeners('jobsCreated'),
+      jobEvents.removeAllListeners('jobsDeleted'),
+      worker.schedulingService.clear(),
+    ]).then(
+      worker.stop
+    );
   });
   describe(`create a one-time job ${testSuffix}`, function postJob(): void {
     this.timeout(30000);

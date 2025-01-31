@@ -1,3 +1,4 @@
+import path from 'path';
 import * as _ from 'lodash-es';
 import * as chassis from '@restorecommerce/chassis-srv';
 import { Events, Topic, registerProtoMeta } from '@restorecommerce/kafka-client';
@@ -349,10 +350,11 @@ export class Worker {
     if (externalJobFiles?.length > 0) {
       await Promise.allSettled(externalJobFiles.map(async (externalFile) => {
         if (externalFile.endsWith('.js') || externalFile.endsWith('.cjs')) {
-          const importPath = [
+          const importExt = cfg.get('externalJobs:importExt') ?? path.extname(externalFile);
+          const importPath = './' + path.join(
             process.env.EXTERNAL_JOBS_REQUIRE_DIR ?? cfg.get('externalJobs:importPath') ?? './external-jobs/',
-            externalFile
-          ].join('').replace(/\.cjs$/, '.js');
+            externalFile.replace(/\.\w+$/, importExt),
+          );
           try {
             const fileImport = await import(importPath);
             // check for double default
@@ -361,7 +363,7 @@ export class Worker {
             } else {
               await fileImport.default(cfg, logger, events, runWorker);
             }
-            this.logger?.info('imported:', importPath);
+            this.logger?.info('Imported:', importPath);
           }
           catch (err: any) {
             this.logger?.error(`Error scheduling external job ${importPath}`, { err });

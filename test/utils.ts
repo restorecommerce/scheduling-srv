@@ -5,8 +5,27 @@ import { Logger } from 'winston';
 import { PolicySetRQResponse } from '@restorecommerce/acs-client';
 import { Effect } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/rule.js';
 import { createServiceConfig } from '@restorecommerce/service-config';
+import { createChannel, createClient } from '@restorecommerce/grpc-client';
+import { 
+  JobServiceDefinition as SchedulingServiceDefinition,
+  JobServiceClient as SchedulingServiceClient,
+} from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/job.js';
 
 export const cfg = createServiceConfig(process.cwd());
+
+let _client: SchedulingServiceClient
+export function getSchedulingServiceClient(logger: Logger) {
+  const schedulingClientCfg = cfg.get('client:schedulingClient');
+  _client = createClient(
+    {
+      ...schedulingClientCfg,
+      logger
+    },
+    SchedulingServiceDefinition,
+    createChannel(schedulingClientCfg.address)
+  );
+  return _client;
+}
 
 export function validateScheduledJob(job: any, expectedSchedule: string, logger: Logger): void {
   should.exist(job.data);

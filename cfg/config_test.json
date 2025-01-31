@@ -266,6 +266,11 @@
       "prefix": "acs:"
     }
   },
+  "externalJobs": {
+    "sourcePath": "./lib/external-jobs/",
+    "importPath": "./external-jobs/",
+    "importExt": ".js"
+  },
   "errors": {
     "USER_NOT_LOGGED_IN": {
       "code": "401",
