@@ -1013,10 +1013,10 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
             let callback: Promise<boolean>;
             const jobIdData = await this.getRedisValue(jobDataKey as string);
             // future jobs scheduled with `when` will have same repeatId as external SCS jobID
-            if (jobIdData && jobIdData.repeatId && (jobIdData.repeatId != jobDataKey)) {
+            if (jobIdData?.repeatId && (jobIdData.repeatId != jobDataKey)) {
               const jobs = await queue.getRepeatableJobs();
               for (const job of jobs) {
-                if (job.id === jobDataKey) {
+                if (job?.key === jobIdData.repeatId) {
                   this.logger.debug('Removing Repeatable job by key for jobId', { id: job.id });
                   callback = queue.removeRepeatableByKey(job.key);
                   deleteResponse.status.push({
