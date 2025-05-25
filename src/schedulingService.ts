@@ -36,7 +36,7 @@ import { Status } from '@restorecommerce/rc-grpc-clients/dist/generated-server/i
 import { Subject } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/auth.js';
 import { Meta } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/meta.js';
 
-const { parseExpression } = pkg;
+const { CronExpressionParser } = pkg;
 const JOB_DONE_EVENT = 'jobDone';
 const JOB_FAILED_EVENT = 'jobFailed';
 const DEFAULT_CLEANUP_COMPLETED_JOBS = 604800000; // 7 days in miliseconds
@@ -291,7 +291,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
           let intervalTime;
           try {
             intervalTime =
-              parseExpression((job.opts.repeat as any).pattern, options);
+            CronExpressionParser.parse((job.opts.repeat as any).pattern, options);
           } catch (error) {
             this.logger.error('Error parsing cron expression running missed schedules', { error });
           }
@@ -394,7 +394,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
       opts?.startDate && new Date(opts.startDate) > new Date(millis)
         ? new Date(opts.startDate)
         : new Date(millis);
-    const interval = parseExpression(
+    const interval = CronExpressionParser.parse(
       opts.cron,
       _.defaults(
         {
@@ -1421,6 +1421,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
               subject
             }), {});
           } catch (error: any) {
+            console.log('MSG reading metadata', error);
             if (error.message?.startsWith('Error! Jobs not found in any of the queues') && action != AuthZAction.DELETE) {
               this.logger.debug('New job should be created', { jobId: resource.id });
               result = { items: [] };
