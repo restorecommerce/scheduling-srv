@@ -273,7 +273,7 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
       jobTopic.removeAllListeners('queuedJob'),
       jobTopic.removeAllListeners('jobsCreated'),
       jobTopic.removeAllListeners('jobsDeleted'),
-      worker.schedulingService.clear(),
+      await worker.schedulingService.clear(),
     ]).then(
       worker.stop
     );
@@ -556,6 +556,11 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
       const offset = await jobTopic.$offset(-1);
       await jobTopic.$wait(offset + 2);
       schedulingService.disableAC();
+      // since this is an async operation via kafka wait for 5sec
+      // till all jobs are cleared
+      await new Promise((resolve, reject) => {
+        setTimeout(() => resolve(0), 5000);
+      });
       const result = await schedulingService.read(JobReadRequest.fromPartial({ subject }), {});
       payloadShouldBeEmpty(result);
       result!.operation_status!.code!.should.equal(200);

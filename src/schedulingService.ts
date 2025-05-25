@@ -253,7 +253,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
       const runMissedScheduled = queueCfg.runMissedScheduled;
       if (_.isNil(runMissedScheduled) ||
         (!_.isNil(runMissedScheduled) && runMissedScheduled == true)) {
-        await queue.getJobs(this.bullOptions['activeAndFutureJobTypes']).then(jobs => {
+        await queue.getJobs(['active', 'delayed', 'repeat']).then(jobs => {
           result = result.concat(jobs);
         }).catch(error => {
           logger.error('Error reading jobs to reschedule the missed recurring jobs', error);
@@ -273,13 +273,13 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
       }
       // we store lastRunTime only for recurring jobs and if it exists check
       // cron interval and schedule immediate jobs for missed intervals
-      this.logger.info(`Last run time of ${job.name} Job was:`, lastRunTime);
+      this.logger.info(`Last run time of ${job?.name} Job was:`, lastRunTime);
       if (lastRunTime) {
         // convert redis string value to object and get actual time value
         try {
           lastRunTime = JSON.parse(lastRunTime);
         } catch (error) {
-          this.logger.error('Error parsing lastRunTime', { error });
+          this.logger.error('Error parsing lastRunTime', { error, lastRunTime });
         }
 
         if ((job?.opts?.repeat as any)?.pattern && lastRunTime?.time) {
@@ -470,7 +470,10 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
     try {
       if (!ctx) { ctx = {}; };
       ctx.subject = subject;
-      ctx.resources = request?.items?.map((data, ...job) => job);
+      ctx.resources = request?.items?.map((job) => {
+        const { data, ...resource } = job;
+        return resource;
+      });
       acsResponse = await checkAccessRequest(ctx, [{
         resource: 'job',
         id: request.items.map(item => item.id)
@@ -661,7 +664,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
       if (customArgsFilter?.length === 0) {
         return [];
       }
-      if(!Array.isArray(customArgsFilter)) {
+      if (!Array.isArray(customArgsFilter)) {
         customArgsFilter = [customArgsFilter];
       }
       for (const customArgObj of customArgsFilter) {
@@ -739,7 +742,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
     } catch (err: any) {
       return this.catchOperationStatus(err, 'Error requesting access-control-srv for read operation');
     }
-    
+
     if (acsResponse.decision !== Response_Decision.PERMIT) {
       return { operation_status: acsResponse.operation_status };
     }
@@ -755,7 +758,8 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
       result = this.filterByOwnerShip(custom_arguments, result);
     } else {
       result = new Array<BullJob>();
-      const jobIDs = Array.isArray(request.filter.job_ids) ?  request.filter.job_ids : [request.filter.job_ids];
+      const jobIDs = (request?.filter?.job_ids?.length && Array.isArray(request.filter.job_ids)) ?
+        request.filter.job_ids : request?.filter?.job_ids ? [request.filter.job_ids] : [];
       const typeFilterName = request.filter.type;
 
       // Search in all the queues and retrieve jobs after JobID
@@ -763,11 +767,11 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
       // If the job is not found in any of the queues, continue looking
       // Finally compare the two lists and add an error to status for which
       // job could not be found in any of the queues.
-      if (jobIDs.length > 0) {
+      if (jobIDs?.length > 0) {
         // jobIDsCopy should contain the jobIDs duplicate values
         // after the for loop ends
         const jobIDsCopy: string[] = [];
-        for (let jobID of jobIDs) {
+        for (let jobID of jobIDs || []) {
           const jobIdData = await this.getRedisValue(jobID as string);
           // future jobs scheduled with `when` will have same repeatId as external SCS jobID
           if (jobIdData?.repeatId && (jobIdData.repeatId != jobID)) {
@@ -828,7 +832,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
         try {
           let jobsList: any[] = [];
           for (const queue of this.queuesList) {
-            const getJobsResult = await queue.getJobs(this.bullOptions['activeAndFutureJobTypes']);
+            const getJobsResult = await queue.getJobs(['active', 'delayed', 'repeat']);
             getJobsResult.forEach((job) => {
               if (job?.opts?.repeat?.pattern) {
                 (job.opts.repeat as any).cron = job.opts.repeat.pattern;
@@ -844,7 +848,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
       }
 
       if (typeFilterName) {
-        result = result.filter(job => job.name === typeFilterName);
+        result = result.filter(job => job?.name === typeFilterName);
       }
       const custom_arguments = acsResponse.custom_query_args?.[0]?.custom_arguments;
       result = this.filterByOwnerShip(custom_arguments, result);
@@ -910,7 +914,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
   async _getJobList(): Promise<BullJob[]> {
     let jobsList: any[] = [];
     for (const queue of this.queuesList) {
-      const getJobsResult = await queue.getJobs(this.bullOptions['activeAndFutureJobTypes']);
+      const getJobsResult = await queue.getJobs(['active', 'delayed', 'repeat']);
       getJobsResult.forEach((job) => {
         if (job?.opts?.repeat?.pattern) {
           (job.opts.repeat as any).cron = job.opts.repeat.pattern;
@@ -940,7 +944,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
         }
       };
     }
-    
+
     try {
       const subject = request?.subject;
       const jobIDs = request?.ids;
@@ -976,37 +980,50 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
       }
       if (acsResponse.decision != Response_Decision.PERMIT) {
         return {
-          status: [], 
+          status: [],
           operation_status: acsResponse.operation_status
         };
       }
       const dispatch = [];
       this.logger.info('Received delete request');
       if ('collection' in request && request.collection) {
-        this.logger.verbose('Deleting all jobs');
-
-        await this._getJobList().then(async (jobs) => {
-          for (const job of jobs) {
-            await job.remove();
+        this.logger.info('Deleting all jobs');
+        for (const queue of this.queuesList || []) {
+          const jobs = await queue.getJobs(['paused', 'repeat', 'wait', 'active', 'delayed',
+            'prioritized', 'waiting', 'waiting-children', 'completed', 'failed']);
+          for (const job of jobs || []) {
+            if (!job) {
+              continue;
+            }
+            let deleted;
+            if (job?.repeatJobKey) {
+              deleted = await queue.removeJobScheduler(job?.repeatJobKey);
+            } else {
+              const id = job.key ? job.key : job.id;
+              deleted = await queue.removeJobScheduler(id);
+            }
+            this.logger.info('Job deleted with key', { key: job.key, name: job.name });
+            const jobIdentifier = job.id ? job.id : job.name;
             if (this.resourceEventsEnabled) {
-              dispatch.push(this.jobEvents.emit('jobsDeleted', { id: job.id }));
+              dispatch.push(this.jobEvents.emit('jobsDeleted', { id: jobIdentifier }));
             }
             deleteResponse.status.push({
-              id: job.id?.toString(),
+              id: jobIdentifier,
               code: 200,
               message: 'success'
             });
           }
-        });
+        }
         // FLUSH redis DB index 8 used for mapping of repeat jobIds (since req is for dropping job collection)
         const delResp = await this.repeatJobIdRedisClient.flushDb();
         if (delResp) {
-          this.logger.debug('Mapped keys for repeatable jobs deleted successfully');
+          this.logger.info('Mapped keys for repeatable jobs deleted successfully');
         } else {
-          this.logger.debug('Could not delete repeatable job keys');
+          this.logger.info('Could not delete repeatable job keys');
         }
+        await this.clear();
       } else if ('ids' in request) {
-        this.logger.verbose('Deleting jobs by their IDs', { id: request.ids });
+        this.logger.info('Deleting jobs by their IDs', { id: request.ids });
 
         for (const queue of this.queuesList) {
           for (const jobDataKey of request.ids) {
@@ -1014,13 +1031,13 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
             const jobIdData = await this.getRedisValue(jobDataKey as string);
             // future jobs scheduled with `when` will have same repeatId as external SCS jobID
             if (jobIdData?.repeatId && (jobIdData.repeatId != jobDataKey)) {
-              const jobs = await queue.getRepeatableJobs();
+              const jobs = await queue.getJobSchedulers();
               for (const job of jobs) {
                 if (job?.key === jobIdData.repeatId) {
-                  this.logger.debug('Removing Repeatable job by key for jobId', { id: job.id });
-                  callback = queue.removeRepeatableByKey(job.key);
+                  this.logger.info('Removing Repeatable job by key', { key: job.key, name: job.name, id: jobDataKey });
+                  callback = queue.removeJobScheduler(job.key);
                   deleteResponse.status.push({
-                    id: job.id,
+                    id: jobDataKey,
                     code: 200,
                     message: 'success'
                   });
@@ -1140,7 +1157,10 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
     try {
       if (!ctx) { ctx = {}; };
       ctx.subject = subject;
-      ctx.resources = request?.items?.map((data, ...obj) => obj);
+      ctx.resources = request?.items?.map((job) => {
+        const { data, ...resource } = job;
+        return resource;
+      });
       acsResponse = await checkAccessRequest(ctx,
         [{ resource: 'job', id: request.items.map(item => item.id) }],
         AuthZAction.MODIFY, Operation.isAllowed);
@@ -1218,7 +1238,10 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
     try {
       if (!ctx) { ctx = {}; };
       ctx.subject = subject;
-      ctx.resources = request?.items?.map((data, ...job) => job);;
+      ctx.resources = request?.items?.map((job) => {
+        const { data, ...resource } = job;
+        return resource;
+      });
       acsResponse = await checkAccessRequest(ctx,
         [{ resource: 'job', id: request.items.map(item => item.id) }],
         AuthZAction.MODIFY, Operation.isAllowed);
@@ -1294,9 +1317,10 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
   async clear(): Promise<any> {
     let allJobs: any[] = [];
     for (const queue of this.queuesList) {
-      allJobs = allJobs.concat(await queue.getJobs(this.bullOptions['allJobTypes']));
+      allJobs = allJobs.concat(await queue.getJobs(['paused', 'repeat', 'wait', 'active', 'delayed',
+        'prioritized', 'waiting', 'waiting-children', 'completed', 'failed']));
     }
-    return Promise.all(allJobs.map(async (job) => job.remove())).catch(err => {
+    return Promise.all(allJobs.map(async (job) => job?.remove())).catch(err => {
       this.logger.error(`Error clearing jobs`, err);
       throw err;
     });

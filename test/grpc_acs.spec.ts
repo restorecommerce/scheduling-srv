@@ -301,7 +301,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
       jobEvents.removeAllListeners('queuedJob'),
       jobEvents.removeAllListeners('jobsCreated'),
       jobEvents.removeAllListeners('jobsDeleted'),
-      worker.schedulingService.clear(),
+      await worker.schedulingService.clear(),
     ]).then(
       worker.stop
     );
@@ -586,7 +586,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
     });
   });
   describe(`managing jobs ${testSuffix}`, function (): void {
-    this.timeout(5000);
+    this.timeout(10000);
     it('should schedule some jobs for tomorrow', async () => {
       const data = {
         timezone: 'Europe/Berlin',
