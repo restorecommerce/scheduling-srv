@@ -1421,7 +1421,6 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
               subject
             }), {});
           } catch (error: any) {
-            console.log('MSG reading metadata', error);
             if (error.message?.startsWith('Error! Jobs not found in any of the queues') && action != AuthZAction.DELETE) {
               this.logger.debug('New job should be created', { jobId: resource.id });
               result = { items: [] };
