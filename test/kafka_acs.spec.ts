@@ -273,10 +273,9 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
       jobTopic.removeAllListeners('queuedJob'),
       jobTopic.removeAllListeners('jobsCreated'),
       jobTopic.removeAllListeners('jobsDeleted'),
-      await worker.schedulingService.clear(),
-    ]).then(
-      worker.stop
-    );
+      worker.schedulingService.clear(),
+    ]);
+    await worker.stop();
   });
   describe('create a one-time job', function postJob(): void {
     this.timeout(15000);

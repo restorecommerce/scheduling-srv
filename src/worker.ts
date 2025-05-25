@@ -405,9 +405,6 @@ export class Worker {
   }
 
   async stop(): Promise<any> {
-    if (!this) {
-      return;
-    }
     this.logger.info('Shutting down');
     if (this.bullBoardServer) {
       this.bullBoardServer.close();

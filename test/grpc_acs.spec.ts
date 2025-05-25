@@ -302,9 +302,8 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
       jobEvents.removeAllListeners('jobsCreated'),
       jobEvents.removeAllListeners('jobsDeleted'),
       await worker.schedulingService.clear(),
-    ]).then(
-      worker.stop
-    );
+    ]);
+    await worker.stop();
   });
   describe(`create a one-time job ${testSuffix}`, function postJob(): void {
     this.timeout(30000);
