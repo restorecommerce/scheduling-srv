@@ -209,3 +209,8 @@ export function _filterJobOptions(data: JobsOptions): Pick<JobsOptions, 'priorit
 
   return picked;
 }
+
+export function decomposeError(error: any) {
+  const { code, message, details, stack } = error;
+  return { code, message, details, stack, ...error };
+};

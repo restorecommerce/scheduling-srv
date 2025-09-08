@@ -233,7 +233,7 @@
       "name": "default-queue",
       "concurrency": 5,
       "default": true,
-      "runMissedScheduled": false,
+      "runMissedScheduled": true,
       "advancedSettings": {
         "lockDuration": 300000,
         "lockRenewTime": 150000
@@ -315,6 +315,10 @@
       "db-index": 5,
       "ttl": 3600,
       "prefix": "acs:"
+    },
+    "techUser": {
+      "id": "root-tech-user",
+      "token": "1a4c6789-6435-487a-9308-64d06384acf9"
     }
   },
   "errors": {

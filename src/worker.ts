@@ -24,7 +24,7 @@ import { ServerReflectionService } from 'nice-grpc-server-reflection';
 import { BindConfig } from '@restorecommerce/chassis-srv/lib/microservice/transport/provider/grpc/index.js';
 import { HealthDefinition } from '@restorecommerce/rc-grpc-clients/dist/generated-server/grpc/health/v1/health.js';
 import { DeleteRequest, protoMetadata as resourceBaseMeta } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/resource_base.js';
-import { _filterKafkaJob } from './utilts.js';
+import { _filterKafkaJob, decomposeError } from './utilts.js';
 import { runWorker } from '@restorecommerce/scs-jobs';
 import express from 'express';
 
@@ -106,14 +106,14 @@ class JobsCommandInterface extends chassis.CommandInterface {
         const listener = eventsSetup[eventName];
         const listenUntil = async (message: any, ctx: any,
           config: any, eventNameRet: string): Promise<any> => {
-          logger.debug(`received message ${ctx.offset}/${targetOffset}`, ctx);
+          logger?.debug(`received message ${ctx.offset}/${targetOffset}`, ctx);
           if (_.includes(ignoreOffsets, ctx.offset)) {
             return;
           }
           try {
             await listener(message, ctx, config, eventNameRet);
           } catch (e: any) {
-            logger.debug('Exception caught :', e.message);
+            logger?.debug('Exception caught :', e.message);
           }
           if (ctx.offset >= targetOffset) {
             const message = {
@@ -126,24 +126,24 @@ class JobsCommandInterface extends chassis.CommandInterface {
             });
 
             for (const name of eventNames) {
-              logger.debug('Number of listeners before removing :',
+              logger?.debug('Number of listeners before removing :',
                 topic.listenerCount(name));
               await topic.removeAllListeners(name);
-              logger.debug('Number of listeners after removing :',
+              logger?.debug('Number of listeners after removing :',
                 topic.listenerCount(name));
             }
-            logger.info('restore process done');
+            logger?.info('restore process done');
 
             schedulingService.enableEvents();
           }
         };
 
-        this.logger.debug(`listening to topic ${topic} event ${eventName}
+        this.logger?.debug(`listening to topic ${topic} event ${eventName}
         until offset ${targetOffset} while ignoring offset`, ignoreOffsets);
         await topic.on(eventName, listenUntil);
-        this.logger.debug(`resetting commit offset of topic ${topic} to ${baseOffset}`);
+        this.logger?.debug(`resetting commit offset of topic ${topic} to ${baseOffset}`);
         await topic.$reset(eventName, baseOffset);
-        this.logger.debug(`reset done for topic ${topic} to commit offset ${baseOffset}`);
+        this.logger?.debug(`reset done for topic ${topic} to commit offset ${baseOffset}`);
       }
     }
 
@@ -160,13 +160,13 @@ class JobsCommandInterface extends chassis.CommandInterface {
           const jobScheduleTime = new Date(message.when).getTime();
           const currentTime = new Date().getTime();
           if (jobScheduleTime < currentTime) {
-            logger.info('Skipping the elapsed time job');
+            logger?.info('Skipping the elapsed time job');
             return {};
           }
         }
 
         if (message?.now) {
-          logger.info('Skipping immediate job');
+          logger?.info('Skipping immediate job');
           return {};
         }
 
@@ -216,9 +216,8 @@ export class Worker {
     const reccurTimeCfg = cfg.get('redis');
     reccurTimeCfg.database = cfg.get('redis:db-indexes:db-reccurTime');
     const redisClient: RedisClientType<any, any> = createClient(reccurTimeCfg);
-    redisClient.on('error', (err) => {
-      const { code, message, details, stack } = err;
-      logger.error('Redis client error in recurring time store', { code, message, details, stack })
+    redisClient.on('error', (error) => {
+      logger?.error('Redis client error in recurring time store', decomposeError(error))
     });
     await redisClient.connect();
 
@@ -243,9 +242,8 @@ export class Worker {
     const redisConfigSubject = cfg.get('redis');
     redisConfigSubject.database = cfg.get('redis:db-indexes:db-subject');
     const redisSubjectClient: RedisClientType<any, any> = createClient(redisConfigSubject);
-    redisSubjectClient.on('error', (err) => {
-      const { code, message, details, stack } = err;
-      logger.error('Redis client error in subject store', { code, message, details, stack })
+    redisSubjectClient.on('error', (error) => {
+      logger?.error('Redis client error in subject store', decomposeError(error))
     });
     await redisSubjectClient.connect();
 
@@ -253,7 +251,7 @@ export class Worker {
     await initializeCache();
 
     const schedulingService: SchedulingService = new SchedulingService(jobEvents,
-      redisConfig, logger, redisClient, bullOptions, cfg, this.authZ);
+      redisConfig, logger, redisClient, bullOptions, cfg);
     await schedulingService.start();
     // Bind business logic to server
     const serviceNamesCfg = cfg.get('serviceNames');
@@ -284,8 +282,7 @@ export class Worker {
         // to disableAC and enable scheduling jobs emitted via kafka event 'createJobs'
         await schedulingService.create(JobList.fromPartial({ items: msg.items, subject: msg.subject }), {}).catch(
           (err) => {
-            const { code, message, details, stack } = err;
-            logger.error('Error occurred scheduling job:', { code, message, details, stack });
+            logger?.error('Error occurred scheduling job:', decomposeError(err));
           });
       } else if (eventName === JOBS_MODIFY_EVENT) {
         msg.items = msg.items.map((job: any) => {
@@ -293,16 +290,14 @@ export class Worker {
         });
         await schedulingService.update(JobList.fromPartial({ items: msg.items, subject: msg.subject }), {}).catch(
           (err) => {
-            const { code, message, details, stack } = err;
-            logger.error('Error occurred updating jobs:', { code, message, details, stack });
+            logger?.error('Error occurred updating jobs:', decomposeError(err));
           });
       } else if (eventName === JOBS_DELETE_EVENT) {
         const ids = msg.ids;
         const collection = msg.collection;
         await schedulingService.delete(DeleteRequest.fromPartial({ ids, collection, subject: msg.subject }), {}).catch(
           (err) => {
-            const { code, message, details, stack } = err;
-            logger.error('Error occurred deleting jobs:', { code, message, details, stack });
+            logger?.error('Error occurred deleting jobs:', decomposeError(err));
           });
       } else if (COMMANDS_EVENTS.indexOf(eventName) > -1) {  // commands
         await cis.command(msg, context);
@@ -314,7 +309,7 @@ export class Worker {
       const topicName = kafkaCfg.topics[topicType].topic;
       const topic = await events.topic(topicName);
       const offsetValue = await this.offsetStore.getOffset(topicName);
-      logger.info('subscribing to topic with offset value', topicName, offsetValue);
+      logger?.info('subscribing to topic with offset value', topicName, offsetValue);
       if (kafkaCfg.topics[topicType].events) {
         const eventNames = kafkaCfg.topics[topicType].events;
         for (const eventName of eventNames) {
@@ -351,9 +346,9 @@ export class Worker {
       externalJobFiles = fs.readdirSync(externalJobDir);
     } catch (err: any) {
       if (err.message.includes('no such file or directory')) {
-        this.logger.info('No files for external job processors found');
+        this.logger?.info('No files for external job processors found');
       } else {
-        this.logger.error('Error reading external-jobs files');
+        this.logger?.error('Error reading external-jobs files', decomposeError(err));
       }
     }
     if (externalJobFiles?.length > 0) {
@@ -375,8 +370,7 @@ export class Worker {
             this.logger?.info('Imported:', importPath);
           }
           catch (err: any) {
-            const { code, message, details, stack } = err;
-            this.logger?.error(`Error scheduling external job ${importPath}`, { code, message, details, stack });
+            this.logger?.error(`Error scheduling external job ${importPath}`, decomposeError(err));
           }
         }
       }));
@@ -409,13 +403,13 @@ export class Worker {
 
     this.app.use(cfg.get('bull:board:path'), serverAdapter.getRouter());
     this.bullBoardServer = this.app.listen(cfg.get('bull:board:port'), () => {
-      logger.info(`Bull board listening on port ${cfg.get('bull:board:port')} at ${cfg.get('bull:board:path')}`);
+      logger?.info(`Bull board listening on port ${cfg.get('bull:board:port')} at ${cfg.get('bull:board:path')}`);
     });
-    logger.info('Server started successfully');
+    logger?.info('Server started successfully');
   }
 
   async stop(): Promise<any> {
-    this.logger.info('Shutting down');
+    this.logger?.info('Shutting down');
     if (this.bullBoardServer) {
       this.bullBoardServer.close();
     }
