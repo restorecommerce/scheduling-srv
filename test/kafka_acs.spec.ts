@@ -6,7 +6,6 @@ import { SchedulingService } from '../src/schedulingService.js';
 import { marshallProtobufAny } from '../src/utilts.js';
 import { Worker } from '../src/worker.js';
 import { Topic } from '@restorecommerce/kafka-client';
-import { createServiceConfig } from '@restorecommerce/service-config';
 import { GrpcMockServer, ProtoUtils } from '@alenon/grpc-mock-server';
 import * as proto_loader from '@grpc/proto-loader';
 import * as grpc from '@grpc/grpc-js';
@@ -233,7 +232,6 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
 
     if (acsEnv && acsEnv.toLowerCase() === 'true') {
       subject = acsSubject;
-      worker.schedulingService.enableAC();
     } else {
       // disable authorization
       cfg.set('authorization:enabled', false);
@@ -328,7 +326,6 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
       // since after creating the job via kafka the authorization will
       // be restored to original value using restoreAC in worker
       // so disable AC to read again
-      schedulingService.disableAC();
       const result = await schedulingService.read(JobReadRequest.fromPartial({ subject }), {});
       payloadShouldBeEmpty(result);
       should.exist(result!.operation_status);
@@ -375,8 +372,6 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
 
       // jobsCreated
       await jobTopic.$wait(offset + 1);
-
-      schedulingService.disableAC();
       let result = await schedulingService.read(JobReadRequest.fromPartial({ subject }), {});
       result!.items!.should.have.length(1);
       result!.items![0]!.payload!.type!.should.equal('test-job');
@@ -388,8 +383,6 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
 
       // jobsCreated, jobDone
       await jobTopic.$wait(offset + 2);
-
-      schedulingService.disableAC();
       result = await schedulingService.read(JobReadRequest.fromPartial({ subject }), {});
       payloadShouldBeEmpty(result);
       result!.operation_status!.code!.should.equal(200);
@@ -405,8 +398,6 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
       let jobExecs = 0;
       const w = await runWorker('test-job', 1, cfg, logger, worker.events, async (job) => {
         validateScheduledJob(job, 'RECCUR', logger);
-
-        schedulingService.disableAC();
         let result = await schedulingService.read(JobReadRequest.fromPartial({ subject }), {});
         should.exist(result!.items);
         result!.items!.length.should.equal(2);
@@ -449,8 +440,6 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
 
       const offset = await jobTopic.$offset(-1);
       await jobTopic.emit('createJobs', { items: [job], subject });
-
-      schedulingService.disableAC();
       await new Promise(resolve => setTimeout(resolve, 200));
       const createResponse = await schedulingService.read(JobReadRequest.fromPartial({ subject }), {});
       should.exist(createResponse);
@@ -513,8 +502,6 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
 
       // jobsCreated
       await jobTopic.$wait(offset + 1);
-
-      schedulingService.disableAC();
       let result = await schedulingService.read(JobReadRequest.fromPartial({ subject }), {});
       result!.items!.map(job => {
         should.exist(job.payload);
@@ -527,7 +514,6 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
       result!.operation_status!.message!.should.equal('success');
     });
     it('should update / reschedule a job', async () => {
-      schedulingService.disableAC();
       let result = await schedulingService.read(JobReadRequest.fromPartial({ subject }), {});
       const job = result!.items![0]!.payload;
       const scheduledTime = new Date();
@@ -539,8 +525,6 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
         items: [job], subject
       });
       await jobTopic.$wait(offset + 1);
-
-      schedulingService.disableAC();
       result = await schedulingService.read(JobReadRequest.fromPartial({ subject }), {});
       should.exist(result);
       should.exist(result!.items);
@@ -554,7 +538,6 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
 
       const offset = await jobTopic.$offset(-1);
       await jobTopic.$wait(offset + 2);
-      schedulingService.disableAC();
       // since this is an async operation via kafka wait for 5sec
       // till all jobs are cleared
       await new Promise((resolve, reject) => {

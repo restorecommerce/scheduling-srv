@@ -3,7 +3,6 @@ import should from 'should';
 import { marshallProtobufAny } from '../src/utilts.js';
 import { Worker } from '../src/worker.js';
 import { Topic } from '@restorecommerce/kafka-client';
-import { createChannel, createClient } from '@restorecommerce/grpc-client';
 import { 
   JobServiceDefinition as SchedulingServiceDefinition,
   JobServiceClient as SchedulingServiceClient,
@@ -220,7 +219,6 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
 
     if (acsEnv && acsEnv.toLowerCase() === 'true') {
       subject = acsSubject;
-      worker.schedulingService.enableAC();
     } else {
       // disable authorization
       cfg.set('authorization:enabled', false);
