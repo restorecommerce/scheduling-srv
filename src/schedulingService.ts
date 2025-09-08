@@ -156,7 +156,8 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
   }
 
   private catchOperationStatus(error: any, message?: string): ResourceListResponse {
-    this.logger?.error(message ?? error?.message, error);
+    const { code, details, stack } = error;
+    this.logger?.error(message ?? error?.message, { code, message, details, stack });
     return {
       total_count: 0,
       operation_status: {
@@ -167,7 +168,8 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
   }
 
   private catchStatus(id: string, error: any, message?: string): Status {
-    this.logger?.error(message ?? error?.message, error);
+    const { code, details, stack } = error;
+    this.logger?.error(message ?? error?.message, { code, message, details, stack });
     return {
       id,
       code: Number.isInteger(error?.code) ? error.code : 500,
@@ -643,7 +645,10 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
       await this.jobEvents.emit('jobsCreated', jobList);
     }
 
-    jobListResponse.operation_status = { code: 200, message: 'success' };
+    jobListResponse.operation_status = jobListResponse.items?.some(
+      item => item.status?.code !== 200
+    ) ? { code: 207, message: 'Multi Status!' }
+      : { code: 200, message: 'success' };
     return jobListResponse;
   }
 
@@ -758,8 +763,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
       result = this.filterByOwnerShip(custom_arguments, result);
     } else {
       result = new Array<BullJob>();
-      const jobIDs = (request?.filter?.job_ids?.length && Array.isArray(request.filter.job_ids)) ?
-        request.filter.job_ids : request?.filter?.job_ids ? [request.filter.job_ids] : [];
+      const jobIDs = Array.isArray(request?.filter?.job_ids) ? request.filter.job_ids : request.filter.job_ids ? [request.filter.job_ids] : [];
       const typeFilterName = request.filter.type;
 
       // Search in all the queues and retrieve jobs after JobID
@@ -771,7 +775,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
         // jobIDsCopy should contain the jobIDs duplicate values
         // after the for loop ends
         const jobIDsCopy: string[] = [];
-        for (let jobID of jobIDs || []) {
+        for (let jobID of jobIDs ?? []) {
           const jobIdData = await this.getRedisValue(jobID as string);
           // future jobs scheduled with `when` will have same repeatId as external SCS jobID
           if (jobIdData?.repeatId && (jobIdData.repeatId != jobID)) {

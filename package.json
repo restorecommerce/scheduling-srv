@@ -77,7 +77,7 @@
     "lcov-report": "c8 report --reporter=lcov",
     "coveralls": "c8 report --reporter=text-lcov | coveralls",
     "build:es": "esbuild ./src/start.ts --bundle --platform=node --outfile=lib/start.cjs --minify --tree-shaking=true --sourcemap=inline",
-    "build:jobs": "find ./src/external-jobs -maxdepth 1 -type f -exec sh -c 'esbuild {} --bundle --platform=node --outfile=lib/external-jobs/$(basename {} .ts).cjs --minify --tree-shaking=true --sourcemap=inline' \\;",
+    "build:jobs": "esbuild ./src/external-jobs/*.ts --bundle --platform=node --outdir=lib/external-jobs/ --minify --tree-shaking=true --sourcemap=inline --out-extension:.js=.cjs",
     "build:clean": "rimraf lib",
     "copy:bullboard-ui-static": "npx copyfiles -u 1 \"./node_modules/@bull-board/ui/dist/**/*\" ./lib",
     "build": "npm-run-all lint build:clean build:es build:jobs copy:bullboard-ui-static",

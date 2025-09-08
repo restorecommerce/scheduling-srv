@@ -233,6 +233,26 @@
       "name": "default-queue",
       "concurrency": 5,
       "default": true,
+      "runMissedScheduled": false,
+      "advancedSettings": {
+        "lockDuration": 300000,
+        "lockRenewTime": 150000
+      }
+    },
+    {
+      "name": "low-queue",
+      "concurrency": 1,
+      "default": true,
+      "runMissedScheduled": false,
+      "advancedSettings": {
+        "lockDuration": 300000,
+        "lockRenewTime": 150000
+      }
+    },
+    {
+      "name": "high-queue",
+      "concurrency": 10,
+      "default": true,
       "runMissedScheduled": true,
       "advancedSettings": {
         "lockDuration": 300000,

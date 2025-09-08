@@ -216,7 +216,10 @@ export class Worker {
     const reccurTimeCfg = cfg.get('redis');
     reccurTimeCfg.database = cfg.get('redis:db-indexes:db-reccurTime');
     const redisClient: RedisClientType<any, any> = createClient(reccurTimeCfg);
-    redisClient.on('error', (err) => logger.error('Redis client error in recurring time store', err));
+    redisClient.on('error', (err) => {
+      const { code, message, details, stack } = err;
+      logger.error('Redis client error in recurring time store', { code, message, details, stack })
+    });
     await redisClient.connect();
 
     // Get Rate Limiter config
@@ -240,7 +243,10 @@ export class Worker {
     const redisConfigSubject = cfg.get('redis');
     redisConfigSubject.database = cfg.get('redis:db-indexes:db-subject');
     const redisSubjectClient: RedisClientType<any, any> = createClient(redisConfigSubject);
-    redisSubjectClient.on('error', (err) => logger.error('Redis client error in subject store', err));
+    redisSubjectClient.on('error', (err) => {
+      const { code, message, details, stack } = err;
+      logger.error('Redis client error in subject store', { code, message, details, stack })
+    });
     await redisSubjectClient.connect();
 
     // init ACS cache
@@ -278,7 +284,8 @@ export class Worker {
         // to disableAC and enable scheduling jobs emitted via kafka event 'createJobs'
         await schedulingService.create(JobList.fromPartial({ items: msg.items, subject: msg.subject }), {}).catch(
           (err) => {
-            logger.error(`Error occurred scheduling job, ${err}`);
+            const { code, message, details, stack } = err;
+            logger.error('Error occurred scheduling job:', { code, message, details, stack });
           });
       } else if (eventName === JOBS_MODIFY_EVENT) {
         msg.items = msg.items.map((job: any) => {
@@ -286,14 +293,16 @@ export class Worker {
         });
         await schedulingService.update(JobList.fromPartial({ items: msg.items, subject: msg.subject }), {}).catch(
           (err) => {
-            logger.error('Error occurred updating jobs:', err.message);
+            const { code, message, details, stack } = err;
+            logger.error('Error occurred updating jobs:', { code, message, details, stack });
           });
       } else if (eventName === JOBS_DELETE_EVENT) {
         const ids = msg.ids;
         const collection = msg.collection;
         await schedulingService.delete(DeleteRequest.fromPartial({ ids, collection, subject: msg.subject }), {}).catch(
           (err) => {
-            logger.error('Error occurred deleting jobs:', err.message);
+            const { code, message, details, stack } = err;
+            logger.error('Error occurred deleting jobs:', { code, message, details, stack });
           });
       } else if (COMMANDS_EVENTS.indexOf(eventName) > -1) {  // commands
         await cis.command(msg, context);
@@ -366,7 +375,8 @@ export class Worker {
             this.logger?.info('Imported:', importPath);
           }
           catch (err: any) {
-            this.logger?.error(`Error scheduling external job ${importPath}`, { err });
+            const { code, message, details, stack } = err;
+            this.logger?.error(`Error scheduling external job ${importPath}`, { code, message, details, stack });
           }
         }
       }));
