@@ -105,7 +105,7 @@
       [
         "@semantic-release-plus/docker",
         {
-          "name": "ghcr.io/restorecommerce/schueduling-srv",
+          "name": "ghcr.io/restorecommerce/scheduling-srv",
           "skipLogin": true
         }
       ]
