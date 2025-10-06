@@ -33,6 +33,7 @@ import { DeleteRequest } from '@restorecommerce/rc-grpc-clients/dist/generated-s
 import { createClient as RedisCreateClient, RedisClientType } from 'redis';
 import { runWorker } from '@restorecommerce/scs-jobs';
 import { Effect } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/rule.js';
+import { it, describe, beforeEach, afterEach, beforeAll, afterAll } from 'vitest';
 
 /**
  * NOTE: Running instances of Redis and Kafka are required to run the tests.
@@ -208,7 +209,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
   let jobEvents: Topic;
   let grpcSchedulingSrv: SchedulingServiceClient;
 
-  before(async function (): Promise<any> {
+  beforeAll(async function (): Promise<any> {
     this.timeout(40000);
     worker = new Worker();
     cfg.set('events:kafka:groupId', testSuffix + 'grpc');
@@ -291,7 +292,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
       jobEvents.removeAllListeners('jobsDeleted'),
     ]);
   });
-  after(async function (): Promise<any> {
+  afterAll(async function (): Promise<any> {
     this.timeout(20000);
     await Promise.allSettled([
       stopACSGrpcMockServer(),

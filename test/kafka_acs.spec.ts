@@ -24,6 +24,7 @@ import {
   validateJobDonePayload,
   cfg,
 } from './utils.js';
+import { expect, it, describe, beforeEach, afterEach, beforeAll, afterAll } from 'vitest';
 
 /**
  * NOTE: Running instances of Redis and Kafka are required to run the tests.
@@ -184,7 +185,7 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
   let worker: Worker;
   let jobTopic: Topic;
   let schedulingService: SchedulingService;
-  before(async function (): Promise<any> {
+  beforeAll(async function (): Promise<any> {
     this.timeout(12000);
     worker = new Worker();
 
@@ -263,7 +264,7 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
       jobTopic.removeAllListeners('jobsDeleted'),
     ]);
   });
-  after(async function (): Promise<any> {
+  afterAll(async function (): Promise<any> {
     this.timeout(20000);
     await Promise.allSettled([
       stopACSGrpcMockServer(),
