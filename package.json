@@ -39,10 +39,11 @@
   },
   "devDependencies": {
     "@alenon/grpc-mock-server": "^3.2.3",
+    "@codingame/esbuild-import-meta-url-plugin": "^1.0.3",
     "@commitlint/cli": "^20.1.0",
     "@commitlint/config-conventional": "^20.0.0",
     "@grpc/proto-loader": "^0.8.0",
-    "@restorecommerce/dev": "^0.1.2",
+    "@restorecommerce/dev": "^0.2.0",
     "@restorecommerce/grpc-client": "^2.2.12",
     "@semantic-release-plus/docker": "^3.1.3",
     "@types/express": "^5.0.3",
@@ -77,11 +78,10 @@
     "mochadebug": "cross-env NODE_ENV=test mocha --inspect-brk --full-trace --exit --trace-warnings --exit",
     "lcov-report": "c8 report --reporter=lcov",
     "coveralls": "c8 report --reporter=text-lcov | coveralls",
-    "build:es": "esbuild ./src/start.ts --bundle --platform=node --outfile=lib/start.cjs --minify --tree-shaking=true --sourcemap=inline",
-    "build:jobs": "esbuild ./src/external-jobs/*.ts --bundle --platform=node --outdir=lib/external-jobs/ --minify --tree-shaking=true --sourcemap=inline --out-extension:.js=.cjs",
+    "build:es": "node esbuild.mjs",
     "build:clean": "rimraf lib",
     "copy:bullboard-ui-static": "npx copyfiles -u 1 \"./node_modules/@bull-board/ui/dist/**/*\" ./lib",
-    "build": "npm-run-all lint build:clean build:es build:jobs copy:bullboard-ui-static",
+    "build": "npm-run-all lint build:clean build:es copy:bullboard-ui-static",
     "prepare": "node -e \"try { require('husky').install() } catch (e) {}\""
   },
   "engines": {
