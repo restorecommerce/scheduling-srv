@@ -1,4 +1,4 @@
-import {} from 'mocha';
+import { } from 'mocha';
 import should from 'should';
 import * as _ from 'lodash-es';
 
@@ -83,12 +83,13 @@ interface MethodWithOutput {
   output: any;
 };
 
-const PROTO_PATH = 'io/restorecommerce/access_control.proto';
+const PROTO_PATH = './io/restorecommerce/access_control.proto';
+const PROTO_ROOT = './test/protos';
 const PKG_NAME = 'io.restorecommerce.access_control';
 const SERVICE_NAME = 'AccessControlService';
 const pkgDef: grpc.GrpcObject = grpc.loadPackageDefinition(
   proto_loader.loadSync(PROTO_PATH, {
-    includeDirs: ['node_modules/@restorecommerce/protos'],
+    includeDirs: PROTO_ROOT ? [PROTO_ROOT] : [],
     keepCase: true,
     longs: String,
     enums: String,
@@ -186,7 +187,6 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
   let jobTopic: Topic;
   let schedulingService: SchedulingService;
   beforeAll(async function (): Promise<any> {
-    this.timeout(12000);
     worker = new Worker();
 
     cfg.set('events:kafka:groupId', testSuffix + 'kafka');
@@ -251,7 +251,7 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
     }
 
     payloadShouldBeEmpty(await schedulingService.read(JobReadRequest.fromPartial({ subject }), {}));
-  });
+  }, 12000);
   beforeEach(async () => {
     for (let event of ['jobsCreated', 'jobsDeleted']) {
       await jobTopic.on(event, () => { });
@@ -265,7 +265,6 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
     ]);
   });
   afterAll(async function (): Promise<any> {
-    this.timeout(20000);
     await Promise.allSettled([
       stopACSGrpcMockServer(),
       stopIDSGrpcMockServer(),
@@ -275,9 +274,8 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
       worker.schedulingService.clear(),
     ]);
     await worker.stop();
-  });
-  describe('create a one-time job', function postJob(): void {
-    this.timeout(15000);
+  }, 20000);
+  describe('create a one-time job', { timeout: 15000 }, function postJob(): void {
     it('should create a new job and execute it immediately', async () => {
       const w = await runWorker('test-job', 1, cfg, logger, worker.events, async (job) => {
         validateScheduledJob(job, 'ONCE', logger);
@@ -393,8 +391,7 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
     });
   });
 
-  describe('creating a recurring job', function (): void {
-    this.timeout(15000);
+  describe('creating a recurring job', { timeout: 15000 }, function (): void {
     it('should create a recurring job and delete it after some executions', async () => {
       let jobExecs = 0;
       const w = await runWorker('test-job', 1, cfg, logger, worker.events, async (job) => {
@@ -464,8 +461,7 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
     });
   });
 
-  describe('managing jobs', function (): void {
-    this.timeout(15000);
+  describe('managing jobs', { timeout: 15000 }, function (): void {
     it('should schedule some jobs for tomorrow', async () => {
       const data = {
         timezone: 'Europe/Berlin',

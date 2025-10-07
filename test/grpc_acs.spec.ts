@@ -1,9 +1,9 @@
-import {} from 'mocha';
+import { } from 'mocha';
 import should from 'should';
 import { marshallProtobufAny } from '../src/utilts.js';
 import { Worker } from '../src/worker.js';
 import { Topic } from '@restorecommerce/kafka-client';
-import { 
+import {
   JobServiceDefinition as SchedulingServiceDefinition,
   JobServiceClient as SchedulingServiceClient,
   JobOptions_Priority,
@@ -92,12 +92,13 @@ interface MethodWithOutput {
   output: any;
 };
 
-const PROTO_PATH = 'io/restorecommerce/access_control.proto';
+const PROTO_PATH = './io/restorecommerce/access_control.proto';
+const PROTO_ROOT = './test/protos';
 const PKG_NAME = 'io.restorecommerce.access_control';
 const SERVICE_NAME = 'AccessControlService';
 const pkgDef: grpc.GrpcObject = grpc.loadPackageDefinition(
   proto_loader.loadSync(PROTO_PATH, {
-    includeDirs: ['node_modules/@restorecommerce/protos'],
+    includeDirs: PROTO_ROOT ? [PROTO_ROOT] : [],
     keepCase: true,
     longs: String,
     enums: String,
@@ -210,7 +211,6 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
   let grpcSchedulingSrv: SchedulingServiceClient;
 
   beforeAll(async function (): Promise<any> {
-    this.timeout(40000);
     worker = new Worker();
     cfg.set('events:kafka:groupId', testSuffix + 'grpc');
     await worker.start(cfg);
@@ -236,9 +236,11 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
         method: 'WhatIsAllowed',
         output: jobPolicySetRQ
       },
-      { method: 'IsAllowed',
-        output: { decision: Effect.PERMIT } }
-      ]
+      {
+        method: 'IsAllowed',
+        output: { decision: Effect.PERMIT }
+      }
+    ]
     );
 
     // start mock ids-srv needed for findByToken response and return subject
@@ -279,7 +281,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
     }
 
     payloadShouldBeEmpty(await grpcSchedulingSrv.read(JobReadRequest.fromPartial({ subject }), {}), false);
-  });
+  }, 40000);
   beforeEach(async () => {
     for (const event of ['jobsCreated', 'jobsDeleted']) {
       await jobEvents.on(event, () => { });
@@ -293,7 +295,6 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
     ]);
   });
   afterAll(async function (): Promise<any> {
-    this.timeout(20000);
     await Promise.allSettled([
       stopACSGrpcMockServer(),
       stopIDSGrpcMockServer(),
@@ -303,9 +304,8 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
       await worker.schedulingService.clear(),
     ]);
     await worker.stop();
-  });
-  describe(`create a one-time job ${testSuffix}`, function postJob(): void {
-    this.timeout(30000);
+  }, 20000);
+  describe(`create a one-time job ${testSuffix}`, { timeout: 30000 }, () => {
     it(`should create a new job and execute it immediately ${testSuffix}`, async () => {
       const w = await runWorker('test-job', 1, cfg, logger, worker.events, async (job) => {
         validateScheduledJob(job, 'ONCE', logger);
@@ -462,8 +462,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
     //   createResponse.operation_status!.message!.should.equal('success');
     // });
   });
-  describe(`should create a recurring job ${testSuffix}`, function (): void {
-    this.timeout(8000);
+  describe(`should create a recurring job ${testSuffix}`, { timeout: 8000 }, function (): void {
     it(`should create a recurring job and delete it after some executions ${testSuffix}`, async () => {
       let jobExecs = 0;
       const w = await runWorker('test-job', 1, cfg, logger, worker.events, async (job) => {
@@ -583,8 +582,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
       result!.operation_status!.message!.should.equal('success');
     });
   });
-  describe(`managing jobs ${testSuffix}`, function (): void {
-    this.timeout(10000);
+  describe(`managing jobs ${testSuffix}`, { timeout: 10000 }, function (): void {
     it('should schedule some jobs for tomorrow', async () => {
       const data = {
         timezone: 'Europe/Berlin',
