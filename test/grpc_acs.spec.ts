@@ -42,7 +42,7 @@ import { it, describe, beforeEach, afterEach, beforeAll, afterAll } from 'vitest
 const JOB_EVENTS_TOPIC = 'io.restorecommerce.jobs';
 
 let logger: Logger;
-let subject;
+let subject: any;
 let redisClient: RedisClientType;
 let tokenRedisClient: RedisClientType;
 let expires_in = new Date();
@@ -273,12 +273,12 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
 
     grpcSchedulingSrv = getSchedulingServiceClient(logger);
     const toDelete = (await grpcSchedulingSrv.read(JobReadRequest.fromPartial({ subject }), {})).total_count;
-    const offset = await jobEvents.$offset(-1);
+    const offset = await jobEvents.$offset(BigInt(-1));
 
     await grpcSchedulingSrv.delete({ collection: true });
 
     if (toDelete! > 0) {
-      await jobEvents.$wait(offset + toDelete! - 1);
+      await jobEvents.$wait(BigInt(Number(offset) + toDelete! - 1));
     }
 
     payloadShouldBeEmpty(await grpcSchedulingSrv.read(JobReadRequest.fromPartial({ subject }), {}), false);
@@ -319,7 +319,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
       });
 
       // validate message emitted on jobDone event.
-      await jobEvents.on('jobDone', async (job, context, configRet, eventNameRet) => {
+      await jobEvents.on('jobDone', async (job) => {
         validateJobDonePayload(job, logger);
       });
 
@@ -344,7 +344,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
         }
       };
 
-      const offset = await jobEvents.$offset(-1);
+      const offset = await jobEvents.$offset(BigInt(-1));
       const createResponse = await grpcSchedulingSrv.create({ items: [job], subject }, {});
       createResponse!.items!.should.have.length(1);
       createResponse!.items![0]!.payload!.type!.should.equal('test-job');
@@ -353,7 +353,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
       createResponse!.operation_status!.code!.should.equal(200);
       createResponse!.operation_status!.message!.should.equal('success');
       // queuedJob (jobDone is emitted from here) - have remvoed jobsDeleted event since we now move the job to completed state
-      await jobEvents.$wait(offset + 1);
+      await jobEvents.$wait(BigInt(Number(offset) + 1));
 
       // Simulate timeout
       await new Promise((resolve) => setTimeout(resolve, 100));
@@ -396,7 +396,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
         }
       };
 
-      const offset = await jobEvents.$offset(-1);
+      const offset = await jobEvents.$offset(BigInt(-1));
 
       const createResponse = await grpcSchedulingSrv.create({
         items: [job], subject
@@ -408,7 +408,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
       createResponse!.operation_status!.code!.should.equal(200);
       createResponse!.operation_status!.message!.should.equal('success');
 
-      await jobEvents.$wait(offset + 1); // jobsCreated, queuedJob (jobDone is sent from test)
+      await jobEvents.$wait(BigInt(Number(offset) + 1)); // jobsCreated, queuedJob (jobDone is sent from test)
 
       const result = await grpcSchedulingSrv.read(JobReadRequest.fromPartial({ subject }), {});
       payloadShouldBeEmpty(result, false);
@@ -507,7 +507,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
         }
       };
 
-      const offset = await jobEvents.$offset(-1);
+      const offset = await jobEvents.$offset(BigInt(-1));
 
       const createdJob = await grpcSchedulingSrv.create({
         items: [job], subject
@@ -522,7 +522,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
       createdJob.operation_status!.message!.should.equal('success');
 
       // wait for 3 'jobDone'
-      await jobEvents.$wait(offset + 3);
+      await jobEvents.$wait(BigInt(Number(offset) + 3));
 
       // Sleep for jobDone to get processed
       await new Promise(resolve => setTimeout(resolve, 100));
@@ -689,7 +689,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
       scheduledTime.setDate(scheduledTime.getDate() + 2); // two days from now
       job!.when = scheduledTime.toISOString();
 
-      const offset = await jobEvents.$offset(-1);
+      const offset = await jobEvents.$offset(BigInt(-1));
       result = await grpcSchedulingSrv.update({
         items: [job!], subject
       });
@@ -705,7 +705,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
       result!.operation_status!.code!.should.equal(200);
       result!.operation_status!.message!.should.equal('success');
       // waiting for event creation
-      await jobEvents.$wait(offset + 1);
+      await jobEvents.$wait(BigInt(Number(offset) + 1));
     });
     it(`should upsert a job ${testSuffix}`, async () => {
       let result = await grpcSchedulingSrv.read(JobReadRequest.fromPartial({ subject }), {});
@@ -715,7 +715,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
       scheduledTime.setDate(scheduledTime.getDate() + 3); // three days from now
       job!.when = scheduledTime.toISOString();
 
-      const offset = await jobEvents.$offset(-1);
+      const offset = await jobEvents.$offset(BigInt(-1));
       result = await grpcSchedulingSrv.upsert({
         items: [job!], subject
       });
@@ -730,7 +730,7 @@ describe(`testing scheduling-srv ${testSuffix}: gRPC`, () => {
       result!.operation_status!.code!.should.equal(200);
       result!.operation_status!.message!.should.equal('success');
       // waiting for event creation
-      await jobEvents.$wait(offset + 1);
+      await jobEvents.$wait(BigInt(Number(offset) + 1));
     });
     // -ve test cases to be run when ACS is enabled
     // set subject target scope to invlaid scope not present in subject's HR scope

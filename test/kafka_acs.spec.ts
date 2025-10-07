@@ -34,7 +34,7 @@ import { expect, it, describe, beforeEach, afterEach, beforeAll, afterAll } from
 const JOB_EVENTS_TOPIC = 'io.restorecommerce.jobs';
 
 let logger: Logger;
-let subject;
+let subject: any;
 let redisClient: RedisClientType;
 let tokenRedisClient: RedisClientType;
 // mainOrg -> orgA -> orgB -> orgC
@@ -242,12 +242,12 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
     }
 
     const toDelete = (await schedulingService.read(JobReadRequest.fromPartial({ subject }), {})).total_count;
-    const jobOffset = await jobTopic.$offset(-1);
+    const jobOffset = await jobTopic.$offset(BigInt(-1));
 
     await jobTopic.emit('deleteJobs', { collection: true, subject });
 
     if (toDelete! > 0) {
-      await jobTopic.$wait(jobOffset + toDelete! - 1);
+      await jobTopic.$wait(BigInt(Number(jobOffset) + toDelete! - 1));
     }
 
     payloadShouldBeEmpty(await schedulingService.read(JobReadRequest.fromPartial({ subject }), {}));
@@ -288,7 +288,7 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
       });
 
       // validate message emitted on jobDone event.
-      await jobTopic.on('jobDone', async (job, context, configRet, eventNameRet) => {
+      await jobTopic.on('jobDone', async (job: any) => {
         validateJobDonePayload(job, logger);
       });
 
@@ -314,11 +314,11 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
         }
       };
 
-      const offset = await jobTopic.$offset(-1);
+      const offset = await jobTopic.$offset(BigInt(-1));
       await jobTopic.emit('createJobs', { items: [job], subject });
 
       // createJobs, jobDone
-      await jobTopic.$wait(offset + 2);
+      await jobTopic.$wait(BigInt(Number(offset) + 2));
       // Simulate timeout
       await new Promise((resolve) => setTimeout(resolve, 100));
 
@@ -365,12 +365,12 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
         }
       };
 
-      const offset = await jobTopic.$offset(-1);
+      const offset = await jobTopic.$offset(BigInt(-1));
 
       await jobTopic.emit('createJobs', { items: [job], subject });
 
       // jobsCreated
-      await jobTopic.$wait(offset + 1);
+      await jobTopic.$wait(BigInt(Number(offset) + 1));
       let result = await schedulingService.read(JobReadRequest.fromPartial({ subject }), {});
       result!.items!.should.have.length(1);
       result!.items![0]!.payload!.type!.should.equal('test-job');
@@ -381,7 +381,7 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
       result!.operation_status!.message!.should.equal('success');
 
       // jobsCreated, jobDone
-      await jobTopic.$wait(offset + 2);
+      await jobTopic.$wait(BigInt(Number(offset) + 2));
       result = await schedulingService.read(JobReadRequest.fromPartial({ subject }), {});
       payloadShouldBeEmpty(result);
       result!.operation_status!.code!.should.equal(200);
@@ -436,7 +436,7 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
         }
       };
 
-      const offset = await jobTopic.$offset(-1);
+      const offset = await jobTopic.$offset(BigInt(-1));
       await jobTopic.emit('createJobs', { items: [job], subject });
       await new Promise(resolve => setTimeout(resolve, 200));
       const createResponse = await schedulingService.read(JobReadRequest.fromPartial({ subject }), {});
@@ -452,7 +452,7 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
 
       // wait for 3 'queuedJob', 1 'createJobs'
       // wait for '1 jobsCreated'
-      await jobTopic.$wait(offset + 4);
+      await jobTopic.$wait(BigInt(Number(offset) + 4));
 
       // Sleep for jobDone to get processed
       await new Promise(resolve => setTimeout(resolve, 100));
@@ -494,11 +494,11 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
         };
       }
 
-      const offset = await jobTopic.$offset(-1);
+      const offset = await jobTopic.$offset(BigInt(-1));
       await jobTopic.emit('createJobs', { items: jobs, subject });
 
       // jobsCreated
-      await jobTopic.$wait(offset + 1);
+      await jobTopic.$wait(BigInt(Number(offset) + 1));
       let result = await schedulingService.read(JobReadRequest.fromPartial({ subject }), {});
       result!.items!.map(job => {
         should.exist(job.payload);
@@ -517,11 +517,11 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
       scheduledTime.setDate(scheduledTime.getDate() + 2); // two days from now
       job!.when = scheduledTime.toISOString();
 
-      const offset = await jobTopic.$offset(-1);
+      const offset = await jobTopic.$offset(BigInt(-1));
       await jobTopic.emit('modifyJobs', {
         items: [job], subject
       });
-      await jobTopic.$wait(offset + 1);
+      await jobTopic.$wait(BigInt(Number(offset) + 1));
       result = await schedulingService.read(JobReadRequest.fromPartial({ subject }), {});
       should.exist(result);
       should.exist(result!.items);
@@ -533,8 +533,8 @@ describe(`testing scheduling-srv ${testSuffix}: Kafka`, async () => {
 
       await jobTopic.emit('deleteJobs', { collection: true, subject });
 
-      const offset = await jobTopic.$offset(-1);
-      await jobTopic.$wait(offset + 2);
+      const offset = await jobTopic.$offset(BigInt(-1));
+      await jobTopic.$wait(BigInt(Number(offset) + 2));
       // since this is an async operation via kafka wait for 5sec
       // till all jobs are cleared
       await new Promise((resolve, reject) => {
