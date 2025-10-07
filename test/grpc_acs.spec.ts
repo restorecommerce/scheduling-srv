@@ -85,7 +85,7 @@ const acsSubject = {
 };
 const acsEnv = 'true';
 let acsEnabled = true;
-let testSuffix = 'with ACS Enabled';
+let testSuffix = 'withACSEnabled';
 
 interface MethodWithOutput {
   method: string;
@@ -145,7 +145,7 @@ const startACSGrpcMockServer = async (methodWithOutput: MethodWithOutput[]) => {
   };
   try {
     mockServerACS.addService(PROTO_PATH, PKG_NAME, SERVICE_NAME, implementations, {
-      includeDirs: ['node_modules/@restorecommerce/protos/'],
+      includeDirs: PROTO_ROOT ? [PROTO_ROOT] : [],
       keepCase: true,
       longs: String,
       enums: String,
@@ -160,7 +160,8 @@ const startACSGrpcMockServer = async (methodWithOutput: MethodWithOutput[]) => {
   return mockServerACS;
 };
 
-const IDS_PROTO_PATH = 'io/restorecommerce/user.proto';
+const IDS_PROTO_PATH = './io/restorecommerce/user.proto';
+const IDS_PROTO_ROOT = './test/protos/'
 const IDS_PKG_NAME = 'io.restorecommerce.user';
 const IDS_SERVICE_NAME = 'UserService';
 
@@ -179,7 +180,7 @@ const startIDSGrpcMockServer = async (methodWithOutput: MethodWithOutput[]) => {
   };
   try {
     mockServerIDS.addService(IDS_PROTO_PATH, IDS_PKG_NAME, IDS_SERVICE_NAME, implementations, {
-      includeDirs: ['node_modules/@restorecommerce/protos/'],
+      includeDirs: IDS_PROTO_ROOT ? [IDS_PROTO_ROOT] : [],
       keepCase: true,
       longs: String,
       enums: String,

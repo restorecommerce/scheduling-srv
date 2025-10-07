@@ -1,5 +1,10 @@
 {
   "extends": "./node_modules/@restorecommerce/dev/tsconfig.json",
+  "compilerOptions": {
+    "sourceMap": true,
+    "inlineSourceMap": false,
+    "inlineSources": false
+  },
   "include": [
     "./src/**/*.ts"
   ],

@@ -58,7 +58,7 @@
   "events": {
     "kafka": {
       "provider": "kafka",
-      "groupId": "restore-scheduling-srv",
+      "groupId": "restore-scheduling-srv-test",
       "kafka": {
         "clientId": "restore-scheduling-srv",
         "brokers": [
