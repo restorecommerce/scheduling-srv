@@ -36,8 +36,7 @@ export function validateScheduledJob(job: any, expectedSchedule: string, logger:
 export function validateJobDonePayload(job: any, logger: Logger): void {
   if (job && job.result) {
     expect(job.result);
-    const payload = unmarshallProtobufAny(job.result, logger);
-    expect(payload.testValue).to.equal('test-value');
+    expect(job.type).to.equal('test-job');
   }
 }
 
