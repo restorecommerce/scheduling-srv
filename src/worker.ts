@@ -309,7 +309,7 @@ export class Worker {
       const topicName = kafkaCfg.topics[topicType].topic;
       const topic = await events.topic(topicName);
       const offsetValue = await this.offsetStore.getOffset(topicName);
-      logger?.info('subscribing to topic with offset value', topicName, offsetValue);
+      logger?.info('subscribing to topic with offset value', { topicName, offsetValue: Number(offsetValue) });
       if (kafkaCfg.topics[topicType].events) {
         const eventNames = kafkaCfg.topics[topicType].events;
         for (const eventName of eventNames) {
