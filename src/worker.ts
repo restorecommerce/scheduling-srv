@@ -27,6 +27,8 @@ import { DeleteRequest, protoMetadata as resourceBaseMeta } from '@restorecommer
 import { _filterKafkaJob, decomposeError } from './utilts.js';
 import { runWorker } from '@restorecommerce/scs-jobs';
 import express from 'express';
+import { Arango } from '@restorecommerce/chassis-srv/lib/database/provider/arango/base.js';
+import { create } from '@restorecommerce/chassis-srv/lib/database/provider/arango/index.js';
 
 const JOBS_CREATE_EVENT = 'createJobs';
 const JOBS_MODIFY_EVENT = 'modifyJobs';
@@ -351,6 +353,10 @@ export class Worker {
         this.logger?.error('Error reading external-jobs files', decomposeError(err));
       }
     }
+    let arangoDb: Arango;
+    if (cfg.get('arangoDb')) {
+      arangoDb = await create(cfg.get('arangoDb'), logger);
+    }
     if (externalJobFiles?.length > 0) {
       await Promise.allSettled(externalJobFiles.map(async (externalFile) => {
         if (externalFile.endsWith('.js') || externalFile.endsWith('.cjs')) {
@@ -363,9 +369,9 @@ export class Worker {
             const fileImport = await import(importPath);
             // check for double default
             if (fileImport?.default?.default) {
-              await fileImport.default.default(cfg, logger, events, runWorker);
+              await fileImport.default.default(cfg, logger, events, arangoDb, runWorker);
             } else {
-              await fileImport.default(cfg, logger, events, runWorker);
+              await fileImport.default(cfg, logger, events, arangoDb, runWorker);
             }
             this.logger?.info('Imported:', importPath);
           }
