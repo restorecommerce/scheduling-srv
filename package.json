@@ -33,7 +33,7 @@
     "cache-manager-redis": "0.6.0",
     "cron-parser": "5.4.0",
     "crypto": "1.0.1",
-    "express": "5.1.0",
+    "express": "5.2.1",
     "lodash-es": "4.17.21",
     "uuid": "13.0.0"
   },
