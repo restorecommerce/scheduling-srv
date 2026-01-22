@@ -34,7 +34,7 @@
     "cron-parser": "5.4.0",
     "crypto": "1.0.1",
     "express": "5.1.0",
-    "lodash-es": "4.17.21",
+    "lodash-es": "4.17.23",
     "uuid": "13.0.0"
   },
   "devDependencies": {
