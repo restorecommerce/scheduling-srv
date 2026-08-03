@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import * as _ from 'lodash-es';
 import { errors } from '@restorecommerce/chassis-srv';
 import * as kafkaClient from '@restorecommerce/kafka-client';
@@ -17,10 +18,9 @@ import {
 } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/job.js';
 import { createClient, RedisClientType } from 'redis';
 import { NewJob, Priority } from './types.js';
-import pkg, { CronExpression } from 'cron-parser';
+import pkg from 'cron-parser';
 import { _filterJobData, _filterJobOptions, _filterQueuedJob, checkAccessRequest, decomposeError, marshallProtobufAny } from './utilts.js';
-import * as uuid from 'uuid';
-import { Logger } from 'winston';
+import { Logger } from '@restorecommerce/logger';
 import { Response_Decision } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/access_control.js';
 import { Attribute } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/attribute.js';
 import {
@@ -214,11 +214,11 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
       queue.on('waiting', (job) => {
         logger?.verbose(`job#${job.id} scheduled`, job);
       });
-      queue.on('removed', (job) => {
-        logger?.verbose(`job#${job.id} removed`, job);
+      queue.on('removed', (id) => {
+        logger?.verbose(`job#${id} removed`, id);
       });
-      queue.on('progress', (job) => {
-        logger?.verbose(`job#${job.id} progress`, job);
+      queue.on('progress', (id, progress) => {
+        logger?.verbose(`job#${id} progress`, progress);
       });
     }
 
@@ -430,7 +430,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
   }
 
   private idGen(): string {
-    return uuid.v4().replace(/-/g, '');
+    return randomUUID().replace(/-/g, '');
   }
 
   /**
@@ -981,18 +981,18 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
         for (const queue of this.queuesList || []) {
           const jobs = await queue.getJobs(['paused', 'repeat', 'wait', 'active', 'delayed',
             'prioritized', 'waiting', 'waiting-children', 'completed', 'failed']);
-          for (const job of jobs || []) {
+          for (const job of jobs ?? []) {
             if (!job) {
               continue;
             }
             let deleted;
+            const id = (job as any).key ? (job as any).key : job.id;
             if (job?.repeatJobKey) {
               deleted = await queue.removeJobScheduler(job?.repeatJobKey);
             } else {
-              const id = job.key ? job.key : job.id;
               deleted = await queue.removeJobScheduler(id);
             }
-            this.logger?.info('Job deleted with key', { key: job.key, name: job.name });
+            this.logger?.info('Job deleted with key', { key: id, name: job.name });
             const jobIdentifier = job.id ? job.id : job.name;
             if (this.resourceEventsEnabled) {
               dispatch.push(this.jobEvents.emit('jobsDeleted', { id: jobIdentifier }));
@@ -1406,7 +1406,7 @@ export class SchedulingService implements SchedulingServiceServiceImplementation
         } else if ((action === AuthZAction.CREATE || !resource.id) && !resource.data.meta.owners) {
           const ownerAttributes = _.cloneDeep(orgOwnerAttributes);
           if (!resource.id) {
-            resource.id = uuid.v4().replace(/-/g, '');
+            resource.id = this.idGen();
           }
           // add user as default owners
           if (resource.id) {

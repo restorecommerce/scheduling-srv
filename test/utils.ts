@@ -1,7 +1,7 @@
 import { unmarshallProtobufAny } from '../src/utilts.js';
 import { expect } from 'vitest';
 import { Priority } from '../src/types.js';
-import { Logger } from 'winston';
+import { Logger } from '@restorecommerce/logger';
 import { PolicySetRQResponse } from '@restorecommerce/acs-client';
 import { Effect } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/rule.js';
 import { createServiceConfig } from '@restorecommerce/service-config';

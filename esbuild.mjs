@@ -1,27 +1,22 @@
+// @ts-nocheck
 import * as esbuild from 'esbuild'
-import { commonifierPlugin } from '@restorecommerce/dev'
+import config from '@restorecommerce/dev/esbuild.config.mjs'
 
 await esbuild.build({
+  ...config,
   entryPoints: ['./src/start.ts'],
-  bundle: true,
-  platform: 'node',
-  outfile: 'lib/start.cjs',
-  minify: true,
-  treeShaking: true,
-  sourcemap: 'linked',
-  plugins: [commonifierPlugin],
+  outfile: './dist/start.cjs',
+  tsconfig: 'tsconfig.json',
+  sourcemap: false,
+  external: [],
 });
 
 await esbuild.build({
+  ...config,
   entryPoints: ['./src/external-jobs/*.ts'],
-  bundle: true,
-  platform: 'node',
-  outdir: 'lib/external-jobs/',
-  minify: true,
-  treeShaking: true,
-  sourcemap: 'linked',
-  outExtension: {
-    '.js': '.cjs'
-  },
-  plugins: [commonifierPlugin],
+  outdir: './dist/external-jobs/',
+  outfile: undefined,
+  tsconfig: 'tsconfig.json',
+  sourcemap: false,
+  external: [],
 });

@@ -3,7 +3,7 @@ import {
 } from '@restorecommerce/acs-client';
 import * as _ from 'lodash-es';
 import { createServiceConfig } from '@restorecommerce/service-config';
-import { createLogger } from '@restorecommerce/logger';
+import { createLogger, Logger } from '@restorecommerce/logger';
 import { createChannel, createClient } from '@restorecommerce/grpc-client';
 import {
   UserServiceClient,
@@ -17,7 +17,6 @@ import { JobsOptions } from 'bullmq';
 import { FilterOpts, KafkaOpts, Priority } from './types.js';
 import { Data } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/job.js';
 import { Attribute } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/attribute.js';
-import { Logger } from 'winston';
 
 // Create a ids client instance
 let idsClientInstance: UserServiceClient;

@@ -1,4 +1,3 @@
-import { } from 'mocha';
 import should from 'should';
 import * as _ from 'lodash-es';
 
@@ -10,7 +9,7 @@ import { GrpcMockServer, ProtoUtils } from '@alenon/grpc-mock-server';
 import * as proto_loader from '@grpc/proto-loader';
 import * as grpc from '@grpc/grpc-js';
 import { createClient as RedisCreateClient, RedisClientType } from 'redis';
-import { Logger } from 'winston';
+import { Logger } from '@restorecommerce/logger';
 import { updateConfig } from '@restorecommerce/acs-client';
 import { JobOptions_Priority, Backoff_Type, JobReadRequest, Job } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/job.js';
 import { runWorker } from '@restorecommerce/scs-jobs';
@@ -24,12 +23,11 @@ import {
   validateJobDonePayload,
   cfg,
 } from './utils.js';
-import { expect, it, describe, beforeEach, afterEach, beforeAll, afterAll } from 'vitest';
+import { it, describe, beforeEach, afterEach, beforeAll, afterAll } from 'vitest';
 
 /**
  * NOTE: Running instances of Redis and Kafka are required to run the tests.
  */
-
 
 const JOB_EVENTS_TOPIC = 'io.restorecommerce.jobs';
 

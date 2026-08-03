@@ -1,0 +1,6 @@
+reject:
+  - '@bull-board/api'
+  - '@bull-board/express'
+  - '@bull-board/koa'
+  - 'bullmq'
+  - redis

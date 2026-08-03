@@ -1,10 +1,9 @@
-import { } from 'mocha';
 import should from 'should';
 import { marshallProtobufAny } from '../src/utilts.js';
 import { Worker } from '../src/worker.js';
 import { Topic } from '@restorecommerce/kafka-client';
 import {
-  JobServiceDefinition as SchedulingServiceDefinition,
+  // JobServiceDefinition as SchedulingServiceDefinition,
   JobServiceClient as SchedulingServiceClient,
   JobOptions_Priority,
   Backoff_Type,
@@ -13,7 +12,7 @@ import {
   JobList,
   Job
 } from '@restorecommerce/rc-grpc-clients/dist/generated-server/io/restorecommerce/job.js';
-import { Logger } from 'winston';
+import { Logger } from '@restorecommerce/logger';
 import { GrpcMockServer, ProtoUtils } from '@alenon/grpc-mock-server';
 import * as proto_loader from '@grpc/proto-loader';
 import * as grpc from '@grpc/grpc-js';
