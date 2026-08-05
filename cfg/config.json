@@ -225,7 +225,7 @@
     }
   },
   "externalJobs": {
-    "sourcePath": "./lib/external-jobs/",
+    "sourcePath": "./dist/external-jobs/",
     "importPath": "./external-jobs/"
   },
   "queue": [

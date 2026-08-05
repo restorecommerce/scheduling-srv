@@ -1,6 +1,8 @@
-node_modules/
 npm-debug.log
+
+node_modules/
 coverage/
+docs/
 
 .project
 .settings
@@ -12,5 +14,7 @@ coverage/
 *.log
 *.db
 *~
-lib/
-dist/
+
+buildImage.bash
+Dockerfile
+.dockerignore

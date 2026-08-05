@@ -400,8 +400,8 @@ export class Worker {
     });
 
     // since node_modules is not copied for ESM bundle support bull-board static files
-    // are copied inside lib
-    const viewsPath = './lib/@bull-board/ui/dist';
+    // are copied inside dist
+    const viewsPath = './dist/@bull-board/ui/dist';
     this.app = express();
     serverAdapter.setBasePath(cfg.get('bull:board:path'));
     serverAdapter.setViewsPath(viewsPath).setStaticPath('/static', viewsPath.concat('/static'));
