@@ -16,6 +16,9 @@ await esbuild.build({
   entryPoints: ['./src/external-jobs/*.ts'],
   outdir: './dist/external-jobs/',
   outfile: undefined,
+  outExtension: {
+    '.js': '.cjs',
+  },
   tsconfig: 'tsconfig.json',
   sourcemap: false,
   external: [],

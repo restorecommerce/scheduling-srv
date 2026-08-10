@@ -32,8 +32,14 @@ import { create } from '@restorecommerce/chassis-srv/lib/database/provider/arang
 const JOBS_CREATE_EVENT = 'createJobs';
 const JOBS_MODIFY_EVENT = 'modifyJobs';
 const JOBS_DELETE_EVENT = 'deleteJobs';
-const COMMANDS_EVENTS = ['healthCheckCommand', 'versionCommand', 'restoreCommand',
-  'resetCommand', 'configUpdateCommand', 'flushCacheCommand'];
+const COMMANDS_EVENTS = [
+  'healthCheckCommand',
+  'versionCommand',
+  'restoreCommand',
+  'resetCommand',
+  'configUpdateCommand',
+  'flushCacheCommand'
+];
 
 registerProtoMeta(
   schedulingMeta,

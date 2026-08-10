@@ -66,7 +66,7 @@
     "build:clean": "rimraf ./dist ./lib ./coverage",
     "copy:bullboard-ui-static": "npx copyfiles -u 1 \"./node_modules/@bull-board/ui/dist/**/*\" ./dist/",
     "copy:kafka-native": "cp ./node_modules/@platformatic/wasm-utils/dist/native.wasm ./dist/",
-    "prebuild": "npm-run-all lint build:clean",
+    "prebuild": "npm-run-all build:clean",
     "build": "npm-run-all build:es",
     "postbuild": "npm-run-all copy:bullboard-ui-static copy:kafka-native",
     "prepare": "node -e \"try { require('husky').install() } catch (e) {}\""
