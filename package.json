@@ -61,7 +61,7 @@
     "dev": "cross-env NODE_ENV=development node ./dist/start.cjs",
     "pretest": "npm-run-all lint",
     "test": "vitest run",
-    "lint": "eslint src --fix --ignore-pattern **/*.d.ts",
+    "lint": "eslint src --fix",
     "build:es": "node esbuild.mjs",
     "build:clean": "rimraf ./dist ./lib ./coverage",
     "copy:bullboard-ui-static": "npx copyfiles -u 1 \"./node_modules/@bull-board/ui/dist/**/*\" ./dist/",
